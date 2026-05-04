@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Bingo — Caisse & Client</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+:root{--bg:#08090d;--s1:#111218;--s2:#191b24;--bd:rgba(255,255,255,0.07);--bd2:rgba(255,255,255,0.13);--tx:#f0f2f8;--mu:#6b7280;--ac:#6366f1;--ac2:#818cf8;--gd:#f59e0b;--gr:#10b981;--rd:#ef4444;--r:12px;--rs:8px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh}
+header{display:flex;align-items:center;justify-content:space-between;padding:16px 28px;background:var(--s1);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:100}
+.logo{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;display:flex;align-items:center;gap:10px}
+.logo-i{width:32px;height:32px;background:linear-gradient(135deg,var(--ac),var(--gd));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--gr);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.mode-sw{display:flex;background:var(--s2);border-radius:var(--r);padding:4px;gap:4px;margin:20px 0}
+.m-btn{flex:1;padding:10px;border:none;border-radius:var(--rs);font-size:14px;font-weight:500;cursor:pointer;background:transparent;color:var(--mu);transition:all .2s;font-family:'DM Sans',sans-serif}
+.m-btn.active{background:var(--s1);color:var(--tx);border:0.5px solid var(--bd2)}
+.wrap{max-width:700px;margin:0 auto;padding:0 20px 40px}
+.panel{display:none}.panel.active{display:block}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.stat{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:16px;position:relative;overflow:hidden}
+.stat::before{content:'';position:absolute;top:0;left:0;right:0;height:2px}
+.s1::before{background:linear-gradient(90deg,var(--ac),var(--ac2))}
+.s2b::before{background:linear-gradient(90deg,var(--gr),#34d399)}
+.s3::before{background:linear-gradient(90deg,var(--gd),#fbbf24)}
+.stat-v{font-family:'Syne',sans-serif;font-size:24px;font-weight:700}
+.stat-l{font-size:11px;color:var(--mu);margin-top:3px}
+.card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--r);padding:20px;margin-bottom:16px}
+.ct{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
+.g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px}
+.fi{display:flex;flex-direction:column;gap:5px}
+.lb{font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.05em}
+input,select{width:100%;padding:10px 12px;border:0.5px solid var(--bd2);border-radius:var(--rs);background:var(--s2);color:var(--tx);font-size:14px;font-family:'DM Sans',sans-serif;outline:none;transition:border-color .15s}
+input:focus,select:focus{border-color:var(--ac)}
+select option{background:var(--s2)}
+.pack-g{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+.pk{border:0.5px solid var(--bd2);border-radius:var(--rs);padding:12px;text-align:center;cursor:pointer;transition:all .15s;background:var(--s1)}
+.pk:hover{border-color:var(--ac)}
+.pk.sel{border:2px solid var(--ac);background:rgba(99,102,241,.1)}
+.pk-n{font-family:'Syne',sans-serif;font-size:20px;font-weight:700}
+.pk-l{font-size:11px;color:var(--mu);margin-top:2px}
+.qty-r{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.qb{width:38px;height:38px;border:0.5px solid var(--bd2);border-radius:var(--rs);background:var(--s2);color:var(--tx);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-weight:500;font-family:'DM Sans',sans-serif}
+.qb:hover{background:var(--bg)}
+.qv{font-family:'Syne',sans-serif;font-size:22px;font-weight:700;min-width:30px;text-align:center}
+.qd{font-size:13px;color:var(--mu)}
+.tot{background:var(--s2);border-radius:var(--rs);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin:12px 0}
+.tot-l{font-size:13px;color:var(--mu)}
+.tot-v{font-family:'Syne',sans-serif;font-size:20px;font-weight:700}
+.btn{padding:10px 18px;border-radius:var(--rs);border:0.5px solid var(--bd2);background:var(--s2);color:var(--tx);font-size:14px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s}
+.btn:hover{background:var(--bg)}
+.btn-p{background:var(--ac);border-color:var(--ac);color:#fff}
+.btn-p:hover{background:#5254cc}
+.btn-g{background:rgba(16,185,129,.15);border-color:rgba(16,185,129,.4);color:#34d399}
+.btn-r{display:flex;gap:8px;margin-top:12px}
+.row{display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:.5px solid var(--bd)}
+.row:last-child{border:none}
+.rn{font-size:14px;font-weight:500}
+.rm{font-size:12px;color:var(--mu);margin-top:2px}
+.rv{font-size:14px;font-weight:500;text-align:right}
+.rt{font-size:11px;color:var(--mu);text-align:right}
+.badge{display:inline-flex;align-items:center;padding:3px 8px;border-radius:20px;font-size:11px;font-weight:500}
+.b-ok{background:rgba(16,185,129,.15);color:#34d399}
+.b-er{background:rgba(239,68,68,.15);color:#f87171}
+.b-in{background:rgba(99,102,241,.15);color:var(--ac2)}
+.empty{text-align:center;padding:30px;font-size:14px;color:var(--mu)}
+.toast{border-radius:var(--rs);padding:10px 14px;font-size:13px;margin-bottom:12px;display:none}
+.t-ok{background:rgba(16,185,129,.15);border:.5px solid rgba(16,185,129,.4);color:#34d399}
+.t-er{background:rgba(239,68,68,.15);border:.5px solid rgba(239,68,68,.4);color:#f87171}
+.res{padding:20px;border-radius:var(--r);text-align:center;margin-top:10px}
+.res-w{background:rgba(16,185,129,.1);border:.5px solid rgba(16,185,129,.4)}
+.res-l{background:rgba(239,68,68,.1);border:.5px solid rgba(239,68,68,.4)}
+.res-i{font-size:40px;margin-bottom:8px}
+.res-t{font-size:16px;font-weight:500}
+.jeu-row{display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:var(--s2);border-radius:var(--rs);margin-bottom:6px}
+.stats2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo"><div class="logo-i">🎱</div>Bingo Caisse</div>
+  <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--mu)"><div class="dot"></div>En ligne</div>
+</header>
+
+<div class="wrap">
+  <div class="mode-sw">
+    <button class="m-btn active" onclick="goTo('boutique',this)">🏪 Espace Boutique</button>
+    <button class="m-btn" onclick="goTo('client',this)">📱 Espace Client</button>
+  </div>
+
+  <!-- BOUTIQUE -->
+  <div id="panel-boutique" class="panel active">
+    <div class="stats">
+      <div class="stat s1"><div class="stat-v" id="sv">0</div><div class="stat-l">Ventes du jour</div></div>
+      <div class="stat s2b"><div class="stat-v" id="st">0</div><div class="stat-l">Feuilles vendues</div></div>
+      <div class="stat s3"><div class="stat-v" id="sc">0 XPF</div><div class="stat-l">Total du jour</div></div>
+    </div>
+
+    <div class="toast" id="tb"></div>
+
+    <div class="card">
+      <div class="ct">📄 Nouvelle vente</div>
+      <div class="g2">
+        <div class="fi"><div class="lb">Nom du client</div><input id="bn" placeholder="Marie Dupont"/></div>
+        <div class="fi"><div class="lb">Jeu Bingo</div>
+          <select id="bj"><option value="">-- Choisir un jeu --</option></select>
+        </div>
+      </div>
+      <div class="lb" style="margin-bottom:8px">Format du paquet</div>
+      <div class="pack-g">
+        <div class="pk sel" id="pk25" onclick="selPk(25,this)"><div class="pk-n">25</div><div class="pk-l">feuilles</div></div>
+        <div class="pk" id="pk250" onclick="selPk(250,this)"><div class="pk-n">250</div><div class="pk-l">feuilles</div></div>
+        <div class="pk" id="pk500" onclick="selPk(500,this)"><div class="pk-n">500</div><div class="pk-l">feuilles</div></div>
+      </div>
+      <div class="lb" style="margin-bottom:8px">Quantité de paquets</div>
+      <div class="qty-r">
+        <button class="qb" onclick="chQty(-1)">−</button>
+        <span class="qv" id="qv">1</span>
+        <button class="qb" onclick="chQty(1)">+</button>
+        <span class="qd" id="qd">= 25 feuilles</span>
+      </div>
+      <div class="g2">
+        <div class="fi"><div class="lb">N° de série (début)</div><input id="bs" placeholder="Ex: 001"/></div>
+        <div class="fi"><div class="lb">Prix par paquet (XPF)</div><input id="bp" type="number" placeholder="500" oninput="majTot()"/></div>
+      </div>
+      <div class="tot"><span class="tot-l">Total à encaisser</span><span class="tot-v" id="btv">0 XPF</span></div>
+      <div class="btn-r">
+        <button class="btn btn-p" onclick="venteOk()" style="flex:1">Enregistrer la vente</button>
+        <button class="btn" onclick="resetB()">Effacer</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ct" style="justify-content:space-between"><span>📋 Historique</span><button class="btn" style="padding:5px 12px;font-size:12px" onclick="loadVentes()">↻</button></div>
+      <div id="bh"><div class="empty">Aucune vente</div></div>
+    </div>
+
+    <div class="card">
+      <div class="ct">🎮 Gérer les jeux</div>
+      <div id="jl"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <input id="nj" placeholder="Nom du nouveau jeu..." style="flex:1"/>
+        <button class="btn btn-p" onclick="addJeu()">+ Ajouter</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CLIENT -->
+  <div id="panel-client" class="panel">
+    <div class="toast" id="tc"></div>
+
+    <div class="card">
+      <div class="ct">🎫 Enregistrer un ticket vendu</div>
+      <div class="g2">
+        <div class="fi"><div class="lb">Nom de l'acheteur</div><input id="ca" placeholder="Jean Martin"/></div>
+        <div class="fi"><div class="lb">Jeu</div><select id="cj"><option value="">-- Choisir --</option></select></div>
+      </div>
+      <div class="g2">
+        <div class="fi"><div class="lb">N° de série du ticket</div><input id="cs" placeholder="Ex: 042"/></div>
+        <div class="fi"><div class="lb">Prix vendu (XPF)</div><input id="cp" type="number" placeholder="100"/></div>
+      </div>
+      <div class="btn-r">
+        <button class="btn btn-p" onclick="regTicket()" style="flex:1">Enregistrer ce ticket</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="ct">🏆 Vérification après tournoi</div>
+      <div class="g2">
+        <div class="fi"><div class="lb">Jeu du tournoi</div><select id="vj"><option value="">-- Choisir --</option></select></div>
+        <div class="fi"><div class="lb">N° de série gagnant</div><input id="vs" placeholder="Ex: 042"/></div>
+      </div>
+      <button class="btn btn-p" onclick="verif()" style="width:100%;margin-top:4px">Vérifier si gagnant</button>
+      <div id="vr"></div>
+    </div>
+
+    <div class="card">
+      <div class="ct">📊 Mes tickets vendus</div>
+      <div class="stats2">
+        <div class="stat s1" style="margin:0"><div class="stat-v" id="cnb">0</div><div class="stat-l">Tickets vendus</div></div>
+        <div class="stat s3" style="margin:0"><div class="stat-v" id="cca">0 XPF</div><div class="stat-l">Mon chiffre d'affaires</div></div>
+      </div>
+      <div id="cl"><div class="empty">Aucun ticket enregistré</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "";
+let pk = 25, qty = 1;
+let jeux = [], tickets = [];
+
+async function init() {
+  try {
+    const r = await fetch(API+"/api/jeux");
+    jeux = await r.json();
+    majSelects();
+    majJeuxList();
+  } catch(e) { jeux = ["Bingo Classique","Bingo Or","Bingo Tropical","Super Jackpot"]; majSelects(); majJeuxList(); }
+  loadVentes(); loadStats(); loadTickets();
+}
+
+function majSelects() {
+  ["bj","cj","vj"].forEach(id => {
+    const s = document.getElementById(id);
+    const v = s.value;
+    s.innerHTML = '<option value="">-- Choisir --</option>';
+    jeux.forEach(j => { const o=document.createElement("option"); o.value=j; o.textContent=j; s.appendChild(o); });
+    if(v) s.value = v;
+  });
+}
+
+function majJeuxList() {
+  document.getElementById("jl").innerHTML = jeux.map(j =>
+    `<div class="jeu-row"><span style="font-size:14px">${j}</span><span class="badge b-ok">Actif</span></div>`
+  ).join("");
+}
+
+function goTo(n, el) {
+  document.querySelectorAll(".panel").forEach(p=>p.classList.remove("active"));
+  document.querySelectorAll(".m-btn").forEach(b=>b.classList.remove("active"));
+  document.getElementById("panel-"+n).classList.add("active");
+  el.classList.add("active");
+}
+
+function selPk(n, el) {
+  pk = n; qty = 1;
+  document.querySelectorAll(".pk").forEach(c=>c.classList.remove("sel"));
+  el.classList.add("sel");
+  document.getElementById("qv").textContent = "1";
+  document.getElementById("qd").textContent = "= "+n.toLocaleString()+" feuilles";
+  majTot();
+}
+
+function chQty(d) {
+  qty = Math.max(1, qty+d);
+  document.getElementById("qv").textContent = qty;
+  document.getElementById("qd").textContent = "= "+(qty*pk).toLocaleString()+" feuilles";
+  majTot();
+}
+
+function majTot() {
+  const p = parseInt(document.getElementById("bp").value)||0;
+  document.getElementById("btv").textContent = (qty*p).toLocaleString()+" XPF";
+}
+
+function toast(id, msg, ok=true) {
+  const el = document.getElementById(id);
+  el.textContent = (ok?"✓ ":"✗ ")+msg;
+  el.className = "toast "+(ok?"t-ok":"t-er");
+  el.style.display = "block";
+  setTimeout(()=>el.style.display="none", 3000);
+}
+
+async function venteOk() {
+  const n=document.getElementById("bn").value.trim();
+  const j=document.getElementById("bj").value;
+  const s=document.getElementById("bs").value.trim();
+  const p=parseInt(document.getElementById("bp").value)||0;
+  if(!n||!j||!s){toast("tb","Remplissez tous les champs",false);return;}
+  try {
+    const r = await fetch(API+"/api/vente",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({client:n,jeu:j,pack:pk,qty,serie:s,prix:p})});
+    const d = await r.json();
+    if(d.ok){toast("tb","Vente enregistrée — "+(qty*pk).toLocaleString()+" feuilles pour "+n);resetB();loadVentes();loadStats();}
+    else toast("tb",d.msg,false);
+  } catch(e){toast("tb","Erreur serveur",false);}
+}
+
+function resetB() {
+  ["bn","bs","bp"].forEach(id=>document.getElementById(id).value="");
+  document.getElementById("bj").value="";
+  qty=1; document.getElementById("qv").textContent="1";
+  document.getElementById("qd").textContent="= "+pk.toLocaleString()+" feuilles";
+  document.getElementById("btv").textContent="0 XPF";
+}
+
+async function loadVentes() {
+  try {
+    const r = await fetch(API+"/api/ventes");
+    const vs = await r.json();
+    const el = document.getElementById("bh");
+    if(!vs.length){el.innerHTML='<div class="empty">Aucune vente</div>';return;}
+    el.innerHTML = vs.map(v=>`<div class="row">
+      <div><div class="rn">${v.client}</div><div class="rm">${v.jeu} · ${v.qty}×${v.pack} feuilles · Série ${v.serie}</div></div>
+      <div><div class="rv">${v.total.toLocaleString()} XPF</div><div class="rt">${new Date(v.date).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div></div>
+    </div>`).join("");
+  }catch(e){}
+}
+
+async function loadStats() {
+  try {
+    const r = await fetch(API+"/api/stats");
+    const s = await r.json();
+    document.getElementById("sv").textContent = s.ventes_jour;
+    document.getElementById("st").textContent = s.tickets_jour.toLocaleString();
+    document.getElementById("sc").textContent = s.total_jour.toLocaleString()+" XPF";
+  }catch(e){}
+}
+
+async function addJeu() {
+  const nom = document.getElementById("nj").value.trim();
+  if(!nom) return;
+  try {
+    const r = await fetch(API+"/api/jeux",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nom})});
+    jeux = await r.json();
+    majSelects(); majJeuxList();
+    document.getElementById("nj").value="";
+  }catch(e){jeux.push(nom);majSelects();majJeuxList();document.getElementById("nj").value="";}
+}
+
+async function regTicket() {
+  const a=document.getElementById("ca").value.trim();
+  const j=document.getElementById("cj").value;
+  const s=document.getElementById("cs").value.trim();
+  const p=parseInt(document.getElementById("cp").value)||0;
+  if(!a||!j||!s){toast("tc","Remplissez tous les champs",false);return;}
+  try {
+    const r = await fetch(API+"/api/ticket",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({acheteur:a,jeu:j,serie:s,prix:p})});
+    const d = await r.json();
+    if(d.ok){toast("tc","Ticket "+s+" enregistré pour "+a);["ca","cs","cp"].forEach(id=>document.getElementById(id).value="");loadTickets();}
+    else toast("tc",d.msg,false);
+  }catch(e){toast("tc","Erreur",false);}
+}
+
+async function loadTickets() {
+  try {
+    const r = await fetch(API+"/api/tickets");
+    tickets = await r.json();
+    const ca = tickets.reduce((s,t)=>s+t.prix,0);
+    document.getElementById("cnb").textContent = tickets.length;
+    document.getElementById("cca").textContent = ca.toLocaleString()+" XPF";
+    const el = document.getElementById("cl");
+    if(!tickets.length){el.innerHTML='<div class="empty">Aucun ticket</div>';return;}
+    el.innerHTML = tickets.map(t=>`<div class="row">
+      <div><div class="rn">${t.acheteur}</div><div class="rm">${t.jeu} · Série <strong style="color:var(--tx)">${t.serie}</strong></div></div>
+      <div><div class="rv">${t.prix.toLocaleString()} XPF</div><div class="rt">${new Date(t.date).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"})}</div></div>
+    </div>`).join("");
+  }catch(e){}
+}
+
+async function verif() {
+  const j=document.getElementById("vj").value;
+  const s=document.getElementById("vs").value.trim();
+  const el=document.getElementById("vr");
+  if(!j||!s){el.innerHTML='<div style="font-size:13px;color:var(--rd);margin-top:8px">Choisissez le jeu et le numéro.</div>';return;}
+  try {
+    const r = await fetch(API+"/api/verifier",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({jeu:j,serie:s})});
+    const d = await r.json();
+    if(d.gagnant){
+      el.innerHTML=`<div class="res res-w"><div class="res-i">🏆</div><div class="res-t" style="color:#34d399">TICKET GAGNANT !</div><div style="font-size:13px;color:#34d399;margin-top:6px">Acheteur : <strong>${d.ticket.acheteur}</strong> · Série ${d.ticket.serie}</div></div>`;
+    } else {
+      el.innerHTML=`<div class="res res-l"><div class="res-i">❌</div><div class="res-t" style="color:#f87171">Ticket non trouvé</div><div style="font-size:13px;color:#f87171;margin-top:6px">Série ${s} introuvable pour ${j}</div></div>`;
+    }
+  }catch(e){el.innerHTML='<div style="font-size:13px;color:var(--rd);margin-top:8px">Erreur de vérification.</div>';}
+}
+
+init();
+setInterval(()=>{loadStats();loadVentes();loadTickets();},30000);
+</script>
+</body>
+</html>
