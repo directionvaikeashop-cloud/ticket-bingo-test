@@ -230,6 +230,15 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
             <button class="btn-sm" onclick="supprimerTicketDoc()">✗</button>
           </div>
         </div>
+        <!-- SELECTION DE PAGES PDF -->
+        <div id="t-pages-zone" style="display:none;background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:10px">
+          <div style="font-size:12px;color:var(--ac2);margin-bottom:8px">📄 Sélection des pages à envoyer au client</div>
+          <div class="g2">
+            <div><div class="lbl">Page de début</div><input id="t-page-debut" type="number" placeholder="Ex: 1" min="1" style="margin-bottom:0"/></div>
+            <div><div class="lbl">Page de fin</div><input id="t-page-fin" type="number" placeholder="Ex: 2" min="1" style="margin-bottom:0"/></div>
+          </div>
+          <div id="t-pages-info" style="font-size:11px;color:var(--mu);margin-top:6px;text-align:center"></div>
+        </div>
         <button class="btn btn-p" onclick="regTicket()">Enregistrer et générer le code</button>
         <div id="t-code-result"></div>
       </div>
@@ -378,10 +387,37 @@ function previewTicketDoc(input,type){
     tDocFile=input.files[0];tDocType=type;
     document.getElementById("t-doc-preview").style.display="block";
     document.getElementById("t-doc-nom").textContent=(type==="photo"?"📸 ":"📄 ")+tDocFile.name;
+    // Afficher la sélection de pages seulement pour PDF
+    if(type==="pdf"){
+      document.getElementById("t-pages-zone").style.display="block";
+      // Calculer le nombre de pages
+      const reader = new FileReader();
+      reader.onload = async function(e){
+        try{
+          const pdf = await pdfjsLib.getDocument({data: e.target.result}).promise;
+          const nb = pdf.numPages;
+          document.getElementById("t-page-fin").placeholder = `Ex: ${nb}`;
+          document.getElementById("t-pages-info").textContent = `Ce PDF contient ${nb} page${nb>1?"s":""} — Entrez les pages à envoyer au client`;
+          document.getElementById("t-page-debut").max = nb;
+          document.getElementById("t-page-fin").max = nb;
+        }catch(e){}
+      };
+      reader.readAsArrayBuffer(tDocFile);
+    } else {
+      document.getElementById("t-pages-zone").style.display="none";
+    }
   }
 }
 
-function supprimerTicketDoc(){tDocFile=null;tDocType=null;document.getElementById("t-doc-preview").style.display="none";document.getElementById("t-photo").value="";document.getElementById("t-pdf").value="";}
+function supprimerTicketDoc(){
+  tDocFile=null;tDocType=null;
+  document.getElementById("t-doc-preview").style.display="none";
+  document.getElementById("t-pages-zone").style.display="none";
+  document.getElementById("t-photo").value="";
+  document.getElementById("t-pdf").value="";
+  document.getElementById("t-page-debut").value="";
+  document.getElementById("t-page-fin").value="";
+}
 
 async function uploadDoc(file,type){
   try{
@@ -518,11 +554,12 @@ async function loadDocs(){
 }
 
 // === PDF JOUEUR INTERACTIF ===
-function ouvrirPDFJoueur(url, nom, venteId){
-  // Charger les coches sauvegardées
+function ouvrirPDFJoueur(url, nom, venteId, pageDebut, pageFin){
   const cleCoches = `coches_${venteId}`;
   const cochesExistantes = JSON.parse(localStorage.getItem(cleCoches)||'{}');
-  
+  const pdDebut = parseInt(pageDebut)||1;
+  const pdFin = parseInt(pageFin)||9999;
+
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0a14;z-index:1000;display:flex;flex-direction:column';
   
@@ -531,46 +568,57 @@ function ouvrirPDFJoueur(url, nom, venteId){
       <div style="font-size:14px;font-weight:600;color:#818cf8">🎮 ${nom} — Mode Jeu</div>
       <div style="display:flex;gap:8px;align-items:center">
         <span id="nb-coches" style="font-size:12px;color:#6b7280">0 cochés</span>
-        <button onclick="resetCoches('${cleCoches}',this.closest('div[style*=\"position:fixed\"]'),'${url}','${nom}','${venteId}')" style="padding:5px 10px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.3);border-radius:6px;cursor:pointer;font-size:12px">🔄 Réinitialiser</button>
-        <button onclick="this.closest('div[style*=\"position:fixed\"]').remove()" style="padding:5px 10px;background:rgba(255,255,255,.1);color:#f0f2f8;border:none;border-radius:6px;cursor:pointer;font-size:12px">✕ Fermer</button>
+        <button onclick="resetCoches('${cleCoches}',this.closest('div[style*=position\\:fixed]'))" style="padding:5px 10px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.3);border-radius:6px;cursor:pointer;font-size:12px">🔄</button>
+        <button onclick="this.closest('div[style*=position\\:fixed]').remove()" style="padding:5px 10px;background:rgba(255,255,255,.1);color:#f0f2f8;border:none;border-radius:6px;cursor:pointer;font-size:12px">✕</button>
       </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#111218;border-bottom:1px solid rgba(255,255,255,0.07)">
-      <button id="prev-page" onclick="changerPage(-1,'${url}','${cleCoches}')" style="padding:6px 14px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid rgba(99,102,241,.3);border-radius:6px;cursor:pointer;font-size:13px">← Préc</button>
-      <span id="page-info" style="font-size:13px;color:#6b7280">Page 1 / 1</span>
-      <button id="next-page" onclick="changerPage(1,'${url}','${cleCoches}')" style="padding:6px 14px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid rgba(99,102,241,.3);border-radius:6px;cursor:pointer;font-size:13px">Suiv →</button>
+      <button id="prev-page" onclick="changerPageJoueur(-1)" style="padding:6px 14px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid rgba(99,102,241,.3);border-radius:6px;cursor:pointer;font-size:13px">← Préc</button>
+      <span id="page-info" style="font-size:13px;color:#6b7280">Chargement...</span>
+      <button id="next-page" onclick="changerPageJoueur(1)" style="padding:6px 14px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid rgba(99,102,241,.3);border-radius:6px;cursor:pointer;font-size:13px">Suiv →</button>
     </div>
     <div style="flex:1;overflow-y:auto;padding:12px;display:flex;justify-content:center">
       <div id="pdf-zone" style="position:relative;width:100%;max-width:500px">
-        <div id="pdf-loading" style="text-align:center;padding:40px;color:#6b7280">Chargement du PDF...</div>
+        <div id="pdf-loading" style="text-align:center;padding:40px;color:#6b7280;font-size:14px">⏳ Chargement du PDF...</div>
         <canvas id="pdf-canvas" style="width:100%;border-radius:8px;display:none"></canvas>
         <div id="coches-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:20"></div>
         <div id="touch-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:30;cursor:crosshair"></div>
       </div>
     </div>
     <div style="background:#111218;padding:10px 16px;border-top:1px solid rgba(255,255,255,0.07);text-align:center;font-size:12px;color:#6b7280">
-      Tapez sur vos numéros pour les cocher 🎯 | Tapez encore pour décocher
+      Tapez sur vos numéros pour les cocher 🎯
     </div>
   `;
   
   document.body.appendChild(overlay);
-  chargerPDFJoueur(url, cleCoches, overlay, cochesExistantes);
+  chargerPDFJoueur(url, cleCoches, overlay, cochesExistantes, pdDebut, pdFin);
 }
 
 let pdfDoc = null;
 let pageNum = 1;
 let cochesParPage = {};
+let pageDebutActuel = 1;
+let pageFinActuel = 9999;
+let overlayActuel = null;
+let cleCochesActuel = "";
 
-async function chargerPDFJoueur(url, cleCoches, overlay, cochesExistantes){
+async function chargerPDFJoueur(url, cleCoches, overlay, cochesExistantes, pageDebut, pageFin){
+  overlayActuel = overlay;
+  cleCochesActuel = cleCoches;
+  pageDebutActuel = pageDebut || 1;
   try{
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    // Charger via proxy pour éviter les problèmes CORS
     const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    const loadingTask = pdfjsLib.getDocument({
-      url: proxyUrl,
-      withCredentials: false
-    });
-    pdfDoc = await loadingTask.promise;
+    pdfDoc = await pdfjsLib.getDocument({url: proxyUrl, withCredentials: false}).promise;
+    pageFinActuel = Math.min(pageFin || 9999, pdfDoc.numPages);
+    pageNum = pageDebutActuel;
+    cochesParPage = cochesExistantes || {};
+    await renderPageJoueur(pageNum, cleCoches, overlay);
+  }catch(e){
+    const loading = overlay.querySelector('#pdf-loading');
+    if(loading){loading.textContent='❌ Erreur de chargement — Vérifiez votre connexion';loading.style.color='#f87171';}
+  }
+}
     pageNum = 1;
     cochesParPage = cochesExistantes || {};
     totalPages = pdfDoc.numPages;
@@ -588,9 +636,11 @@ async function renderPageJoueur(num, cleCoches, overlay){
   const touchLayer = overlay.querySelector('#touch-layer');
   const pageInfo = overlay.querySelector('#page-info');
   
-  if(pageInfo) pageInfo.textContent = `Page ${num} / ${pdfDoc.numPages}`;
-  if(loading) loading.style.display = 'block';
-  if(canvas) canvas.style.display = 'none';
+  const pageAffichee = num - pageDebutActuel + 1;
+  const totalAffichees = pageFinActuel - pageDebutActuel + 1;
+  if(pageInfo) pageInfo.textContent = `Feuille ${pageAffichee} / ${totalAffichees}`;
+  if(loading){loading.style.display='block';loading.textContent='⏳ Chargement...';}
+  if(canvas) canvas.style.display='none';
   
   const page = await pdfDoc.getPage(num);
   const viewport = page.getViewport({scale: 2.0});
@@ -670,24 +720,22 @@ function toggleCoche(x, y, pageN, cleCoches, cochesLayer, canvas, overlay){
   if(nbCoches) nbCoches.textContent = `${total} cochés`;
 }
 
-async function changerPage(dir, url, cleCoches){
-  const overlay = document.querySelector('div[style*="position:fixed"][style*="z-index:1000"]');
-  if(!pdfDoc) return;
+async function changerPageJoueur(dir){
+  if(!pdfDoc||!overlayActuel) return;
   const nouvPage = pageNum + dir;
-  if(nouvPage < 1 || nouvPage > pdfDoc.numPages) return;
+  if(nouvPage < pageDebutActuel || nouvPage > pageFinActuel) return;
   pageNum = nouvPage;
-  const cochesLayer = overlay.querySelector('#coches-layer');
-  await renderPageJoueur(pageNum, cleCoches, overlay);
+  await renderPageJoueur(pageNum, cleCochesActuel, overlayActuel);
 }
 
-function resetCoches(cleCoches, overlay, url, nom, venteId){
+function resetCoches(cleCoches, overlay){
   if(confirm('Réinitialiser toutes les coches ?')){
-    cochesParPage = {};
+    cochesParPage={};
     localStorage.removeItem(cleCoches);
-    const cochesLayer = overlay.querySelector('#coches-layer');
-    if(cochesLayer) cochesLayer.innerHTML = '';
-    const nbCoches = overlay.querySelector('#nb-coches');
-    if(nbCoches) nbCoches.textContent = '0 cochés';
+    const cochesLayer=overlay.querySelector('#coches-layer');
+    if(cochesLayer)cochesLayer.innerHTML='';
+    const nbCoches=overlay.querySelector('#nb-coches');
+    if(nbCoches)nbCoches.textContent='0 cochés';
   }
 }
 
@@ -697,12 +745,15 @@ async function regTicket(){
   const j=document.getElementById("t-jeu").value;
   const s=document.getElementById("t-serie").value.trim();
   const p=parseInt(document.getElementById("t-prix").value)||0;
+  const pageDebut=parseInt(document.getElementById("t-page-debut").value)||null;
+  const pageFin=parseInt(document.getElementById("t-page-fin").value)||null;
   if(!a||!j||!s){toast("toast-t","Remplissez tous les champs",false);return;}
   toast("toast-t","Enregistrement...");
   let photo_url=null,pdf_url=null;
   if(tDocFile){toast("toast-t","Upload...");const url=await uploadDoc(tDocFile,tDocType);if(tDocType==="photo")photo_url=url;else pdf_url=url;}
   try{
-    const r=await fetch("/api/ticket",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({acheteur:a,jeu:j,serie:s,prix:p,photo_url,pdf_url})});
+    const r=await fetch("/api/ticket",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({acheteur:a,jeu:j,serie:s,prix:p,photo_url,pdf_url,page_debut:pageDebut,page_fin:pageFin})});
     const d=await r.json();
     if(d.ok){
       const code=d.code_acheteur;
@@ -759,8 +810,9 @@ async function chargerTicket(){
           ${t.pdf_url?`
             <div style="background:rgba(99,102,241,.1);border:.5px solid var(--ac);border-radius:8px;padding:14px;text-align:center">
               <div style="font-size:14px;color:var(--ac2);margin-bottom:6px">🎮 Votre ticket PDF</div>
+              ${t.page_debut&&t.page_fin?`<div style="font-size:12px;color:var(--gd);margin-bottom:6px">📄 Feuilles ${t.page_debut} à ${t.page_fin}</div>`:''}
               <div style="font-size:12px;color:var(--mu);margin-bottom:10px">Tapez sur vos numéros pour les cocher pendant le tournoi !</div>
-              <button onclick="ouvrirPDFJoueur('${t.pdf_url}','${t.acheteur}','ticket_${t.id}')" style="width:100%;padding:12px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600">🎯 Jouer maintenant !</button>
+              <button onclick="ouvrirPDFJoueur('${t.pdf_url}','${t.acheteur}','ticket_${t.id}','${t.page_debut||1}','${t.page_fin||9999}')" style="width:100%;padding:12px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600">🎯 Jouer maintenant !</button>
             </div>`:""}
           ${t.photo_url?`
             <div style="margin-top:10px;border-radius:8px;overflow:hidden">
