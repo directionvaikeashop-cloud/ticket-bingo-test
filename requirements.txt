@@ -1,4 +1,3 @@
 flask
-pypdf
-reportlab
 gunicorn
+sendgrid
