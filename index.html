@@ -324,9 +324,6 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
 </div>
 
 <script>
-// PDF.js config
-if(typeof pdfjsLib !== 'undefined') pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
 let TOKEN="", ADMIN=false, USER_NOM="";
 let pk=25, qty=1, planSel=30;
 let docFile=null, docType=null;
@@ -616,15 +613,6 @@ async function chargerPDFJoueur(url, cleCoches, overlay, cochesExistantes, pageD
   }catch(e){
     const loading = overlay.querySelector('#pdf-loading');
     if(loading){loading.textContent='❌ Erreur de chargement — Vérifiez votre connexion';loading.style.color='#f87171';}
-  }
-}
-    pageNum = 1;
-    cochesParPage = cochesExistantes || {};
-    totalPages = pdfDoc.numPages;
-    await renderPageJoueur(pageNum, cleCoches, overlay);
-  }catch(e){
-    const loading = overlay.querySelector('#pdf-loading');
-    if(loading) loading.textContent = 'Erreur de chargement du PDF';
   }
 }
 
