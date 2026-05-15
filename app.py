@@ -1,5 +1,5 @@
-import hashlib, datetime, os, secrets, string, json
-from flask import Flask, request, jsonify, send_from_directory
+import hashlib, datetime, os, secrets, string, json, urllib.request, urllib.parse
+from flask import Flask, request, jsonify, send_from_directory, Response
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
@@ -249,3 +249,20 @@ def admin_desactiver():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
+@app.route("/api/pdf-proxy")
+def pdf_proxy():
+    url = request.args.get("url","")
+    if not url:
+        return jsonify({"ok": False}), 400
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        resp = urllib.request.urlopen(req, timeout=30)
+        data = resp.read()
+        return Response(data, content_type="application/pdf", headers={
+            "Access-Control-Allow-Origin": "*",
+            "Content-Disposition": "inline"
+        })
+    except Exception as e:
+        print(f"[PDF PROXY ERR] {e}")
+        return jsonify({"ok": False, "msg": str(e)}), 500
