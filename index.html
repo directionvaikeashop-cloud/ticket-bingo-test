@@ -5,13 +5,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Ticket Bingo</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
 :root{--bg:#08090d;--s1:#111218;--s2:#191b24;--bd:rgba(255,255,255,0.07);--bd2:rgba(255,255,255,0.13);--tx:#f0f2f8;--mu:#6b7280;--ac:#6366f1;--ac2:#818cf8;--gd:#f59e0b;--gr:#10b981;--rd:#ef4444;--r:12px;--rs:8px}
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--tx);min-height:100vh}
-/* SECURITE - Bloquer selection et clic droit */
-.doc-viewer{user-select:none;-webkit-user-select:none;-moz-user-select:none}
-.doc-viewer img{pointer-events:none;-webkit-user-drag:none}
+.doc-viewer{user-select:none;-webkit-user-select:none}
 .screen{display:none}.screen.active{display:flex;flex-direction:column;min-height:100vh}
 .hdr{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;background:var(--s1);border-bottom:1px solid var(--bd);position:sticky;top:0;z-index:100}
 .logo{font-family:'Syne',sans-serif;font-weight:800;font-size:20px;display:flex;align-items:center;gap:10px}
@@ -31,7 +30,7 @@ select option{background:var(--s2)}
 .pk-n{font-family:'Syne',sans-serif;font-size:18px;font-weight:700}
 .pk-l{font-size:10px;color:var(--mu)}
 .qty-r{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-.qb{width:36px;height:36px;border:0.5px solid var(--bd2);border-radius:var(--rs);background:var(--s2);color:var(--tx);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:'DM Sans',sans-serif}
+.qb{width:36px;height:36px;border:0.5px solid var(--bd2);border-radius:var(--rs);background:var(--s2);color:var(--tx);font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .qv{font-family:'Syne',sans-serif;font-size:20px;font-weight:700;min-width:28px;text-align:center}
 .qd{font-size:12px;color:var(--mu)}
 .tot{background:var(--s2);border-radius:var(--rs);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;margin:10px 0}
@@ -40,6 +39,7 @@ select option{background:var(--s2)}
 .btn{width:100%;padding:11px;border:none;border-radius:var(--rs);font-size:14px;font-weight:500;cursor:pointer;font-family:'DM Sans',sans-serif;transition:all .15s;margin-top:4px}
 .btn-p{background:linear-gradient(135deg,var(--ac),var(--ac2));color:#fff}
 .btn-g{background:linear-gradient(135deg,#059669,var(--gr));color:#fff}
+.btn-r{background:linear-gradient(135deg,var(--rd),#f87171);color:#fff}
 .btn-sm{padding:6px 12px;font-size:12px;border-radius:6px;border:0.5px solid var(--bd2);background:var(--s2);color:var(--tx);cursor:pointer;font-family:'DM Sans',sans-serif}
 .badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:500}
 .b-ok{background:rgba(16,185,129,.15);color:#34d399}
@@ -65,28 +65,41 @@ select option{background:var(--s2)}
 .plan-p{font-size:18px;font-weight:700;color:var(--ac2);margin-top:4px}
 .code-box{background:var(--s2);border:1px solid var(--ac);border-radius:var(--rs);padding:16px;text-align:center;margin:12px 0}
 .code-val{font-family:monospace;font-size:26px;font-weight:800;letter-spacing:6px;color:var(--ac2)}
-
-/* VISIONNEUSE SECURISEE */
-.doc-secure{position:relative;background:var(--s2);border-radius:var(--r);overflow:hidden;margin-top:10px}
-.doc-secure-overlay{position:absolute;top:0;left:0;right:0;bottom:0;z-index:10;background:transparent}
-.doc-watermark{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:18px;font-weight:700;color:rgba(99,102,241,0.15);white-space:nowrap;z-index:5;pointer-events:none;font-family:'Syne',sans-serif;letter-spacing:2px}
-.doc-secure img{width:100%;display:block;pointer-events:none;-webkit-user-drag:none}
 .sec-badge{display:flex;align-items:center;gap:6px;background:rgba(239,68,68,.1);border:0.5px solid rgba(239,68,68,.3);border-radius:var(--rs);padding:8px 12px;font-size:12px;color:#f87171;margin-bottom:10px}
 .expire-badge{background:rgba(245,158,11,.1);border:0.5px solid rgba(245,158,11,.3);border-radius:var(--rs);padding:8px 12px;font-size:12px;color:#fbbf24;margin-bottom:10px;text-align:center}
+
+/* PDF VIEWER */
+.pdf-viewer-wrap{position:relative;background:#fff;border-radius:var(--rs);overflow:hidden;margin-top:10px}
+.pdf-canvas-wrap{position:relative;width:100%;overflow:hidden}
+.pdf-canvas-wrap canvas{width:100% !important;height:auto !important;display:block}
+.pdf-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:10}
+.pdf-nav{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--s2);border-radius:var(--rs);margin-top:8px}
+.pdf-nav span{font-size:13px;color:var(--mu)}
+.watermark-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:20px;font-weight:700;color:rgba(99,102,241,0.12);white-space:nowrap;z-index:5;pointer-events:none;font-family:'Syne',sans-serif;letter-spacing:2px}
+
+/* MARQUEURS DE COCHAGE */
+.check-marker{position:absolute;border-radius:50%;background:rgba(239,68,68,0.75);border:2px solid #ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;font-weight:700;transition:all .15s;z-index:20}
+.check-marker:hover{background:rgba(239,68,68,0.9);transform:scale(1.1)}
+.check-marker.checked{background:rgba(16,185,129,0.85);border-color:#10b981}
+
+/* BINGO ALERT */
+.bingo-alert{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(135deg,#6366f1,#f59e0b);border-radius:var(--r);padding:30px;text-align:center;z-index:1000;box-shadow:0 20px 60px rgba(0,0,0,.5);animation:popIn .3s ease}
+@keyframes popIn{from{transform:translate(-50%,-50%) scale(0.5);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+.bingo-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:999}
+
+/* TICKET NUMERO INPUT */
+.num-input-wrap{background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:10px}
+.num-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:8px}
+.num-btn{padding:8px 4px;border:0.5px solid var(--bd2);border-radius:6px;background:var(--s1);color:var(--tx);font-size:12px;cursor:pointer;text-align:center;font-family:'DM Sans',sans-serif;transition:all .1s}
+.num-btn.coche{background:var(--rd);border-color:var(--rd);color:#fff;font-weight:700}
+.num-btn:hover{border-color:var(--ac)}
 </style>
 </head>
 <body>
 
-<!-- BLOQUER CLIC DROIT GLOBALEMENT -->
 <script>
-document.addEventListener('contextmenu', function(e) {
-  if(e.target.closest('.doc-viewer')) { e.preventDefault(); return false; }
-});
-document.addEventListener('keydown', function(e) {
-  if((e.ctrlKey || e.metaKey) && (e.key==='s'||e.key==='p'||e.key==='S'||e.key==='P')) {
-    if(document.getElementById('tab-tickets')?.classList.contains('active')) { e.preventDefault(); return false; }
-  }
-});
+document.addEventListener('contextmenu',e=>{if(e.target.closest('.doc-viewer'))e.preventDefault();});
+document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='p'))e.preventDefault();});
 </script>
 
 <!-- LOGIN -->
@@ -169,12 +182,10 @@ document.addEventListener('keydown', function(e) {
         <div class="tot"><span class="tot-l">Total</span><span class="tot-v" id="btv">0 XPF</span></div>
         <button class="btn btn-p" onclick="enregistrerVente()">Enregistrer la vente</button>
       </div>
-
       <div class="card">
         <div class="ct" style="justify-content:space-between"><span>📋 Ventes</span><button class="btn-sm" onclick="loadVentes()">↻</button></div>
         <div id="b-liste"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune vente</div></div>
       </div>
-
       <div class="card">
         <div class="ct">🎮 Gérer les jeux</div>
         <div id="jeux-list"></div>
@@ -185,36 +196,65 @@ document.addEventListener('keydown', function(e) {
       </div>
     </div>
 
-    <!-- TAB TICKETS (CLIENT) -->
+    <!-- TAB TICKETS -->
     <div id="tab-tickets" class="tab doc-viewer">
       <div id="toast-t"></div>
 
+      <!-- MES DOCUMENTS -->
       <div class="card">
-        <div class="ct">📂 Mes documents</div>
+        <div class="ct">📂 Mes tickets reçus</div>
         <div id="docs-liste"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun document</div></div>
       </div>
 
+      <!-- VENDRE UN TICKET -->
       <div class="card">
-        <div class="ct">🎫 Enregistrer un ticket vendu</div>
+        <div class="ct">🎫 Vendre un ticket à un client</div>
         <div class="g2">
-          <div><div class="lbl">Acheteur</div><input id="t-acheteur" placeholder="Jean Martin"/></div>
+          <div><div class="lbl">Nom acheteur</div><input id="t-acheteur" placeholder="Jean Martin"/></div>
           <div><div class="lbl">Jeu</div><select id="t-jeu"><option value="">-- Choisir --</option></select></div>
         </div>
         <div class="g2">
           <div><div class="lbl">N° de série</div><input id="t-serie" placeholder="Ex: 042"/></div>
           <div><div class="lbl">Prix (XPF)</div><input id="t-prix" type="number" placeholder="100"/></div>
         </div>
-        <button class="btn btn-p" onclick="regTicket()">+ Enregistrer</button>
+        <div class="lbl" style="margin-bottom:8px">📎 Document du ticket (optionnel)</div>
+        <div style="display:flex;gap:8px;margin-bottom:10px">
+          <button class="btn-sm" style="flex:1;padding:10px" onclick="document.getElementById('t-photo').click()">📸 Photo</button>
+          <button class="btn-sm" style="flex:1;padding:10px" onclick="document.getElementById('t-pdf').click()">📄 PDF</button>
+        </div>
+        <input type="file" id="t-photo" accept="image/*" capture="environment" style="display:none" onchange="previewTicketDoc(this,'photo')"/>
+        <input type="file" id="t-pdf" accept=".pdf" style="display:none" onchange="previewTicketDoc(this,'pdf')"/>
+        <div id="t-doc-preview" style="display:none;background:var(--s2);border-radius:var(--rs);padding:10px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:13px;color:var(--gr)" id="t-doc-nom">Document</span>
+            <button class="btn-sm" onclick="supprimerTicketDoc()">✗</button>
+          </div>
+        </div>
+        <button class="btn btn-p" onclick="regTicket()">Enregistrer et générer le code</button>
+        <div id="t-code-result"></div>
       </div>
 
+      <!-- MES TICKETS VENDUS -->
       <div class="card">
-        <div class="ct">📊 Mes tickets</div>
+        <div class="ct">📊 Mes tickets vendus</div>
         <div class="g2" style="margin-bottom:12px">
           <div class="stat"><div class="stat-v" id="cnb">0</div><div class="stat-l">Tickets vendus</div></div>
           <div class="stat"><div class="stat-v" id="cca">0 XPF</div><div class="stat-l">Chiffre d'affaires</div></div>
         </div>
         <div id="t-liste"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun ticket</div></div>
       </div>
+    </div>
+
+    <!-- TAB JOUER -->
+    <div id="tab-jouer" class="tab doc-viewer">
+      <div id="toast-j"></div>
+      <div class="card">
+        <div class="ct">🎮 Jouer mon ticket</div>
+        <div class="lbl">Entrez votre code ticket</div>
+        <input id="j-code" placeholder="Ex: AB12CD" style="text-transform:uppercase;letter-spacing:3px;text-align:center;font-size:18px"/>
+        <button class="btn btn-p" onclick="chargerTicket()">Ouvrir mon ticket</button>
+      </div>
+      <div id="j-ticket-zone"></div>
     </div>
 
     <!-- TAB VERIF -->
@@ -233,7 +273,6 @@ document.addEventListener('keydown', function(e) {
     <!-- TAB ADMIN -->
     <div id="tab-admin" class="tab">
       <div id="toast-adm"></div>
-
       <div class="card">
         <div class="ct">🏆 Créer un tournoi</div>
         <div class="lbl">Nom du tournoi</div>
@@ -245,7 +284,6 @@ document.addEventListener('keydown', function(e) {
         <button class="btn btn-p" onclick="creerTournoi()">Créer le tournoi</button>
         <div id="tournois-liste" style="margin-top:12px"></div>
       </div>
-
       <div class="card">
         <div class="ct">🔑 Générer un code client</div>
         <div class="lbl">Nom du client</div>
@@ -260,7 +298,6 @@ document.addEventListener('keydown', function(e) {
         <button class="btn btn-p" onclick="genCode()">Générer le code</button>
         <div id="code-result"></div>
       </div>
-
       <div class="card">
         <div class="ct" style="justify-content:space-between"><span>👥 Codes actifs</span><button class="btn-sm" onclick="loadCodes()">↻</button></div>
         <div id="codes-liste"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Chargement...</div></div>
@@ -272,20 +309,27 @@ document.addEventListener('keydown', function(e) {
   <nav class="nav">
     <button class="nb active" id="nb-boutique" onclick="switchTab('boutique',this)"><span class="ni">🏪</span>Boutique</button>
     <button class="nb" id="nb-tickets" onclick="switchTab('tickets',this)"><span class="ni">🎫</span>Tickets</button>
+    <button class="nb" id="nb-jouer" onclick="switchTab('jouer',this)"><span class="ni">🎮</span>Jouer</button>
     <button class="nb" id="nb-verif" onclick="switchTab('verif',this)"><span class="ni">🏆</span>Vérifier</button>
     <button class="nb" id="nb-admin" onclick="switchTab('admin',this)" style="display:none"><span class="ni">⚙️</span>Admin</button>
   </nav>
 </div>
 
 <script>
+// PDF.js config
+if(typeof pdfjsLib !== 'undefined') pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
 let TOKEN="", ADMIN=false, USER_NOM="";
 let pk=25, qty=1, planSel=30;
 let docFile=null, docType=null;
+let tDocFile=null, tDocType=null;
 let tickets=[], jeux=[], ventes=[], tournois=[];
+let cochesSauvegardees = {};
+let pdfActuel = null, pageActuelle = 1, totalPages = 1;
 const CLOUD="dz556b0ee", PRESET="alerte_upload";
 
 function show(id){document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));document.getElementById(id).classList.add("active");}
-function toast(id,msg,ok=true){const el=document.getElementById(id);el.textContent=(ok?"✓ ":"✗ ")+msg;el.className="toast "+(ok?"t-ok":"t-er");setTimeout(()=>el.className="toast",4000);}
+function toast(id,msg,ok=true){const el=document.getElementById(id);if(!el)return;el.textContent=(ok?"✓ ":"✗ ")+msg;el.className="toast "+(ok?"t-ok":"t-er");setTimeout(()=>el.className="toast",4000);}
 
 async function doLogin(){
   const code=document.getElementById("login-code").value.trim().toUpperCase();
@@ -322,27 +366,27 @@ function previewDoc(input,type){
     docFile=input.files[0];docType=type;
     document.getElementById("doc-preview").style.display="block";
     document.getElementById("doc-nom").textContent=(type==="photo"?"📸 ":"📄 ")+docFile.name;
-    if(type==="photo"){
-      const img=document.getElementById("doc-img-preview");img.style.display="block";
-      const reader=new FileReader();reader.onload=e=>img.src=e.target.result;reader.readAsDataURL(docFile);
-    }else document.getElementById("doc-img-preview").style.display="none";
+    if(type==="photo"){const img=document.getElementById("doc-img-preview");img.style.display="block";const reader=new FileReader();reader.onload=e=>img.src=e.target.result;reader.readAsDataURL(docFile);}
+    else document.getElementById("doc-img-preview").style.display="none";
   }
 }
 
-function supprimerDoc(){
-  docFile=null;docType=null;
-  document.getElementById("doc-preview").style.display="none";
-  document.getElementById("doc-img-preview").style.display="none";
-  document.getElementById("doc-photo").value="";
-  document.getElementById("doc-pdf").value="";
+function supprimerDoc(){docFile=null;docType=null;document.getElementById("doc-preview").style.display="none";document.getElementById("doc-photo").value="";document.getElementById("doc-pdf").value="";}
+
+function previewTicketDoc(input,type){
+  if(input.files&&input.files[0]){
+    tDocFile=input.files[0];tDocType=type;
+    document.getElementById("t-doc-preview").style.display="block";
+    document.getElementById("t-doc-nom").textContent=(type==="photo"?"📸 ":"📄 ")+tDocFile.name;
+  }
 }
+
+function supprimerTicketDoc(){tDocFile=null;tDocType=null;document.getElementById("t-doc-preview").style.display="none";document.getElementById("t-photo").value="";document.getElementById("t-pdf").value="";}
 
 async function uploadDoc(file,type){
   try{
     const fd=new FormData();fd.append("file",file);fd.append("upload_preset",PRESET);
-    const endpoint=type==="pdf"
-      ?`https://api.cloudinary.com/v1_1/${CLOUD}/raw/upload`
-      :`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`;
+    const endpoint=type==="pdf"?`https://api.cloudinary.com/v1_1/${CLOUD}/raw/upload`:`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`;
     const r=await fetch(endpoint,{method:"POST",body:fd});
     const d=await r.json();
     return d.secure_url||null;
@@ -359,20 +403,11 @@ async function enregistrerVente(){
   if(!client||!jeu||!serie){toast("toast-b","Remplissez les champs obligatoires",false);return;}
   toast("toast-b","Enregistrement...");
   let photo_url=null,pdf_url=null;
-  if(docFile){
-    toast("toast-b","Upload sécurisé...");
-    const url=await uploadDoc(docFile,docType);
-    if(docType==="photo")photo_url=url;else pdf_url=url;
-  }
+  if(docFile){toast("toast-b","Upload sécurisé...");const url=await uploadDoc(docFile,docType);if(docType==="photo")photo_url=url;else pdf_url=url;}
   try{
-    const r=await fetch("/api/vente",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({client,email,jeu,tournoi_id,pack:pk,qty,serie,prix,photo_url,pdf_url})});
+    const r=await fetch("/api/vente",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({client,email,jeu,tournoi_id,pack:pk,qty,serie,prix,photo_url,pdf_url})});
     const d=await r.json();
-    if(d.ok){toast("toast-b","Vente enregistrée !");
-      ["b-client","b-email","b-serie","b-prix"].forEach(id=>document.getElementById(id).value="");
-      document.getElementById("b-jeu").value="";document.getElementById("b-tournoi").value="";
-      supprimerDoc();qty=1;document.getElementById("qv").textContent="1";document.getElementById("btv").textContent="0 XPF";
-      loadVentes();loadStats();}
+    if(d.ok){toast("toast-b","Vente enregistrée !");["b-client","b-email","b-serie","b-prix"].forEach(id=>document.getElementById(id).value="");document.getElementById("b-jeu").value="";document.getElementById("b-tournoi").value="";supprimerDoc();qty=1;document.getElementById("qv").textContent="1";document.getElementById("btv").textContent="0 XPF";loadVentes();loadStats();}
     else toast("toast-b",d.msg,false);
   }catch(e){toast("toast-b","Erreur",false);}
 }
@@ -386,7 +421,13 @@ async function loadJeux(){
       jeux.forEach(j=>{const o=document.createElement("option");o.value=j;o.textContent=j;s.appendChild(o);});
     });
     const el=document.getElementById("jeux-list");
-    el.innerHTML=jeux.map(j=>`<div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--s2);border-radius:6px;margin-bottom:6px;font-size:13px">${j}<span class="badge b-ok">Actif</span></div>`).join("");
+    el.innerHTML=jeux.map(j=>`<div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--s2);border-radius:6px;margin-bottom:6px;font-size:13px">
+      <span>${j}</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <span class="badge b-ok">Actif</span>
+        <button class="btn-sm" onclick="delJeu('${j}')">✗</button>
+      </div>
+    </div>`).join("");
   }catch(e){}
 }
 
@@ -395,14 +436,17 @@ async function addJeu(){
   try{await fetch("/api/jeux",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nom})});document.getElementById("new-jeu").value="";loadJeux();}catch(e){}
 }
 
+async function delJeu(nom){
+  try{await fetch(`/api/jeux/${encodeURIComponent(nom)}`,{method:"DELETE"});loadJeux();}catch(e){}
+}
+
 async function loadTournois(){
   try{
     const r=await fetch("/api/tournois");tournois=await r.json();
     const sel=document.getElementById("b-tournoi");
     sel.innerHTML='<option value="">-- Aucun tournoi --</option>';
     tournois.forEach(t=>{const o=document.createElement("option");o.value=t.id;o.textContent=`${t.nom} — ${new Date(t.date_tournoi).toLocaleDateString('fr-FR')}`;sel.appendChild(o);});
-    const el=document.getElementById("tournois-liste");
-    if(!el)return;
+    const el=document.getElementById("tournois-liste");if(!el)return;
     if(!tournois.length){el.innerHTML='<div style="font-size:13px;color:var(--mu);text-align:center;padding:10px">Aucun tournoi créé</div>';return;}
     el.innerHTML=tournois.map(t=>`<div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--s2);border-radius:6px;margin-bottom:6px;font-size:13px">
       <div><div style="font-weight:500">${t.nom}</div><div style="font-size:11px;color:var(--mu)">${t.jeu} · ${new Date(t.date_tournoi).toLocaleString('fr-FR')}</div></div>
@@ -417,8 +461,7 @@ async function creerTournoi(){
   const date=document.getElementById("t-date").value;
   if(!nom||!jeu||!date){toast("toast-adm","Remplissez tous les champs",false);return;}
   try{
-    const r=await fetch("/api/tournoi",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},
-      body:JSON.stringify({nom,jeu,date_tournoi:new Date(date).toISOString()})});
+    const r=await fetch("/api/tournoi",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({nom,jeu,date_tournoi:new Date(date).toISOString()})});
     const d=await r.json();
     if(d.ok){toast("toast-adm","Tournoi créé !");["t-nom","t-date"].forEach(id=>document.getElementById(id).value="");document.getElementById("t-jeu-admin").value="";loadTournois();}
   }catch(e){toast("toast-adm","Erreur",false);}
@@ -450,60 +493,223 @@ async function loadDocs(){
     const el=document.getElementById("docs-liste");
     if(!docs.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun document reçu</div>';return;}
     el.innerHTML=docs.map(v=>{
-      const expire = v.date_expiration ? new Date(v.date_expiration) : null;
-      const estExpire = expire && new Date() > expire;
-      const expireStr = expire ? expire.toLocaleString('fr-FR') : null;
+      const expire=v.date_expiration?new Date(v.date_expiration):null;
+      const estExpire=expire&&new Date()>expire;
+      const expireStr=expire?expire.toLocaleString('fr-FR'):null;
       return `<div style="background:var(--s2);border-radius:var(--rs);padding:14px;margin-bottom:10px;border:0.5px solid var(--bd)">
         <div style="font-size:13px;font-weight:500;margin-bottom:6px">🎱 ${v.jeu} — Série ${v.serie}</div>
         <div style="font-size:12px;color:var(--mu);margin-bottom:8px">${v.qty}×${v.pack} feuilles · ${v.client}</div>
         ${expireStr?`<div class="expire-badge">⏱ Accès jusqu'au ${expireStr}</div>`:""}
-        ${estExpire?`<div style="background:rgba(239,68,68,.1);border:.5px solid rgba(239,68,68,.3);border-radius:6px;padding:10px;text-align:center;color:#f87171;font-size:13px">🔒 Document expiré — Tournoi terminé</div>`:""}
+        ${estExpire?`<div style="background:rgba(239,68,68,.1);border:.5px solid rgba(239,68,68,.3);border-radius:6px;padding:10px;text-align:center;color:#f87171;font-size:13px">🔒 Document expiré</div>`:""}
         ${!estExpire&&v.photo_url?`
-        <div class="doc-secure" oncontextmenu="return false">
-          <div class="doc-watermark">${USER_NOM} — CONFIDENTIEL</div>
-          <div class="doc-secure-overlay" oncontextmenu="return false"></div>
-          <img src="${v.photo_url}" style="width:100%;display:block;pointer-events:none;-webkit-user-drag:none" oncontextmenu="return false" ondragstart="return false"/>
-        </div>`:""}
+          <div style="position:relative;background:#fff;border-radius:8px;overflow:hidden;margin-top:8px">
+            <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:16px;font-weight:700;color:rgba(99,102,241,0.15);white-space:nowrap;pointer-events:none;z-index:5;font-family:'Syne',sans-serif">${USER_NOM} — CONFIDENTIEL</div>
+            <img src="${v.photo_url}" style="width:100%;display:block;pointer-events:none" oncontextmenu="return false" ondragstart="return false"/>
+          </div>`:""}
         ${!estExpire&&v.pdf_url?`
-        <div style="background:rgba(99,102,241,.1);border:.5px solid var(--ac);border-radius:6px;padding:12px;text-align:center">
-          <div style="font-size:13px;color:var(--ac2);margin-bottom:6px">📄 Document PDF disponible</div>
-          <div style="font-size:11px;color:var(--mu)">🔒 Lecture seule — Non téléchargeable</div>
-          <button onclick="ouvrirPDFSecurise('${v.pdf_url}','${USER_NOM}')" style="margin-top:8px;padding:8px 16px;background:var(--ac);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px">Voir le document</button>
-        </div>`:""}
+          <div style="background:rgba(99,102,241,.1);border:.5px solid var(--ac);border-radius:6px;padding:12px;text-align:center;margin-top:8px">
+            <div style="font-size:13px;color:var(--ac2);margin-bottom:6px">📄 PDF de vos tickets</div>
+            <div style="font-size:11px;color:var(--mu);margin-bottom:8px">🔒 Lecture seule — Non imprimable</div>
+            <button onclick="ouvrirPDFJoueur('${v.pdf_url}','${USER_NOM}','${v.id}')" style="padding:10px 20px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;width:100%">🎮 Ouvrir et jouer</button>
+          </div>`:""}
       </div>`;
     }).join("");
   }catch(e){}
 }
 
-function ouvrirPDFSecurise(url, nom){
-  const w=window.open("","_blank","width=800,height=600,toolbar=no,menubar=no,scrollbars=yes,resizable=yes");
-  w.document.write(`<!DOCTYPE html><html><head><title>Document Sécurisé</title>
-  <style>body{margin:0;background:#1a1a2e;font-family:sans-serif}
-  .bar{background:#0f0f1a;padding:10px 16px;display:flex;align-items:center;justify-content:space-between}
-  .bar-t{color:#818cf8;font-size:14px;font-weight:600}.bar-s{color:#ef4444;font-size:12px}
-  iframe{width:100%;height:calc(100vh - 50px);border:none}
-  </style>
-  <script>
-  document.addEventListener('keydown',function(e){if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='p'))e.preventDefault();});
-  document.addEventListener('contextmenu',function(e){e.preventDefault();});
-  <\/script>
-  </head><body>
-  <div class="bar"><span class="bar-t">🔒 Document Sécurisé — ${nom}</span><span class="bar-s">Lecture seule · Non imprimable</span></div>
-  <iframe src="${url}#toolbar=0&navpanes=0&scrollbar=1&statusbar=0&messages=0&zoom=page-fit" allowfullscreen></iframe>
-  </body></html>`);
-  w.document.close();
+// === PDF JOUEUR INTERACTIF ===
+function ouvrirPDFJoueur(url, nom, venteId){
+  // Charger les coches sauvegardées
+  const cleCoches = `coches_${venteId}`;
+  const cochesExistantes = JSON.parse(localStorage.getItem(cleCoches)||'{}');
+  
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0a14;z-index:1000;display:flex;flex-direction:column';
+  
+  overlay.innerHTML = `
+    <div style="background:#111218;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.1)">
+      <div style="font-size:14px;font-weight:600;color:#818cf8">🎮 ${nom} — Mode Jeu</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <span id="nb-coches" style="font-size:12px;color:#6b7280">0 cochés</span>
+        <button onclick="resetCoches('${cleCoches}',this.closest('div[style*=\"position:fixed\"]'),'${url}','${nom}','${venteId}')" style="padding:5px 10px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.3);border-radius:6px;cursor:pointer;font-size:12px">🔄 Réinitialiser</button>
+        <button onclick="this.closest('div[style*=\"position:fixed\"]').remove()" style="padding:5px 10px;background:rgba(255,255,255,.1);color:#f0f2f8;border:none;border-radius:6px;cursor:pointer;font-size:12px">✕ Fermer</button>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 16px;background:#111218;border-bottom:1px solid rgba(255,255,255,0.07)">
+      <button id="prev-page" onclick="changerPage(-1,'${url}','${cleCoches}')" style="padding:6px 14px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid rgba(99,102,241,.3);border-radius:6px;cursor:pointer;font-size:13px">← Préc</button>
+      <span id="page-info" style="font-size:13px;color:#6b7280">Page 1 / 1</span>
+      <button id="next-page" onclick="changerPage(1,'${url}','${cleCoches}')" style="padding:6px 14px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid rgba(99,102,241,.3);border-radius:6px;cursor:pointer;font-size:13px">Suiv →</button>
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:12px;display:flex;justify-content:center">
+      <div id="pdf-zone" style="position:relative;width:100%;max-width:500px">
+        <div id="pdf-loading" style="text-align:center;padding:40px;color:#6b7280">Chargement du PDF...</div>
+        <canvas id="pdf-canvas" style="width:100%;border-radius:8px;display:none"></canvas>
+        <div id="coches-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:20"></div>
+        <div id="touch-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:30;cursor:crosshair"></div>
+      </div>
+    </div>
+    <div style="background:#111218;padding:10px 16px;border-top:1px solid rgba(255,255,255,0.07);text-align:center;font-size:12px;color:#6b7280">
+      Tapez sur vos numéros pour les cocher 🎯 | Tapez encore pour décocher
+    </div>
+  `;
+  
+  document.body.appendChild(overlay);
+  chargerPDFJoueur(url, cleCoches, overlay, cochesExistantes);
 }
 
+let pdfDoc = null;
+let pageNum = 1;
+let cochesParPage = {};
+
+async function chargerPDFJoueur(url, cleCoches, overlay, cochesExistantes){
+  try{
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfDoc = await pdfjsLib.getDocument(url).promise;
+    pageNum = 1;
+    cochesParPage = cochesExistantes || {};
+    totalPages = pdfDoc.numPages;
+    await renderPageJoueur(pageNum, cleCoches, overlay);
+  }catch(e){
+    const loading = overlay.querySelector('#pdf-loading');
+    if(loading) loading.textContent = 'Erreur de chargement du PDF';
+  }
+}
+
+async function renderPageJoueur(num, cleCoches, overlay){
+  const canvas = overlay.querySelector('#pdf-canvas');
+  const loading = overlay.querySelector('#pdf-loading');
+  const cochesLayer = overlay.querySelector('#coches-layer');
+  const touchLayer = overlay.querySelector('#touch-layer');
+  const pageInfo = overlay.querySelector('#page-info');
+  
+  if(pageInfo) pageInfo.textContent = `Page ${num} / ${pdfDoc.numPages}`;
+  if(loading) loading.style.display = 'block';
+  if(canvas) canvas.style.display = 'none';
+  
+  const page = await pdfDoc.getPage(num);
+  const viewport = page.getViewport({scale: 2.0});
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  
+  const ctx = canvas.getContext('2d');
+  await page.render({canvasContext: ctx, viewport}).promise;
+  
+  if(loading) loading.style.display = 'none';
+  if(canvas) canvas.style.display = 'block';
+  
+  // Recalculer les dimensions
+  const rect = canvas.getBoundingClientRect();
+  if(cochesLayer){
+    cochesLayer.innerHTML = '';
+    cochesLayer.style.pointerEvents = 'none';
+  }
+  
+  // Afficher les coches existantes
+  const pageCoches = cochesParPage[`page_${num}`] || [];
+  pageCoches.forEach(c => {
+    afficherCoche(c.x, c.y, c.id, cochesLayer, canvas);
+  });
+  
+  // Mettre à jour le compteur
+  const total = Object.values(cochesParPage).flat().length;
+  const nbCoches = overlay.querySelector('#nb-coches');
+  if(nbCoches) nbCoches.textContent = `${total} cochés`;
+  
+  // Gérer les touches
+  if(touchLayer){
+    touchLayer.onclick = (e) => {
+      const rect2 = canvas.getBoundingClientRect();
+      const xPct = (e.clientX - rect2.left) / rect2.width * 100;
+      const yPct = (e.clientY - rect2.top) / rect2.height * 100;
+      toggleCoche(xPct, yPct, num, cleCoches, cochesLayer, canvas, overlay);
+    };
+  }
+}
+
+function afficherCoche(x, y, id, cochesLayer, canvas){
+  const rect = canvas.getBoundingClientRect();
+  const marker = document.createElement('div');
+  const size = Math.max(rect.width * 0.06, 24);
+  marker.style.cssText = `position:absolute;left:${x}%;top:${y}%;width:${size}px;height:${size}px;transform:translate(-50%,-50%);border-radius:50%;background:rgba(239,68,68,0.75);border:2px solid #ef4444;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:20`;
+  marker.innerHTML = `<span style="color:#fff;font-size:${size*0.5}px;font-weight:700">✓</span>`;
+  marker.id = `coche_${id}`;
+  cochesLayer.appendChild(marker);
+}
+
+function toggleCoche(x, y, pageN, cleCoches, cochesLayer, canvas, overlay){
+  const pageKey = `page_${pageN}`;
+  if(!cochesParPage[pageKey]) cochesParPage[pageKey] = [];
+  
+  // Vérifier si on clique sur une coche existante (dans un rayon de 5%)
+  const existing = cochesParPage[pageKey].find(c => Math.abs(c.x-x)<5 && Math.abs(c.y-y)<5);
+  
+  if(existing){
+    // Supprimer la coche
+    cochesParPage[pageKey] = cochesParPage[pageKey].filter(c => c.id !== existing.id);
+    const marker = cochesLayer.querySelector(`#coche_${existing.id}`);
+    if(marker) marker.remove();
+  } else {
+    // Ajouter une coche
+    const id = Date.now();
+    cochesParPage[pageKey].push({x, y, id});
+    afficherCoche(x, y, id, cochesLayer, canvas);
+  }
+  
+  // Sauvegarder
+  localStorage.setItem(cleCoches, JSON.stringify(cochesParPage));
+  
+  // Mettre à jour le compteur
+  const total = Object.values(cochesParPage).flat().length;
+  const nbCoches = overlay.querySelector('#nb-coches');
+  if(nbCoches) nbCoches.textContent = `${total} cochés`;
+}
+
+async function changerPage(dir, url, cleCoches){
+  const overlay = document.querySelector('div[style*="position:fixed"][style*="z-index:1000"]');
+  if(!pdfDoc) return;
+  const nouvPage = pageNum + dir;
+  if(nouvPage < 1 || nouvPage > pdfDoc.numPages) return;
+  pageNum = nouvPage;
+  const cochesLayer = overlay.querySelector('#coches-layer');
+  await renderPageJoueur(pageNum, cleCoches, overlay);
+}
+
+function resetCoches(cleCoches, overlay, url, nom, venteId){
+  if(confirm('Réinitialiser toutes les coches ?')){
+    cochesParPage = {};
+    localStorage.removeItem(cleCoches);
+    const cochesLayer = overlay.querySelector('#coches-layer');
+    if(cochesLayer) cochesLayer.innerHTML = '';
+    const nbCoches = overlay.querySelector('#nb-coches');
+    if(nbCoches) nbCoches.textContent = '0 cochés';
+  }
+}
+
+// === TICKETS ===
 async function regTicket(){
   const a=document.getElementById("t-acheteur").value.trim();
   const j=document.getElementById("t-jeu").value;
   const s=document.getElementById("t-serie").value.trim();
   const p=parseInt(document.getElementById("t-prix").value)||0;
   if(!a||!j||!s){toast("toast-t","Remplissez tous les champs",false);return;}
+  toast("toast-t","Enregistrement...");
+  let photo_url=null,pdf_url=null;
+  if(tDocFile){toast("toast-t","Upload...");const url=await uploadDoc(tDocFile,tDocType);if(tDocType==="photo")photo_url=url;else pdf_url=url;}
   try{
-    const r=await fetch("/api/ticket",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({acheteur:a,jeu:j,serie:s,prix:p})});
+    const r=await fetch("/api/ticket",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({acheteur:a,jeu:j,serie:s,prix:p,photo_url,pdf_url})});
     const d=await r.json();
-    if(d.ok){tickets.unshift(d.ticket);["t-acheteur","t-serie","t-prix"].forEach(id=>document.getElementById(id).value="");document.getElementById("t-jeu").value="";renderTickets();toast("toast-t","Ticket "+s+" enregistré !");}
+    if(d.ok){
+      const code=d.code_acheteur;
+      document.getElementById("t-code-result").innerHTML=`
+        <div class="code-box" style="margin-top:12px">
+          <div style="font-size:12px;color:var(--mu);margin-bottom:8px">Code pour <strong>${a}</strong></div>
+          <div class="code-val">${code}</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:8px">Envoyez ce code à votre client<br/>Il l'utilise dans l'onglet 🎮 Jouer</div>
+        </div>`;
+      ["t-acheteur","t-serie","t-prix"].forEach(id=>document.getElementById(id).value="");
+      document.getElementById("t-jeu").value="";supprimerTicketDoc();
+      loadTickets();toast("toast-t","Ticket enregistré !");
+    }
   }catch(e){toast("toast-t","Erreur",false);}
 }
 
@@ -516,13 +722,51 @@ function renderTickets(){
   document.getElementById("cnb").textContent=tickets.length;
   document.getElementById("cca").textContent=ca.toLocaleString()+" XPF";
   const el=document.getElementById("t-liste");
-  if(!tickets.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun ticket</div>';return;}
+  if(!tickets.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun ticket vendu</div>';return;}
   el.innerHTML=tickets.map(t=>`<div class="row">
-    <div><div style="font-size:13px;font-weight:500">${t.acheteur}</div><div style="font-size:12px;color:var(--mu)">${t.jeu} · Série ${t.serie}</div></div>
-    <div style="font-size:13px;font-weight:500">${t.prix.toLocaleString()} XPF</div>
+    <div>
+      <div style="font-size:13px;font-weight:500">${t.acheteur}</div>
+      <div style="font-size:12px;color:var(--mu)">${t.jeu} · Série ${t.serie}</div>
+      ${t.code_acheteur?`<div style="font-size:11px;color:var(--ac2);margin-top:3px">Code: <strong>${t.code_acheteur}</strong></div>`:""}
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:13px;font-weight:500">${t.prix.toLocaleString()} XPF</div>
+      ${t.pdf_url||t.photo_url?`<span class="badge b-info" style="margin-top:4px">📎</span>`:""}
+    </div>
   </div>`).join("");
 }
 
+// === JOUER ===
+async function chargerTicket(){
+  const code=document.getElementById("j-code").value.trim().toUpperCase();
+  if(!code){toast("toast-j","Entrez votre code",false);return;}
+  try{
+    const r=await fetch(`/api/ticket/acheteur/${code}`);
+    const d=await r.json();
+    if(d.ok){
+      const t=d.ticket;
+      const el=document.getElementById("j-ticket-zone");
+      el.innerHTML=`
+        <div class="card">
+          <div class="ct">🎱 ${t.jeu} — Série ${t.serie}</div>
+          <div style="font-size:13px;color:var(--mu);margin-bottom:12px">Acheteur: ${t.acheteur}</div>
+          ${t.pdf_url?`
+            <div style="background:rgba(99,102,241,.1);border:.5px solid var(--ac);border-radius:8px;padding:14px;text-align:center">
+              <div style="font-size:14px;color:var(--ac2);margin-bottom:6px">🎮 Votre ticket PDF</div>
+              <div style="font-size:12px;color:var(--mu);margin-bottom:10px">Tapez sur vos numéros pour les cocher pendant le tournoi !</div>
+              <button onclick="ouvrirPDFJoueur('${t.pdf_url}','${t.acheteur}','ticket_${t.id}')" style="width:100%;padding:12px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600">🎯 Jouer maintenant !</button>
+            </div>`:""}
+          ${t.photo_url?`
+            <div style="margin-top:10px;border-radius:8px;overflow:hidden">
+              <img src="${t.photo_url}" style="width:100%;display:block;pointer-events:none" oncontextmenu="return false"/>
+            </div>`:""}
+          ${!t.pdf_url&&!t.photo_url?`<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun document joint à ce ticket</div>`:""}
+        </div>`;
+    }else toast("toast-j","Code invalide ou introuvable",false);
+  }catch(e){toast("toast-j","Erreur",false);}
+}
+
+// === VERIFIER ===
 async function verifier(){
   const j=document.getElementById("v-jeu").value;
   const s=document.getElementById("v-serie").value.trim();
@@ -536,6 +780,7 @@ async function verifier(){
   }catch(e){}
 }
 
+// === ADMIN ===
 async function genCode(){
   const nom=document.getElementById("a-nom").value.trim();
   if(!nom){toast("toast-adm","Entrez le nom du client",false);return;}
