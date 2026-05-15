@@ -564,7 +564,13 @@ let cochesParPage = {};
 async function chargerPDFJoueur(url, cleCoches, overlay, cochesExistantes){
   try{
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    pdfDoc = await pdfjsLib.getDocument(url).promise;
+    // Charger via proxy pour éviter les problèmes CORS
+    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+    const loadingTask = pdfjsLib.getDocument({
+      url: proxyUrl,
+      withCredentials: false
+    });
+    pdfDoc = await loadingTask.promise;
     pageNum = 1;
     cochesParPage = cochesExistantes || {};
     totalPages = pdfDoc.numPages;
