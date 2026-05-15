@@ -604,8 +604,17 @@ async function chargerPDFJoueur(url, cleCoches, overlay, cochesExistantes, pageD
   pageDebutActuel = pageDebut || 1;
   try{
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
-    pdfDoc = await pdfjsLib.getDocument({url: proxyUrl, withCredentials: false}).promise;
+    // Essayer de charger directement d'abord, puis via proxy si erreur
+    let loadingTask;
+    try {
+      loadingTask = pdfjsLib.getDocument({url: url, withCredentials: false});
+      pdfDoc = await loadingTask.promise;
+    } catch(e1) {
+      // Si echec, essayer via proxy
+      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+      loadingTask = pdfjsLib.getDocument({url: proxyUrl, withCredentials: false});
+      pdfDoc = await loadingTask.promise;
+    }
     pageFinActuel = Math.min(pageFin || 9999, pdfDoc.numPages);
     pageNum = pageDebutActuel;
     cochesParPage = cochesExistantes || {};
