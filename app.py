@@ -9,23 +9,20 @@ app = Flask(__name__, static_folder=".")
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "directionvaikeashop@gmail.com")
 FROM_NAME = "Ticket Bingo"
+
 CLOUDINARY_CLOUD = os.environ.get("CLOUDINARY_CLOUD", "dz556b0ee")
 CLOUDINARY_PRESET = "alerte_upload"
 
 DATA_FILE = "/tmp/ticketbingo_data.json"
-PDF_DIR = "/tmp/ticketbingo_pdfs"
-
-# Créer le dossier PDFs
-os.makedirs(PDF_DIR, exist_ok=True)
 
 def load_data():
     try:
         if os.path.exists(DATA_FILE):
             with open(DATA_FILE, "r") as f:
                 data = json.load(f)
-                for k in ["tickets_acheteurs","acces_docs"]:
-                    if k not in data: data[k] = {}
-                return data
+            for k in ["tickets_acheteurs", "acces_docs"]:
+                if k not in data: data[k] = {}
+            return data
     except: pass
     return {
         "ventes": [], "tickets": [],
@@ -108,13 +105,13 @@ def del_jeu(nom):
 
 @app.route("/api/tournoi", methods=["POST"])
 def creer_tournoi():
-    token = request.headers.get("X-Token","")
+    token = request.headers.get("X-Token", "")
     s = verif_session(token)
     if not s or not s.get("admin"):
         return jsonify({"ok": False, "msg": "Accès refusé"}), 403
     d = request.json
-    tournoi = {"id": gen_code(6), "nom": d.get("nom",""), "jeu": d.get("jeu",""),
-        "date_tournoi": d.get("date_tournoi",""), "created": datetime.datetime.now().isoformat()}
+    tournoi = {"id": gen_code(6), "nom": d.get("nom", ""), "jeu": d.get("jeu", ""),
+               "date_tournoi": d.get("date_tournoi", ""), "created": datetime.datetime.now().isoformat()}
     DB["tournois"].insert(0, tournoi)
     save_data()
     return jsonify({"ok": True, "tournoi": tournoi})
@@ -125,37 +122,35 @@ def get_tournois():
 
 @app.route("/api/upload-pdf", methods=["POST"])
 def upload_pdf():
-    """Stocke un PDF sur le serveur et retourne un ID"""
+    """Uploade un PDF vers Cloudinary (stockage permanent) et retourne l'URL"""
     try:
         d = request.json
-        pdf_b64 = d.get("pdf_b64","")
+        pdf_b64 = d.get("pdf_b64", "")
         if not pdf_b64:
             return jsonify({"ok": False, "msg": "PDF manquant"}), 400
-        pdf_id = secrets.token_hex(16)
-        pdf_path = os.path.join(PDF_DIR, f"{pdf_id}.pdf")
-        with open(pdf_path, "wb") as f:
-            f.write(base64.b64decode(pdf_b64))
-        return jsonify({"ok": True, "pdf_id": pdf_id, "pdf_url": f"/api/pdf/{pdf_id}"})
+
+        # Upload vers Cloudinary avec resource_type=raw pour les PDFs
+        data = urllib.parse.urlencode({
+            "file": f"data:application/pdf;base64,{pdf_b64}",
+            "upload_preset": CLOUDINARY_PRESET,
+            "resource_type": "raw"
+        }).encode('utf-8')
+
+        url = f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD}/raw/upload"
+        req = urllib.request.Request(url, data=data, method='POST')
+        req.add_header('Content-Type', 'application/x-www-form-urlencoded')
+        resp = urllib.request.urlopen(req, timeout=60)
+        result = json.loads(resp.read().decode())
+
+        pdf_url = result.get("secure_url")
+        if not pdf_url:
+            return jsonify({"ok": False, "msg": "Cloudinary n'a pas retourné d'URL"}), 500
+
+        return jsonify({"ok": True, "pdf_url": pdf_url})
+
     except Exception as e:
         print(f"[PDF UPLOAD ERR] {e}")
         return jsonify({"ok": False, "msg": str(e)}), 500
-
-@app.route("/api/pdf/<pdf_id>")
-def serve_pdf(pdf_id):
-    """Sert un PDF stocké sur le serveur"""
-    # Sécurité - vérifier que pdf_id est valide
-    if not all(c in '0123456789abcdef' for c in pdf_id):
-        return jsonify({"ok": False}), 400
-    pdf_path = os.path.join(PDF_DIR, f"{pdf_id}.pdf")
-    if not os.path.exists(pdf_path):
-        return jsonify({"ok": False, "msg": "PDF introuvable"}), 404
-    with open(pdf_path, "rb") as f:
-        data = f.read()
-    return Response(data, content_type="application/pdf", headers={
-        "Access-Control-Allow-Origin": "*",
-        "Content-Disposition": "inline",
-        "Cache-Control": "no-store"
-    })
 
 @app.route("/api/vente", methods=["POST"])
 def nouvelle_vente():
@@ -164,14 +159,14 @@ def nouvelle_vente():
         return jsonify({"ok": False, "msg": "Champs manquants"}), 400
     total = int(d.get("qty", 1)) * int(d.get("prix", 0))
     token_doc = secrets.token_hex(16)
-    tournoi_id = d.get("tournoi_id","")
+    tournoi_id = d.get("tournoi_id", "")
     date_expiration = None
     tournoi = next((t for t in DB["tournois"] if t["id"] == tournoi_id), None)
     if tournoi and tournoi.get("date_tournoi"):
         date_expiration = tournoi["date_tournoi"]
     vente = {
         "id": hashlib.md5(f"{d['client']}{datetime.datetime.now()}".encode()).hexdigest()[:8],
-        "client": d["client"], "email": d.get("email",""), "jeu": d["jeu"],
+        "client": d["client"], "email": d.get("email", ""), "jeu": d["jeu"],
         "pack": int(d.get("pack", 25)), "qty": int(d.get("qty", 1)),
         "total_feuilles": int(d.get("qty", 1)) * int(d.get("pack", 25)),
         "serie": d["serie"], "prix": int(d.get("prix", 0)), "total": total,
@@ -183,7 +178,7 @@ def nouvelle_vente():
     }
     DB["ventes"].insert(0, vente)
     DB["acces_docs"][token_doc] = {"vente_id": vente["id"], "client": vente["client"],
-        "jeu": vente["jeu"], "date_expiration": date_expiration, "acces_count": 0}
+                                    "jeu": vente["jeu"], "date_expiration": date_expiration, "acces_count": 0}
     save_data()
     return jsonify({"ok": True, "vente": vente})
 
@@ -243,25 +238,25 @@ def verifier():
 
 @app.route("/api/admin/generer", methods=["POST"])
 def admin_generer():
-    token = request.headers.get("X-Token","")
+    token = request.headers.get("X-Token", "")
     s = verif_session(token)
     if not s or not s.get("admin"):
         return jsonify({"ok": False, "msg": "Accès refusé"}), 403
     d = request.json
-    nom = d.get("nom","Client").strip()
+    nom = d.get("nom", "Client").strip()
     duree = int(d.get("duree", 30))
     code = gen_code()
     while code in DB["codes"]:
         code = gen_code()
     DB["codes"][code] = {"duree": duree, "nom": nom, "actif": True,
-        "created": datetime.datetime.now().isoformat(),
-        "expire": (datetime.datetime.now() + datetime.timedelta(days=duree)).isoformat()}
+                          "created": datetime.datetime.now().isoformat(),
+                          "expire": (datetime.datetime.now() + datetime.timedelta(days=duree)).isoformat()}
     save_data()
     return jsonify({"ok": True, "code": code, "nom": nom, "duree": duree})
 
 @app.route("/api/admin/codes")
 def admin_codes():
-    token = request.headers.get("X-Token","")
+    token = request.headers.get("X-Token", "")
     s = verif_session(token)
     if not s or not s.get("admin"):
         return jsonify({"ok": False, "msg": "Accès refusé"}), 403
@@ -270,14 +265,14 @@ def admin_codes():
 
 @app.route("/api/admin/desactiver", methods=["POST"])
 def admin_desactiver():
-    token = request.headers.get("X-Token","")
+    token = request.headers.get("X-Token", "")
     s = verif_session(token)
     if not s or not s.get("admin"):
         return jsonify({"ok": False, "msg": "Accès refusé"}), 403
-    code = request.json.get("code","").strip().upper()
+    code = request.json.get("code", "").strip().upper()
     if code in DB["codes"]:
         DB["codes"][code]["actif"] = False
-    save_data()
+        save_data()
     return jsonify({"ok": True})
 
 if __name__ == "__main__":
