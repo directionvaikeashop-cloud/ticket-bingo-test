@@ -534,9 +534,11 @@ function ouvrirPDFJoueur(url,nom,venteId,pageDebut,pageFin){
     <div style="flex:1;overflow-y:auto;padding:12px;display:flex;justify-content:center">
       <div id="pdf-zone" style="position:relative;width:100%;max-width:500px">
         <div id="pdf-loading" style="text-align:center;padding:40px;color:#6b7280;font-size:14px">⏳ Chargement du PDF...</div>
-        <canvas id="pdf-canvas" style="width:100%;border-radius:8px;display:none"></canvas>
-        <div id="coches-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:20"></div>
-        <div id="touch-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:30;cursor:crosshair"></div>
+        <div style="position:relative">
+          <canvas id="pdf-canvas" style="width:100%;border-radius:8px;display:none"></canvas>
+          <div id="coches-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:20"></div>
+          <div id="touch-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:30;cursor:crosshair"></div>
+        </div>
       </div>
     </div>
     <div style="background:#111218;padding:10px 16px;border-top:1px solid rgba(255,255,255,0.07);text-align:center;font-size:12px;color:#6b7280">Tapez sur vos numéros pour les cocher 🎯</div>
@@ -587,7 +589,11 @@ async function renderPageJoueur(num,cleCoches,overlay){
   if(touchLayer){
     touchLayer.onclick=(e)=>{
       const rect=canvas.getBoundingClientRect();
-      toggleCoche((e.clientX-rect.left)/rect.width*100,(e.clientY-rect.top)/rect.height*100,num,cleCoches,cochesLayer,canvas,overlay);
+      const scaleX=canvas.width/rect.width;
+      const scaleY=canvas.height/rect.height;
+      const xPct=(e.clientX-rect.left)/rect.width*100;
+      const yPct=(e.clientY-rect.top)/rect.height*100;
+      toggleCoche(xPct,yPct,num,cleCoches,cochesLayer,canvas,overlay);
     };
   }
 }
