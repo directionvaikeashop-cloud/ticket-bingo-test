@@ -66,36 +66,13 @@ select option{background:var(--s2)}
 .code-val{font-family:monospace;font-size:26px;font-weight:800;letter-spacing:6px;color:var(--ac2)}
 .sec-badge{display:flex;align-items:center;gap:6px;background:rgba(239,68,68,.1);border:0.5px solid rgba(239,68,68,.3);border-radius:var(--rs);padding:8px 12px;font-size:12px;color:#f87171;margin-bottom:10px}
 .expire-badge{background:rgba(245,158,11,.1);border:0.5px solid rgba(245,158,11,.3);border-radius:var(--rs);padding:8px 12px;font-size:12px;color:#fbbf24;margin-bottom:10px;text-align:center}
-
-/* PDF VIEWER */
-.pdf-viewer-wrap{position:relative;background:#fff;border-radius:var(--rs);overflow:hidden;margin-top:10px}
-.pdf-canvas-wrap{position:relative;width:100%;overflow:hidden}
 .pdf-canvas-wrap canvas{width:100% !important;height:auto !important;display:block}
-.pdf-overlay{position:absolute;top:0;left:0;width:100%;height:100%;z-index:10}
-.pdf-nav{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--s2);border-radius:var(--rs);margin-top:8px}
-.pdf-nav span{font-size:13px;color:var(--mu)}
-.watermark-overlay{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-45deg);font-size:20px;font-weight:700;color:rgba(99,102,241,0.12);white-space:nowrap;z-index:5;pointer-events:none;font-family:'Syne',sans-serif;letter-spacing:2px}
-
-/* MARQUEURS DE COCHAGE */
 .check-marker{position:absolute;border-radius:50%;background:rgba(239,68,68,0.75);border:2px solid #ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;font-weight:700;transition:all .15s;z-index:20}
-.check-marker:hover{background:rgba(239,68,68,0.9);transform:scale(1.1)}
-.check-marker.checked{background:rgba(16,185,129,0.85);border-color:#10b981}
-
-/* BINGO ALERT */
 .bingo-alert{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(135deg,#6366f1,#f59e0b);border-radius:var(--r);padding:30px;text-align:center;z-index:1000;box-shadow:0 20px 60px rgba(0,0,0,.5);animation:popIn .3s ease}
 @keyframes popIn{from{transform:translate(-50%,-50%) scale(0.5);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
-.bingo-overlay{position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:999}
-
-/* TICKET NUMERO INPUT */
-.num-input-wrap{background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:10px}
-.num-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:4px;margin-top:8px}
-.num-btn{padding:8px 4px;border:0.5px solid var(--bd2);border-radius:6px;background:var(--s1);color:var(--tx);font-size:12px;cursor:pointer;text-align:center;font-family:'DM Sans',sans-serif;transition:all .1s}
-.num-btn.coche{background:var(--rd);border-color:var(--rd);color:#fff;font-weight:700}
-.num-btn:hover{border-color:var(--ac)}
 </style>
 </head>
 <body>
-
 <script>
 document.addEventListener('contextmenu',e=>{if(e.target.closest('.doc-viewer'))e.preventDefault();});
 document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'||e.key==='p'))e.preventDefault();});
@@ -126,7 +103,6 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       <button class="btn-sm" onclick="logout()">Quitter</button>
     </div>
   </div>
-
   <div class="wrap">
 
     <!-- TAB BOUTIQUE -->
@@ -198,14 +174,10 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     <!-- TAB TICKETS -->
     <div id="tab-tickets" class="tab doc-viewer">
       <div id="toast-t"></div>
-
-      <!-- MES DOCUMENTS -->
       <div class="card">
         <div class="ct">📂 Mes tickets reçus</div>
         <div id="docs-liste"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun document</div></div>
       </div>
-
-      <!-- VENDRE UN TICKET -->
       <div class="card">
         <div class="ct">🎫 Vendre un ticket à un client</div>
         <div class="g2">
@@ -229,7 +201,6 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
             <button class="btn-sm" onclick="supprimerTicketDoc()">✗</button>
           </div>
         </div>
-        <!-- SELECTION DE PAGES PDF -->
         <div id="t-pages-zone" style="display:none;background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:10px">
           <div style="font-size:12px;color:var(--ac2);margin-bottom:8px">📄 Sélection des pages à envoyer au client</div>
           <div class="g2">
@@ -241,8 +212,6 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <button class="btn btn-p" onclick="regTicket()">Enregistrer et générer le code</button>
         <div id="t-code-result"></div>
       </div>
-
-      <!-- MES TICKETS VENDUS -->
       <div class="card">
         <div class="ct">📊 Mes tickets vendus</div>
         <div class="g2" style="margin-bottom:12px">
@@ -313,7 +282,6 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     </div>
 
   </div>
-
   <nav class="nav">
     <button class="nb active" id="nb-boutique" onclick="switchTab('boutique',this)"><span class="ni">🏪</span>Boutique</button>
     <button class="nb" id="nb-tickets" onclick="switchTab('tickets',this)"><span class="ni">🎫</span>Tickets</button>
@@ -329,8 +297,7 @@ let pk=25, qty=1, planSel=30;
 let docFile=null, docType=null;
 let tDocFile=null, tDocType=null;
 let tickets=[], jeux=[], ventes=[], tournois=[];
-let cochesSauvegardees = {};
-let pdfActuel = null, pageActuelle = 1, totalPages = 1;
+let pdfDoc=null, pageNum=1, cochesParPage={}, pageDebutActuel=1, pageFinActuel=9999, overlayActuel=null, cleCochesActuel="";
 const CLOUD="dz556b0ee", PRESET="alerte_upload";
 
 function show(id){document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));document.getElementById(id).classList.add("active");}
@@ -375,7 +342,6 @@ function previewDoc(input,type){
     else document.getElementById("doc-img-preview").style.display="none";
   }
 }
-
 function supprimerDoc(){docFile=null;docType=null;document.getElementById("doc-preview").style.display="none";document.getElementById("doc-photo").value="";document.getElementById("doc-pdf").value="";}
 
 function previewTicketDoc(input,type){
@@ -383,56 +349,40 @@ function previewTicketDoc(input,type){
     tDocFile=input.files[0];tDocType=type;
     document.getElementById("t-doc-preview").style.display="block";
     document.getElementById("t-doc-nom").textContent=(type==="photo"?"📸 ":"📄 ")+tDocFile.name;
-    // Afficher la sélection de pages seulement pour PDF
     if(type==="pdf"){
       document.getElementById("t-pages-zone").style.display="block";
-      // Calculer le nombre de pages
-      const reader = new FileReader();
-      reader.onload = async function(e){
+      const reader=new FileReader();
+      reader.onload=async function(e){
         try{
-          const pdf = await pdfjsLib.getDocument({data: e.target.result}).promise;
-          const nb = pdf.numPages;
-          document.getElementById("t-page-fin").placeholder = `Ex: ${nb}`;
-          document.getElementById("t-pages-info").textContent = `Ce PDF contient ${nb} page${nb>1?"s":""} — Entrez les pages à envoyer au client`;
-          document.getElementById("t-page-debut").max = nb;
-          document.getElementById("t-page-fin").max = nb;
+          const pdf=await pdfjsLib.getDocument({data:e.target.result}).promise;
+          const nb=pdf.numPages;
+          document.getElementById("t-page-fin").placeholder=`Ex: ${nb}`;
+          document.getElementById("t-pages-info").textContent=`Ce PDF contient ${nb} page${nb>1?"s":""} — Entrez les pages à envoyer au client`;
+          document.getElementById("t-page-debut").max=nb;
+          document.getElementById("t-page-fin").max=nb;
         }catch(e){}
       };
       reader.readAsArrayBuffer(tDocFile);
-    } else {
-      document.getElementById("t-pages-zone").style.display="none";
-    }
+    }else{document.getElementById("t-pages-zone").style.display="none";}
   }
 }
-
 function supprimerTicketDoc(){
   tDocFile=null;tDocType=null;
   document.getElementById("t-doc-preview").style.display="none";
   document.getElementById("t-pages-zone").style.display="none";
-  document.getElementById("t-photo").value="";
-  document.getElementById("t-pdf").value="";
-  document.getElementById("t-page-debut").value="";
-  document.getElementById("t-page-fin").value="";
+  document.getElementById("t-photo").value="";document.getElementById("t-pdf").value="";
+  document.getElementById("t-page-debut").value="";document.getElementById("t-page-fin").value="";
 }
 
 async function uploadDoc(file,type){
   try{
-    if(type === "pdf"){
-      // Pour les PDFs - envoyer au serveur directement
-      const reader = new FileReader();
-      const pdf_b64 = await new Promise((resolve) => {
-        reader.onload = (e) => resolve(e.target.result.split(',')[1]);
-        reader.readAsDataURL(file);
-      });
-      const r = await fetch("/api/upload-pdf", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({pdf_b64})
-      });
-      const d = await r.json();
-      return d.ok ? d.pdf_url : null;
-    } else {
-      // Pour les photos - utiliser Cloudinary
+    if(type==="pdf"){
+      const reader=new FileReader();
+      const pdf_b64=await new Promise(resolve=>{reader.onload=e=>resolve(e.target.result.split(',')[1]);reader.readAsDataURL(file);});
+      const r=await fetch("/api/upload-pdf",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({pdf_b64})});
+      const d=await r.json();
+      return d.ok?d.pdf_url:null;
+    }else{
       const fd=new FormData();fd.append("file",file);fd.append("upload_preset",PRESET);
       const r=await fetch(`https://api.cloudinary.com/v1_1/${CLOUD}/image/upload`,{method:"POST",body:fd});
       const d=await r.json();
@@ -471,22 +421,12 @@ async function loadJeux(){
     const el=document.getElementById("jeux-list");
     el.innerHTML=jeux.map(j=>`<div style="display:flex;justify-content:space-between;padding:8px 12px;background:var(--s2);border-radius:6px;margin-bottom:6px;font-size:13px">
       <span>${j}</span>
-      <div style="display:flex;gap:6px;align-items:center">
-        <span class="badge b-ok">Actif</span>
-        <button class="btn-sm" onclick="delJeu('${j}')">✗</button>
-      </div>
+      <div style="display:flex;gap:6px;align-items:center"><span class="badge b-ok">Actif</span><button class="btn-sm" onclick="delJeu('${j}')">✗</button></div>
     </div>`).join("");
   }catch(e){}
 }
-
-async function addJeu(){
-  const nom=document.getElementById("new-jeu").value.trim();if(!nom)return;
-  try{await fetch("/api/jeux",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nom})});document.getElementById("new-jeu").value="";loadJeux();}catch(e){}
-}
-
-async function delJeu(nom){
-  try{await fetch(`/api/jeux/${encodeURIComponent(nom)}`,{method:"DELETE"});loadJeux();}catch(e){}
-}
+async function addJeu(){const nom=document.getElementById("new-jeu").value.trim();if(!nom)return;try{await fetch("/api/jeux",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nom})});document.getElementById("new-jeu").value="";loadJeux();}catch(e){}}
+async function delJeu(nom){try{await fetch(`/api/jeux/${encodeURIComponent(nom)}`,{method:"DELETE"});loadJeux();}catch(e){}}
 
 async function loadTournois(){
   try{
@@ -522,7 +462,7 @@ async function loadVentes(){
     if(!ventes.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune vente</div>';return;}
     el.innerHTML=ventes.map(v=>`<div class="row">
       <div><div style="font-size:13px;font-weight:500">${v.client}</div>
-      <div style="font-size:12px;color:var(--mu)">${v.jeu} · ${v.qty}×${v.pack} · Série ${v.serie}</div>
+      <div style="font-size:12px;color:var(--mu)">${v.jeu} · ${v.qty}x${v.pack} · Série ${v.serie}</div>
       ${v.photo_url||v.pdf_url?`<span class="badge b-info" style="margin-top:4px">📎 Document protégé</span>`:""}
       </div>
       <div style="text-align:right"><div style="font-size:13px;font-weight:500">${v.total.toLocaleString()} XPF</div></div>
@@ -530,23 +470,27 @@ async function loadVentes(){
   }catch(e){}
 }
 
-async function loadStats(){
-  try{const r=await fetch("/api/stats");const s=await r.json();document.getElementById("sv").textContent=s.ventes_jour;document.getElementById("sc").textContent=s.total_jour.toLocaleString()+" XPF";}catch(e){}
-}
+async function loadStats(){try{const r=await fetch("/api/stats");const s=await r.json();document.getElementById("sv").textContent=s.ventes_jour;document.getElementById("sc").textContent=s.total_jour.toLocaleString()+" XPF";}catch(e){}}
 
+// ✅ CORRIGE : charge ventes ET tickets avec PDF/photo
 async function loadDocs(){
   try{
-    const r=await fetch("/api/ventes");const vs=await r.json();
-    const docs=vs.filter(v=>v.photo_url||v.pdf_url);
+    const [rV,rT]=await Promise.all([fetch("/api/ventes"),fetch("/api/tickets")]);
+    const vs=await rV.json();
+    const ts=await rT.json();
+    const docsVentes=vs.filter(v=>v.photo_url||v.pdf_url).map(v=>({...v,_type:'vente',label:`${v.qty}x${v.pack} feuilles · Client: ${v.client}`}));
+    const docsTickets=ts.filter(t=>t.photo_url||t.pdf_url).map(t=>({...t,_type:'ticket',label:`Acheteur: ${t.acheteur}`}));
+    const docs=[...docsVentes,...docsTickets];
     const el=document.getElementById("docs-liste");
     if(!docs.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun document reçu</div>';return;}
     el.innerHTML=docs.map(v=>{
       const expire=v.date_expiration?new Date(v.date_expiration):null;
       const estExpire=expire&&new Date()>expire;
       const expireStr=expire?expire.toLocaleString('fr-FR'):null;
+      const docId=v._type==='vente'?v.id:`ticket_${v.id}`;
       return `<div style="background:var(--s2);border-radius:var(--rs);padding:14px;margin-bottom:10px;border:0.5px solid var(--bd)">
         <div style="font-size:13px;font-weight:500;margin-bottom:6px">🎱 ${v.jeu} — Série ${v.serie}</div>
-        <div style="font-size:12px;color:var(--mu);margin-bottom:8px">${v.qty}×${v.pack} feuilles · ${v.client}</div>
+        <div style="font-size:12px;color:var(--mu);margin-bottom:8px">${v.label}</div>
         ${expireStr?`<div class="expire-badge">⏱ Accès jusqu'au ${expireStr}</div>`:""}
         ${estExpire?`<div style="background:rgba(239,68,68,.1);border:.5px solid rgba(239,68,68,.3);border-radius:6px;padding:10px;text-align:center;color:#f87171;font-size:13px">🔒 Document expiré</div>`:""}
         ${!estExpire&&v.photo_url?`
@@ -558,24 +502,22 @@ async function loadDocs(){
           <div style="background:rgba(99,102,241,.1);border:.5px solid var(--ac);border-radius:6px;padding:12px;text-align:center;margin-top:8px">
             <div style="font-size:13px;color:var(--ac2);margin-bottom:6px">📄 PDF de vos tickets</div>
             <div style="font-size:11px;color:var(--mu);margin-bottom:8px">🔒 Lecture seule — Non imprimable</div>
-            <button onclick="ouvrirPDFJoueur('${v.pdf_url}','${USER_NOM}','${v.id}')" style="padding:10px 20px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;width:100%">🎮 Ouvrir et jouer</button>
+            <button onclick="ouvrirPDFJoueur('${v.pdf_url}','${USER_NOM}','${docId}')" style="padding:10px 20px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;width:100%">🎮 Ouvrir et jouer</button>
           </div>`:""}
       </div>`;
     }).join("");
   }catch(e){}
 }
 
-// === PDF JOUEUR INTERACTIF ===
-function ouvrirPDFJoueur(url, nom, venteId, pageDebut, pageFin){
-  const cleCoches = `coches_${venteId}`;
-  const cochesExistantes = JSON.parse(localStorage.getItem(cleCoches)||'{}');
-  const pdDebut = parseInt(pageDebut)||1;
-  const pdFin = parseInt(pageFin)||9999;
-
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0a14;z-index:1000;display:flex;flex-direction:column';
-  
-  overlay.innerHTML = `
+// === PDF JOUEUR ===
+function ouvrirPDFJoueur(url,nom,venteId,pageDebut,pageFin){
+  const cleCoches=`coches_${venteId}`;
+  const cochesExistantes=JSON.parse(localStorage.getItem(cleCoches)||'{}');
+  const pdDebut=parseInt(pageDebut)||1;
+  const pdFin=parseInt(pageFin)||9999;
+  const overlay=document.createElement('div');
+  overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0a14;z-index:1000;display:flex;flex-direction:column';
+  overlay.innerHTML=`
     <div style="background:#111218;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.1)">
       <div style="font-size:14px;font-weight:600;color:#818cf8">🎮 ${nom} — Mode Jeu</div>
       <div style="display:flex;gap:8px;align-items:center">
@@ -597,149 +539,101 @@ function ouvrirPDFJoueur(url, nom, venteId, pageDebut, pageFin){
         <div id="touch-layer" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:30;cursor:crosshair"></div>
       </div>
     </div>
-    <div style="background:#111218;padding:10px 16px;border-top:1px solid rgba(255,255,255,0.07);text-align:center;font-size:12px;color:#6b7280">
-      Tapez sur vos numéros pour les cocher 🎯
-    </div>
+    <div style="background:#111218;padding:10px 16px;border-top:1px solid rgba(255,255,255,0.07);text-align:center;font-size:12px;color:#6b7280">Tapez sur vos numéros pour les cocher 🎯</div>
   `;
-  
   document.body.appendChild(overlay);
-  chargerPDFJoueur(url, cleCoches, overlay, cochesExistantes, pdDebut, pdFin);
+  chargerPDFJoueur(url,cleCoches,overlay,cochesExistantes,pdDebut,pdFin);
 }
 
-let pdfDoc = null;
-let pageNum = 1;
-let cochesParPage = {};
-let pageDebutActuel = 1;
-let pageFinActuel = 9999;
-let overlayActuel = null;
-let cleCochesActuel = "";
-
-async function chargerPDFJoueur(url, cleCoches, overlay, cochesExistantes, pageDebut, pageFin){
-  overlayActuel = overlay;
-  cleCochesActuel = cleCoches;
-  pageDebutActuel = pageDebut || 1;
+async function chargerPDFJoueur(url,cleCoches,overlay,cochesExistantes,pageDebut,pageFin){
+  overlayActuel=overlay;cleCochesActuel=cleCoches;pageDebutActuel=pageDebut||1;
   try{
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    // Le PDF est sur notre propre serveur - pas besoin de proxy !
-    pdfDoc = await pdfjsLib.getDocument({url: url, withCredentials: false}).promise;
-    pageFinActuel = Math.min(pageFin || 9999, pdfDoc.numPages);
-    pageNum = pageDebutActuel;
-    cochesParPage = cochesExistantes || {};
-    await renderPageJoueur(pageNum, cleCoches, overlay);
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfDoc=await pdfjsLib.getDocument({url:url,withCredentials:false}).promise;
+    pageFinActuel=Math.min(pageFin||9999,pdfDoc.numPages);
+    pageNum=pageDebutActuel;
+    cochesParPage=cochesExistantes||{};
+    await renderPageJoueur(pageNum,cleCoches,overlay);
   }catch(e){
-    console.error("PDF error:", e);
-    const loading = overlay.querySelector('#pdf-loading');
+    console.error("PDF error:",e);
+    const loading=overlay.querySelector('#pdf-loading');
     if(loading){loading.textContent='❌ Erreur de chargement — '+e.message;loading.style.color='#f87171';}
   }
 }
 
-async function renderPageJoueur(num, cleCoches, overlay){
-  const canvas = overlay.querySelector('#pdf-canvas');
-  const loading = overlay.querySelector('#pdf-loading');
-  const cochesLayer = overlay.querySelector('#coches-layer');
-  const touchLayer = overlay.querySelector('#touch-layer');
-  const pageInfo = overlay.querySelector('#page-info');
-  
-  const pageAffichee = num - pageDebutActuel + 1;
-  const totalAffichees = pageFinActuel - pageDebutActuel + 1;
-  if(pageInfo) pageInfo.textContent = `Feuille ${pageAffichee} / ${totalAffichees}`;
+async function renderPageJoueur(num,cleCoches,overlay){
+  const canvas=overlay.querySelector('#pdf-canvas');
+  const loading=overlay.querySelector('#pdf-loading');
+  const cochesLayer=overlay.querySelector('#coches-layer');
+  const touchLayer=overlay.querySelector('#touch-layer');
+  const pageInfo=overlay.querySelector('#page-info');
+  const pageAffichee=num-pageDebutActuel+1;
+  const totalAffichees=pageFinActuel-pageDebutActuel+1;
+  if(pageInfo)pageInfo.textContent=`Feuille ${pageAffichee} / ${totalAffichees}`;
   if(loading){loading.style.display='block';loading.textContent='⏳ Chargement...';}
-  if(canvas) canvas.style.display='none';
-  
-  const page = await pdfDoc.getPage(num);
-  const viewport = page.getViewport({scale: 2.0});
-  canvas.width = viewport.width;
-  canvas.height = viewport.height;
-  
-  const ctx = canvas.getContext('2d');
-  await page.render({canvasContext: ctx, viewport}).promise;
-  
-  if(loading) loading.style.display = 'none';
-  if(canvas) canvas.style.display = 'block';
-  
-  // Recalculer les dimensions
-  const rect = canvas.getBoundingClientRect();
-  if(cochesLayer){
-    cochesLayer.innerHTML = '';
-    cochesLayer.style.pointerEvents = 'none';
-  }
-  
-  // Afficher les coches existantes
-  const pageCoches = cochesParPage[`page_${num}`] || [];
-  pageCoches.forEach(c => {
-    afficherCoche(c.x, c.y, c.id, cochesLayer, canvas);
-  });
-  
-  // Mettre à jour le compteur
-  const total = Object.values(cochesParPage).flat().length;
-  const nbCoches = overlay.querySelector('#nb-coches');
-  if(nbCoches) nbCoches.textContent = `${total} cochés`;
-  
-  // Gérer les touches
+  if(canvas)canvas.style.display='none';
+  const page=await pdfDoc.getPage(num);
+  const viewport=page.getViewport({scale:2.0});
+  canvas.width=viewport.width;canvas.height=viewport.height;
+  await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+  if(loading)loading.style.display='none';
+  if(canvas)canvas.style.display='block';
+  if(cochesLayer){cochesLayer.innerHTML='';cochesLayer.style.pointerEvents='none';}
+  const pageCoches=cochesParPage[`page_${num}`]||[];
+  pageCoches.forEach(c=>afficherCoche(c.x,c.y,c.id,cochesLayer,canvas));
+  const total=Object.values(cochesParPage).flat().length;
+  const nbCoches=overlay.querySelector('#nb-coches');
+  if(nbCoches)nbCoches.textContent=`${total} cochés`;
   if(touchLayer){
-    touchLayer.onclick = (e) => {
-      const rect2 = canvas.getBoundingClientRect();
-      const xPct = (e.clientX - rect2.left) / rect2.width * 100;
-      const yPct = (e.clientY - rect2.top) / rect2.height * 100;
-      toggleCoche(xPct, yPct, num, cleCoches, cochesLayer, canvas, overlay);
+    touchLayer.onclick=(e)=>{
+      const rect=canvas.getBoundingClientRect();
+      toggleCoche((e.clientX-rect.left)/rect.width*100,(e.clientY-rect.top)/rect.height*100,num,cleCoches,cochesLayer,canvas,overlay);
     };
   }
 }
 
-function afficherCoche(x, y, id, cochesLayer, canvas){
-  const rect = canvas.getBoundingClientRect();
-  const marker = document.createElement('div');
-  const size = Math.max(rect.width * 0.06, 24);
-  marker.style.cssText = `position:absolute;left:${x}%;top:${y}%;width:${size}px;height:${size}px;transform:translate(-50%,-50%);border-radius:50%;background:rgba(239,68,68,0.75);border:2px solid #ef4444;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:20`;
-  marker.innerHTML = `<span style="color:#fff;font-size:${size*0.5}px;font-weight:700">✓</span>`;
-  marker.id = `coche_${id}`;
+function afficherCoche(x,y,id,cochesLayer,canvas){
+  const rect=canvas.getBoundingClientRect();
+  const size=Math.max(rect.width*0.06,24);
+  const marker=document.createElement('div');
+  marker.style.cssText=`position:absolute;left:${x}%;top:${y}%;width:${size}px;height:${size}px;transform:translate(-50%,-50%);border-radius:50%;background:rgba(239,68,68,0.75);border:2px solid #ef4444;display:flex;align-items:center;justify-content:center;pointer-events:none;z-index:20`;
+  marker.innerHTML=`<span style="color:#fff;font-size:${size*0.5}px;font-weight:700">✓</span>`;
+  marker.id=`coche_${id}`;
   cochesLayer.appendChild(marker);
 }
 
-function toggleCoche(x, y, pageN, cleCoches, cochesLayer, canvas, overlay){
-  const pageKey = `page_${pageN}`;
-  if(!cochesParPage[pageKey]) cochesParPage[pageKey] = [];
-  
-  // Vérifier si on clique sur une coche existante (dans un rayon de 5%)
-  const existing = cochesParPage[pageKey].find(c => Math.abs(c.x-x)<5 && Math.abs(c.y-y)<5);
-  
+function toggleCoche(x,y,pageN,cleCoches,cochesLayer,canvas,overlay){
+  const pageKey=`page_${pageN}`;
+  if(!cochesParPage[pageKey])cochesParPage[pageKey]=[];
+  const existing=cochesParPage[pageKey].find(c=>Math.abs(c.x-x)<5&&Math.abs(c.y-y)<5);
   if(existing){
-    // Supprimer la coche
-    cochesParPage[pageKey] = cochesParPage[pageKey].filter(c => c.id !== existing.id);
-    const marker = cochesLayer.querySelector(`#coche_${existing.id}`);
-    if(marker) marker.remove();
-  } else {
-    // Ajouter une coche
-    const id = Date.now();
-    cochesParPage[pageKey].push({x, y, id});
-    afficherCoche(x, y, id, cochesLayer, canvas);
+    cochesParPage[pageKey]=cochesParPage[pageKey].filter(c=>c.id!==existing.id);
+    const marker=cochesLayer.querySelector(`#coche_${existing.id}`);
+    if(marker)marker.remove();
+  }else{
+    const id=Date.now();
+    cochesParPage[pageKey].push({x,y,id});
+    afficherCoche(x,y,id,cochesLayer,canvas);
   }
-  
-  // Sauvegarder
-  localStorage.setItem(cleCoches, JSON.stringify(cochesParPage));
-  
-  // Mettre à jour le compteur
-  const total = Object.values(cochesParPage).flat().length;
-  const nbCoches = overlay.querySelector('#nb-coches');
-  if(nbCoches) nbCoches.textContent = `${total} cochés`;
+  localStorage.setItem(cleCoches,JSON.stringify(cochesParPage));
+  const total=Object.values(cochesParPage).flat().length;
+  const nbCoches=overlay.querySelector('#nb-coches');
+  if(nbCoches)nbCoches.textContent=`${total} cochés`;
 }
 
 async function changerPageJoueur(dir){
-  if(!pdfDoc||!overlayActuel) return;
-  const nouvPage = pageNum + dir;
-  if(nouvPage < pageDebutActuel || nouvPage > pageFinActuel) return;
-  pageNum = nouvPage;
-  await renderPageJoueur(pageNum, cleCochesActuel, overlayActuel);
+  if(!pdfDoc||!overlayActuel)return;
+  const nouvPage=pageNum+dir;
+  if(nouvPage<pageDebutActuel||nouvPage>pageFinActuel)return;
+  pageNum=nouvPage;
+  await renderPageJoueur(pageNum,cleCochesActuel,overlayActuel);
 }
 
-function resetCoches(cleCoches, overlay){
+function resetCoches(cleCoches,overlay){
   if(confirm('Réinitialiser toutes les coches ?')){
-    cochesParPage={};
-    localStorage.removeItem(cleCoches);
-    const cochesLayer=overlay.querySelector('#coches-layer');
-    if(cochesLayer)cochesLayer.innerHTML='';
-    const nbCoches=overlay.querySelector('#nb-coches');
-    if(nbCoches)nbCoches.textContent='0 cochés';
+    cochesParPage={};localStorage.removeItem(cleCoches);
+    const cochesLayer=overlay.querySelector('#coches-layer');if(cochesLayer)cochesLayer.innerHTML='';
+    const nbCoches=overlay.querySelector('#nb-coches');if(nbCoches)nbCoches.textContent='0 cochés';
   }
 }
 
@@ -756,28 +650,22 @@ async function regTicket(){
   let photo_url=null,pdf_url=null;
   if(tDocFile){toast("toast-t","Upload...");const url=await uploadDoc(tDocFile,tDocType);if(tDocType==="photo")photo_url=url;else pdf_url=url;}
   try{
-    const r=await fetch("/api/ticket",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({acheteur:a,jeu:j,serie:s,prix:p,photo_url,pdf_url,page_debut:pageDebut,page_fin:pageFin})});
+    const r=await fetch("/api/ticket",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({acheteur:a,jeu:j,serie:s,prix:p,photo_url,pdf_url,page_debut:pageDebut,page_fin:pageFin})});
     const d=await r.json();
     if(d.ok){
-      const code=d.code_acheteur;
       document.getElementById("t-code-result").innerHTML=`
         <div class="code-box" style="margin-top:12px">
           <div style="font-size:12px;color:var(--mu);margin-bottom:8px">Code pour <strong>${a}</strong></div>
-          <div class="code-val">${code}</div>
+          <div class="code-val">${d.code_acheteur}</div>
           <div style="font-size:11px;color:var(--mu);margin-top:8px">Envoyez ce code à votre client<br/>Il l'utilise dans l'onglet 🎮 Jouer</div>
         </div>`;
       ["t-acheteur","t-serie","t-prix"].forEach(id=>document.getElementById(id).value="");
-      document.getElementById("t-jeu").value="";supprimerTicketDoc();
-      loadTickets();toast("toast-t","Ticket enregistré !");
+      document.getElementById("t-jeu").value="";supprimerTicketDoc();loadTickets();toast("toast-t","Ticket enregistré !");
     }
   }catch(e){toast("toast-t","Erreur",false);}
 }
 
-async function loadTickets(){
-  try{const r=await fetch("/api/tickets");tickets=await r.json();renderTickets();}catch(e){}
-}
-
+async function loadTickets(){try{const r=await fetch("/api/tickets");tickets=await r.json();renderTickets();}catch(e){}}
 function renderTickets(){
   const ca=tickets.reduce((s,t)=>s+t.prix,0);
   document.getElementById("cnb").textContent=tickets.length;
@@ -785,15 +673,11 @@ function renderTickets(){
   const el=document.getElementById("t-liste");
   if(!tickets.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun ticket vendu</div>';return;}
   el.innerHTML=tickets.map(t=>`<div class="row">
-    <div>
-      <div style="font-size:13px;font-weight:500">${t.acheteur}</div>
-      <div style="font-size:12px;color:var(--mu)">${t.jeu} · Série ${t.serie}</div>
-      ${t.code_acheteur?`<div style="font-size:11px;color:var(--ac2);margin-top:3px">Code: <strong>${t.code_acheteur}</strong></div>`:""}
+    <div><div style="font-size:13px;font-weight:500">${t.acheteur}</div>
+    <div style="font-size:12px;color:var(--mu)">${t.jeu} · Série ${t.serie}</div>
+    ${t.code_acheteur?`<div style="font-size:11px;color:var(--ac2);margin-top:3px">Code: <strong>${t.code_acheteur}</strong></div>`:""}
     </div>
-    <div style="text-align:right">
-      <div style="font-size:13px;font-weight:500">${t.prix.toLocaleString()} XPF</div>
-      ${t.pdf_url||t.photo_url?`<span class="badge b-info" style="margin-top:4px">📎</span>`:""}
-    </div>
+    <div style="text-align:right"><div style="font-size:13px;font-weight:500">${t.prix.toLocaleString()} XPF</div>${t.pdf_url||t.photo_url?`<span class="badge b-info" style="margin-top:4px">📎</span>`:""}</div>
   </div>`).join("");
 }
 
@@ -806,8 +690,7 @@ async function chargerTicket(){
     const d=await r.json();
     if(d.ok){
       const t=d.ticket;
-      const el=document.getElementById("j-ticket-zone");
-      el.innerHTML=`
+      document.getElementById("j-ticket-zone").innerHTML=`
         <div class="card">
           <div class="ct">🎱 ${t.jeu} — Série ${t.serie}</div>
           <div style="font-size:13px;color:var(--mu);margin-bottom:12px">Acheteur: ${t.acheteur}</div>
@@ -818,10 +701,7 @@ async function chargerTicket(){
               <div style="font-size:12px;color:var(--mu);margin-bottom:10px">Tapez sur vos numéros pour les cocher pendant le tournoi !</div>
               <button onclick="ouvrirPDFJoueur('${t.pdf_url}','${t.acheteur}','ticket_${t.id}','${t.page_debut||1}','${t.page_fin||9999}')" style="width:100%;padding:12px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600">🎯 Jouer maintenant !</button>
             </div>`:""}
-          ${t.photo_url?`
-            <div style="margin-top:10px;border-radius:8px;overflow:hidden">
-              <img src="${t.photo_url}" style="width:100%;display:block;pointer-events:none" oncontextmenu="return false"/>
-            </div>`:""}
+          ${t.photo_url?`<div style="margin-top:10px;border-radius:8px;overflow:hidden"><img src="${t.photo_url}" style="width:100%;display:block;pointer-events:none" oncontextmenu="return false"/></div>`:""}
           ${!t.pdf_url&&!t.photo_url?`<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun document joint à ce ticket</div>`:""}
         </div>`;
     }else toast("toast-j","Code invalide ou introuvable",false);
@@ -865,9 +745,7 @@ async function loadCodes(){
   }catch(e){}
 }
 
-async function desactiver(code){
-  try{await fetch("/api/admin/desactiver",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({code})});loadCodes();}catch(e){}
-}
+async function desactiver(code){try{await fetch("/api/admin/desactiver",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({code})});loadCodes();}catch(e){}}
 
 document.getElementById("login-code").addEventListener("keypress",e=>{if(e.key==="Enter")doLogin();});
 </script>
