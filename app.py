@@ -123,35 +123,39 @@ def get_tournois():
 
 @app.route("/api/upload-pdf", methods=["POST"])
 def upload_pdf():
-    """Uploade un PDF vers Cloudinary (stockage permanent) et retourne l'URL"""
+    """Stocke le PDF en base64 dans la DB et retourne un ID d'acces"""
     try:
         d = request.json
         pdf_b64 = d.get("pdf_b64", "")
         if not pdf_b64:
             return jsonify({"ok": False, "msg": "PDF manquant"}), 400
 
-        # Upload vers Cloudinary avec resource_type=raw pour les PDFs
-        data = urllib.parse.urlencode({
-            "file": f"data:application/pdf;base64,{pdf_b64}",
-            "upload_preset": CLOUDINARY_PRESET_PDF,
-            "resource_type": "raw"
-        }).encode('utf-8')
+        pdf_id = secrets.token_hex(16)
+        if "pdfs" not in DB:
+            DB["pdfs"] = {}
+        DB["pdfs"][pdf_id] = pdf_b64
+        save_data()
 
-        url = f"https://api.cloudinary.com/v1_1/{CLOUDINARY_CLOUD}/raw/upload"
-        req = urllib.request.Request(url, data=data, method='POST')
-        req.add_header('Content-Type', 'application/x-www-form-urlencoded')
-        resp = urllib.request.urlopen(req, timeout=60)
-        result = json.loads(resp.read().decode())
-
-        pdf_url = result.get("secure_url")
-        if not pdf_url:
-            return jsonify({"ok": False, "msg": "Cloudinary n'a pas retourné d'URL"}), 500
-
-        return jsonify({"ok": True, "pdf_url": pdf_url})
+        return jsonify({"ok": True, "pdf_url": f"/api/pdf/{pdf_id}"})
 
     except Exception as e:
         print(f"[PDF UPLOAD ERR] {e}")
         return jsonify({"ok": False, "msg": str(e)}), 500
+
+@app.route("/api/pdf/<pdf_id>")
+def serve_pdf(pdf_id):
+    """Sert un PDF stocke en base64 dans la DB"""
+    if not all(c in '0123456789abcdef' for c in pdf_id):
+        return jsonify({"ok": False}), 400
+    pdf_b64 = DB.get("pdfs", {}).get(pdf_id)
+    if not pdf_b64:
+        return jsonify({"ok": False, "msg": "PDF introuvable"}), 404
+    data = base64.b64decode(pdf_b64)
+    return Response(data, content_type="application/pdf", headers={
+        "Access-Control-Allow-Origin": "*",
+        "Content-Disposition": "inline",
+        "Cache-Control": "no-store"
+    })
 
 @app.route("/api/vente", methods=["POST"])
 def nouvelle_vente():
