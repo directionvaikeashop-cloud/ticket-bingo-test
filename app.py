@@ -12,6 +12,7 @@ FROM_NAME = "Ticket Bingo"
 
 CLOUDINARY_CLOUD = os.environ.get("CLOUDINARY_CLOUD", "dz556b0ee")
 CLOUDINARY_PRESET = "alerte_upload"
+CLOUDINARY_PRESET_PDF = "bingo_pdf"
 
 DATA_FILE = "/tmp/ticketbingo_data.json"
 
@@ -132,7 +133,7 @@ def upload_pdf():
         # Upload vers Cloudinary avec resource_type=raw pour les PDFs
         data = urllib.parse.urlencode({
             "file": f"data:application/pdf;base64,{pdf_b64}",
-            "upload_preset": CLOUDINARY_PRESET,
+            "upload_preset": CLOUDINARY_PRESET_PDF,
             "resource_type": "raw"
         }).encode('utf-8')
 
