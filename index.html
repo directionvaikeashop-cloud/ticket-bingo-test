@@ -70,6 +70,7 @@ select option{background:var(--s2)}
 .check-marker{position:absolute;border-radius:50%;background:rgba(239,68,68,0.75);border:2px solid #ef4444;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:10px;color:#fff;font-weight:700;transition:all .15s;z-index:20}
 .bingo-alert{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:linear-gradient(135deg,#6366f1,#f59e0b);border-radius:var(--r);padding:30px;text-align:center;z-index:1000;box-shadow:0 20px 60px rgba(0,0,0,.5);animation:popIn .3s ease}
 @keyframes popIn{from{transform:translate(-50%,-50%) scale(0.5);opacity:0}to{transform:translate(-50%,-50%) scale(1);opacity:1}}
+@keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
 </style>
 </head>
 <body>
@@ -245,6 +246,13 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <button class="btn btn-g" onclick="verifier()">Vérifier maintenant</button>
         <div id="v-result"></div>
       </div>
+      <div class="card" style="margin-top:14px">
+        <div class="ct" style="justify-content:space-between">
+          <span>🚨 Alertes BINGO</span>
+          <button class="btn-sm" onclick="loadAlertesBingo()">↻</button>
+        </div>
+        <div id="bingo-alertes"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune alerte</div></div>
+      </div>
     </div>
 
     <!-- TAB ADMIN -->
@@ -326,6 +334,7 @@ function switchTab(n,el){
   el.classList.add("active");
   if(n==="tickets"){loadDocs();loadTickets();}
   if(n==="admin"){loadCodes();loadTournois();}
+  if(n==="verif"){loadAlertesBingo();}
 }
 
 function selPk(n,el){pk=n;qty=1;document.querySelectorAll(".pk").forEach(c=>c.classList.remove("sel"));el.classList.add("sel");document.getElementById("qv").textContent="1";document.getElementById("qd").textContent="= "+n+" feuilles";majTot();}
@@ -510,7 +519,7 @@ async function loadDocs(){
 }
 
 // === PDF JOUEUR ===
-function ouvrirPDFJoueur(url,nom,venteId,pageDebut,pageFin){
+function ouvrirPDFJoueur(url,nom,venteId,pageDebut,pageFin,jeu,serie){
   const cleCoches=`coches_${venteId}`;
   const cochesExistantes=JSON.parse(localStorage.getItem(cleCoches)||'{}');
   const pdDebut=parseInt(pageDebut)||1;
@@ -541,9 +550,13 @@ function ouvrirPDFJoueur(url,nom,venteId,pageDebut,pageFin){
         </div>
       </div>
     </div>
-    <div style="background:#111218;padding:10px 16px;border-top:1px solid rgba(255,255,255,0.07);text-align:center;font-size:12px;color:#6b7280">Tapez sur vos numéros pour les cocher 🎯</div>
+    <div style="background:#111218;padding:10px 16px;border-top:1px solid rgba(255,255,255,0.07);display:flex;align-items:center;justify-content:space-between">
+      <span style="font-size:12px;color:#6b7280">Tapez sur vos numéros pour les cocher 🎯</span>
+      <button id="bingo-btn" style="padding:8px 18px;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;animation:pulse 1.5s infinite" onclick="declarerBingo()">🎉 BINGO !</button>
+    </div>
   `;
   document.body.appendChild(overlay);
+  if(jeu&&serie) setBingoTicket(nom, jeu, serie, venteId);
   chargerPDFJoueur(url,cleCoches,overlay,cochesExistantes,pdDebut,pdFin);
 }
 
@@ -705,13 +718,77 @@ async function chargerTicket(){
               <div style="font-size:14px;color:var(--ac2);margin-bottom:6px">🎮 Votre ticket PDF</div>
               ${t.page_debut&&t.page_fin?`<div style="font-size:12px;color:var(--gd);margin-bottom:6px">📄 Feuilles ${t.page_debut} à ${t.page_fin}</div>`:''}
               <div style="font-size:12px;color:var(--mu);margin-bottom:10px">Tapez sur vos numéros pour les cocher pendant le tournoi !</div>
-              <button onclick="ouvrirPDFJoueur('${t.pdf_url}','${t.acheteur}','ticket_${t.id}','${t.page_debut||1}','${t.page_fin||9999}')" style="width:100%;padding:12px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600">🎯 Jouer maintenant !</button>
+              <button onclick="ouvrirPDFJoueur('${t.pdf_url}','${t.acheteur}','ticket_${t.id}','${t.page_debut||1}','${t.page_fin||9999}','${t.jeu}','${t.serie}')" style="width:100%;padding:12px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600">🎯 Jouer maintenant !</button>
             </div>`:""}
           ${t.photo_url?`<div style="margin-top:10px;border-radius:8px;overflow:hidden"><img src="${t.photo_url}" style="width:100%;display:block;pointer-events:none" oncontextmenu="return false"/></div>`:""}
           ${!t.pdf_url&&!t.photo_url?`<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun document joint à ce ticket</div>`:""}
         </div>`;
     }else toast("toast-j","Code invalide ou introuvable",false);
   }catch(e){toast("toast-j","Erreur",false);}
+}
+
+// === BINGO ===
+let bingoTicketActuel = null;
+
+function setBingoTicket(acheteur, jeu, serie, ticketId){
+  bingoTicketActuel = {acheteur, jeu, serie, ticketId};
+}
+
+async function declarerBingo(){
+  if(!bingoTicketActuel){return;}
+  const btn = document.getElementById('bingo-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Envoi...';}
+  try{
+    const r = await fetch('/api/bingo', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(bingoTicketActuel)
+    });
+    const d = await r.json();
+    if(d.ok){
+      if(btn){btn.textContent='✅ Signalé !';btn.style.background='#10b981';}
+      // Afficher alerte visuelle
+      const overlay = document.createElement('div');
+      overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.7);z-index:2000;display:flex;align-items:center;justify-content:center';
+      overlay.innerHTML=`<div style="background:linear-gradient(135deg,#6366f1,#f59e0b);border-radius:16px;padding:32px;text-align:center;animation:popIn .3s ease">
+        <div style="font-size:60px">🎉</div>
+        <div style="font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:#fff;margin:12px 0">BINGO !</div>
+        <div style="font-size:14px;color:rgba(255,255,255,.8);margin-bottom:16px">L'organisateur a été averti !</div>
+        <button onclick="this.closest('div[style*=position]').remove()" style="padding:10px 24px;background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px">Fermer</button>
+      </div>`;
+      document.body.appendChild(overlay);
+    }
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='🎉 BINGO !';}
+  }
+}
+
+async function loadAlertesBingo(){
+  try{
+    const r=await fetch('/api/bingo/alertes');
+    const alertes=await r.json();
+    const el=document.getElementById('bingo-alertes');
+    if(!alertes.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune alerte</div>';return;}
+    el.innerHTML=alertes.map(a=>`<div style="background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:8px;border:0.5px solid ${a.statut==='en_attente'?'rgba(245,158,11,.4)':a.statut==='valide'?'rgba(16,185,129,.4)':'rgba(239,68,68,.4)'}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:600">🎉 ${a.acheteur}</div>
+        <span class="badge ${a.statut==='en_attente'?'b-warn':a.statut==='valide'?'b-ok':'b-er'}">${a.statut==='en_attente'?'En attente':a.statut==='valide'?'Validé':'Refusé'}</span>
+      </div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:8px">${a.jeu} · Série ${a.serie}</div>
+      <div style="font-size:11px;color:var(--mu);margin-bottom:8px">${new Date(a.date).toLocaleString('fr-FR')}</div>
+      ${a.statut==='en_attente'?`<div style="display:flex;gap:8px">
+        <button onclick="validerBingo('${a.id}','valide')" style="flex:1;padding:8px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid rgba(16,185,129,.4);border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">✅ Valider</button>
+        <button onclick="validerBingo('${a.id}','refuse')" style="flex:1;padding:8px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:6px;cursor:pointer;font-size:13px">❌ Refuser</button>
+      </div>`:''}
+    </div>`).join('');
+  }catch(e){}
+}
+
+async function validerBingo(alerteId, statut){
+  try{
+    await fetch('/api/bingo/valider',{method:'POST',headers:{'Content-Type':'application/json','X-Token':TOKEN},body:JSON.stringify({alerte_id:alerteId,statut})});
+    loadAlertesBingo();
+  }catch(e){}
 }
 
 // === VERIFIER ===
