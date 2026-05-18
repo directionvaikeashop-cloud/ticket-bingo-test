@@ -280,6 +280,46 @@ def admin_desactiver():
         save_data()
     return jsonify({"ok": True})
 
+
+@app.route("/api/bingo", methods=["POST"])
+def declarer_bingo():
+    d = request.json
+    alerte = {
+        "id": gen_code(8),
+        "acheteur": d.get("acheteur", "Inconnu"),
+        "jeu": d.get("jeu", ""),
+        "serie": d.get("serie", ""),
+        "ticket_id": d.get("ticket_id", ""),
+        "date": datetime.datetime.now().isoformat(),
+        "statut": "en_attente"
+    }
+    if "alertes_bingo" not in DB:
+        DB["alertes_bingo"] = []
+    DB["alertes_bingo"].insert(0, alerte)
+    save_data()
+    return jsonify({"ok": True, "alerte_id": alerte["id"]})
+
+@app.route("/api/bingo/alertes")
+def get_alertes_bingo():
+    return jsonify(DB.get("alertes_bingo", []))
+
+@app.route("/api/bingo/valider", methods=["POST"])
+def valider_bingo():
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    d = request.json
+    alerte_id = d.get("alerte_id", "")
+    statut = d.get("statut", "valide")
+    alertes = DB.get("alertes_bingo", [])
+    for a in alertes:
+        if a["id"] == alerte_id:
+            a["statut"] = statut
+            break
+    save_data()
+    return jsonify({"ok": True})
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
