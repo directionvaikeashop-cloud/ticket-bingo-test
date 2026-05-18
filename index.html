@@ -525,6 +525,7 @@ function ouvrirPDFJoueur(url,nom,venteId,pageDebut,pageFin,jeu,serie){
   const pdDebut=parseInt(pageDebut)||1;
   const pdFin=parseInt(pageFin)||9999;
   const overlay=document.createElement('div');
+  overlay.id='pdf-overlay-'+venteId;
   overlay.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:#0a0a14;z-index:1000;display:flex;flex-direction:column';
   overlay.innerHTML=`
     <div style="background:#111218;padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(255,255,255,0.1)">
