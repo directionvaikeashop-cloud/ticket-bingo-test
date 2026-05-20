@@ -280,6 +280,8 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div class="ct">🔑 Générer un code client</div>
         <div class="lbl">Nom du client</div>
         <input id="a-nom" placeholder="Ex: Marie Dupont"/>
+        <div class="lbl">Email du client</div>
+        <input id="a-email" type="email" placeholder="client@email.com"/>
         <div class="lbl">Durée</div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
           <div class="plan" id="p30" onclick="selPlan(30,'p30')"><div class="plan-n">1 mois</div><div class="plan-p">4 990 XPF</div></div>
@@ -816,11 +818,12 @@ async function verifier(){
 // === ADMIN ===
 async function genCode(){
   const nom=document.getElementById("a-nom").value.trim();
+  const email=document.getElementById("a-email").value.trim();
   if(!nom){toast("toast-adm","Entrez le nom du client",false);return;}
   try{
-    const r=await fetch("/api/admin/generer",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({nom,duree:planSel})});
+    const r=await fetch("/api/admin/generer",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({nom,email,duree:planSel})});
     const d=await r.json();
-    if(d.ok){document.getElementById("code-result").innerHTML=`<div class="code-box"><div style="font-size:12px;color:var(--mu);margin-bottom:8px">Code pour ${d.nom} — ${d.duree} jours</div><div class="code-val">${d.code}</div><div style="font-size:11px;color:var(--mu);margin-top:8px">Envoyez par WhatsApp</div></div>`;document.getElementById("a-nom").value="";loadCodes();toast("toast-adm","Code généré !");}
+    if(d.ok){document.getElementById("code-result").innerHTML=`<div class="code-box"><div style="font-size:12px;color:var(--mu);margin-bottom:8px">Code pour ${d.nom} — ${d.duree} jours</div><div class="code-val">${d.code}</div><div style="font-size:11px;color:var(--mu);margin-top:8px">Envoyez par WhatsApp</div></div>`;document.getElementById("a-nom").value="";document.getElementById("a-email").value="";loadCodes();toast("toast-adm","Code généré !");}
   }catch(e){toast("toast-adm","Erreur",false);}
 }
 
