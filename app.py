@@ -320,6 +320,18 @@ def valider_bingo():
     save_data()
     return jsonify({"ok": True})
 
+@app.route("/manifest.json")
+def manifest():
+    return app.send_static_file("manifest.json")
+
+@app.route("/icon-192.png")
+def icon192():
+    return app.send_static_file("icon-192.png")
+
+@app.route("/icon-512.png")
+def icon512():
+    return app.send_static_file("icon-512.png")
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
