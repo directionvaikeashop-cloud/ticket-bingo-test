@@ -412,6 +412,19 @@ def icon192():
 def icon512():
     return app.send_static_file("icon-512.png")
 
+@app.route("/api/tirage", methods=["POST"])
+def sauvegarder_tirage():
+    d = request.json
+    if "tirage" not in DB:
+        DB["tirage"] = []
+    DB["tirage"] = d.get("boules", [])
+    save_data()
+    return jsonify({"ok": True})
+
+@app.route("/api/tirage")
+def get_tirage():
+    return jsonify({"boules": DB.get("tirage", [])})
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
