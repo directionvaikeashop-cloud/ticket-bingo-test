@@ -292,6 +292,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     <!-- TAB ADMIN -->
     <div id="tab-admin" class="tab">
       <div id="toast-adm"></div>
+      <button class="btn btn-p" onclick="switchTab('tirage',document.getElementById('nb-admin'))" style="margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px">🎰 Lancer le Tirage des Boules</button>
       <div class="card">
         <div class="ct">🏆 Créer un tournoi</div>
         <div class="lbl">Nom du tournoi</div>
@@ -331,7 +332,6 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     <button class="nb" id="nb-tickets" onclick="switchTab('tickets',this)"><span class="ni">🎫</span>Tickets</button>
     <button class="nb" id="nb-jouer" onclick="switchTab('jouer',this)"><span class="ni">🎮</span>Jouer</button>
     <button class="nb" id="nb-verif" onclick="switchTab('verif',this)"><span class="ni">🏆</span>Vérifier</button>
-    <button class="nb" id="nb-tirage" onclick="switchTab('tirage',this)" style="display:none"><span class="ni">🎰</span>Tirage</button>
     <button class="nb" id="nb-admin" onclick="switchTab('admin',this)" style="display:none"><span class="ni">⚙️</span>Admin</button>
   </nav>
 </div>
