@@ -240,6 +240,15 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <button class="btn btn-p" onclick="chargerTicket()">Ouvrir mon ticket</button>
       </div>
       <div id="j-ticket-zone"></div>
+      <div class="card" style="margin-top:14px">
+        <div class="ct" style="justify-content:space-between">
+          <span>🎰 Boules tirées</span>
+          <button class="btn-sm" onclick="loadTirageJoueur()">↻</button>
+        </div>
+        <div id="tirage-joueur-display">
+          <div style="text-align:center;padding:16px;font-size:13px;color:var(--mu)">Appuyez sur ↻ pour voir les boules tirées</div>
+        </div>
+      </div>
     </div>
 
     <!-- TAB VERIF -->
@@ -818,6 +827,9 @@ function tirerBoule(){
       document.getElementById('nb-tires').textContent = boulesTirees.length;
       document.getElementById('nb-restants').textContent = bouleRestantes.length;
       
+      // Sauvegarder pour les joueurs
+      fetch('/api/tirage', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({boules: boulesTirees})}).catch(()=>{});
+      
       // Ajouter à l'historique
       const hist = document.getElementById('historique-boules');
       const el = document.createElement('div');
@@ -826,6 +838,32 @@ function tirerBoule(){
       hist.insertBefore(el, hist.firstChild);
       
       btn.disabled = false;
+      
+      // Son ding + voix
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.frequency.setValueAtTime(880, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.5);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 0.5);
+      } catch(e){}
+      
+      // Voix qui annonce la boule
+      setTimeout(() => {
+        try {
+          const msg = new SpeechSynthesisUtterance(lettre + ' ' + boule);
+          msg.lang = 'fr-FR';
+          msg.rate = 0.8;
+          msg.pitch = 1.1;
+          window.speechSynthesis.speak(msg);
+        } catch(e){}
+      }, 300);
     }
   }, 60);
 }
@@ -906,6 +944,46 @@ async function validerBingo(alerteId, statut){
     loadAlertesBingo();
   }catch(e){}
 }
+
+// === TIRAGE JOUEUR ===
+async function loadTirageJoueur(){
+  try{
+    const r = await fetch('/api/tirage');
+    const d = await r.json();
+    const boules = d.boules || [];
+    const el = document.getElementById('tirage-joueur-display');
+    if(!boules.length){
+      el.innerHTML = '<div style="text-align:center;padding:16px;font-size:13px;color:var(--mu)">Aucune boule tirée pour le moment</div>';
+      return;
+    }
+    // Dernière boule tirée en grand
+    const derniere = boules[boules.length-1];
+    const couleur = getCouleur(derniere);
+    const lettre = getLettre(derniere);
+    el.innerHTML = `
+      <div style="text-align:center;padding:12px 0">
+        <div style="font-size:11px;color:var(--mu);margin-bottom:8px">DERNIÈRE BOULE</div>
+        <div style="width:80px;height:80px;border-radius:50%;background:${couleur};margin:0 auto;display:flex;align-items:center;justify-content:center;box-shadow:0 0 20px ${couleur}66">
+          <span style="font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:#fff">${derniere}</span>
+        </div>
+        <div style="font-size:14px;color:var(--mu);margin-top:8px">${lettre} — ${derniere}</div>
+      </div>
+      <div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.05em;margin:8px 0">Toutes les boules tirées (${boules.length})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">${boules.map(b=>{
+        const c=getCouleur(b);
+        return `<div style="width:32px;height:32px;border-radius:50%;background:${c};display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff">${b}</div>`;
+      }).join('')}</div>
+    `;
+  }catch(e){}
+}
+
+// Auto-refresh toutes les 10 secondes
+setInterval(()=>{
+  const tab = document.getElementById('tab-jouer');
+  if(tab && tab.classList.contains('active')){
+    loadTirageJoueur();
+  }
+}, 10000);
 
 // === VERIFIER ===
 async function verifier(){
