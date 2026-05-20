@@ -262,6 +262,33 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       </div>
     </div>
 
+    <!-- TAB TIRAGE -->
+    <div id="tab-tirage" class="tab">
+      <div class="card">
+        <div class="ct" style="justify-content:space-between">
+          <span>🎰 Tirage des boules</span>
+          <button class="btn-sm" onclick="resetTirage()" style="color:#f87171;border-color:rgba(239,68,68,.3)">🔄 Reset</button>
+        </div>
+        <!-- BOULE PRINCIPALE -->
+        <div id="boule-display" style="text-align:center;padding:24px 0">
+          <div style="width:120px;height:120px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#818cf8);margin:0 auto;display:flex;align-items:center;justify-content:center;box-shadow:0 0 40px rgba(99,102,241,.4)">
+            <span id="boule-numero" style="font-family:'Syne',sans-serif;font-size:52px;font-weight:800;color:#fff">?</span>
+          </div>
+          <div id="boule-label" style="font-size:14px;color:var(--mu);margin-top:12px">Prêt à tirer</div>
+        </div>
+        <!-- BOUTON TIRER -->
+        <button class="btn btn-p" id="btn-tirer" onclick="tirerBoule()" style="font-size:18px;padding:16px;margin-bottom:16px">🎱 Tirer une boule</button>
+        <!-- STATS -->
+        <div class="g2" style="margin-bottom:16px">
+          <div class="stat"><div class="stat-v" id="nb-tires">0</div><div class="stat-l">Tirés</div></div>
+          <div class="stat"><div class="stat-v" id="nb-restants">75</div><div class="stat-l">Restants</div></div>
+        </div>
+        <!-- HISTORIQUE -->
+        <div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Numéros tirés</div>
+        <div id="historique-boules" style="display:flex;flex-wrap:wrap;gap:6px;max-height:200px;overflow-y:auto;padding:4px"></div>
+      </div>
+    </div>
+
     <!-- TAB ADMIN -->
     <div id="tab-admin" class="tab">
       <div id="toast-adm"></div>
@@ -304,6 +331,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     <button class="nb" id="nb-tickets" onclick="switchTab('tickets',this)"><span class="ni">🎫</span>Tickets</button>
     <button class="nb" id="nb-jouer" onclick="switchTab('jouer',this)"><span class="ni">🎮</span>Jouer</button>
     <button class="nb" id="nb-verif" onclick="switchTab('verif',this)"><span class="ni">🏆</span>Vérifier</button>
+    <button class="nb" id="nb-tirage" onclick="switchTab('tirage',this)" style="display:none"><span class="ni">🎰</span>Tirage</button>
     <button class="nb" id="nb-admin" onclick="switchTab('admin',this)" style="display:none"><span class="ni">⚙️</span>Admin</button>
   </nav>
 </div>
@@ -328,13 +356,13 @@ async function doLogin(){
     const d=await r.json();
     if(d.ok){TOKEN=d.token;ADMIN=d.admin;USER_NOM=d.nom;
       document.getElementById("user-nom").textContent=d.nom;
-      if(ADMIN)document.getElementById("nb-admin").style.display="flex";
+      if(ADMIN){document.getElementById("nb-admin").style.display="flex";document.getElementById("nb-tirage").style.display="flex";}
       show("s-app");loadJeux();loadVentes();loadStats();loadDocs();loadTournois();}
     else toast("toast-login",d.msg||"Code invalide",false);
   }catch(e){toast("toast-login","Erreur",false);}
 }
 
-function logout(){TOKEN="";ADMIN=false;document.getElementById("login-code").value="";document.getElementById("nb-admin").style.display="none";show("s-login");}
+function logout(){TOKEN="";ADMIN=false;document.getElementById("login-code").value="";document.getElementById("nb-admin").style.display="none";document.getElementById("nb-tirage").style.display="none";show("s-login");}
 
 function switchTab(n,el){
   document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));
@@ -735,6 +763,92 @@ async function chargerTicket(){
         </div>`;
     }else toast("toast-j","Code invalide ou introuvable",false);
   }catch(e){toast("toast-j","Erreur",false);}
+}
+
+// === TIRAGE ===
+let boulesTirees = [];
+let toutesLesBoules = Array.from({length:75}, (_,i) => i+1);
+let bouleRestantes = [...toutesLesBoules];
+
+const COULEURS_BOULES = {
+  B: {range:[1,15], color:'#3b82f6'},
+  I: {range:[16,30], color:'#8b5cf6'},
+  N: {range:[31,45], color:'#ef4444'},
+  G: {range:[46,60], color:'#10b981'},
+  O: {range:[61,75], color:'#f59e0b'}
+};
+
+function getLettre(n){
+  if(n<=15) return 'B';
+  if(n<=30) return 'I';
+  if(n<=45) return 'N';
+  if(n<=60) return 'G';
+  return 'O';
+}
+
+function getCouleur(n){
+  const l = getLettre(n);
+  return COULEURS_BOULES[l].color;
+}
+
+function tirerBoule(){
+  if(bouleRestantes.length === 0){
+    document.getElementById('boule-label').textContent = '🎉 Toutes les boules ont été tirées !';
+    document.getElementById('btn-tirer').disabled = true;
+    return;
+  }
+  
+  // Animation
+  const btn = document.getElementById('btn-tirer');
+  btn.disabled = true;
+  
+  let compteur = 0;
+  const interval = setInterval(() => {
+    const faux = bouleRestantes[Math.floor(Math.random()*bouleRestantes.length)];
+    document.getElementById('boule-numero').textContent = faux;
+    document.getElementById('boule-display').querySelector('div').style.background = 
+      'linear-gradient(135deg,' + getCouleur(faux) + ',' + getCouleur(faux) + 'aa)';
+    compteur++;
+    if(compteur > 15){
+      clearInterval(interval);
+      // Tirer la vraie boule
+      const idx = Math.floor(Math.random() * bouleRestantes.length);
+      const boule = bouleRestantes.splice(idx, 1)[0];
+      boulesTirees.push(boule);
+      
+      const lettre = getLettre(boule);
+      const couleur = getCouleur(boule);
+      
+      document.getElementById('boule-numero').textContent = boule;
+      document.getElementById('boule-display').querySelector('div').style.background = 
+        'linear-gradient(135deg,' + couleur + ',' + couleur + 'aa)';
+      document.getElementById('boule-label').textContent = lettre + ' — ' + boule;
+      document.getElementById('nb-tires').textContent = boulesTirees.length;
+      document.getElementById('nb-restants').textContent = bouleRestantes.length;
+      
+      // Ajouter à l'historique
+      const hist = document.getElementById('historique-boules');
+      const el = document.createElement('div');
+      el.style.cssText = 'width:36px;height:36px;border-radius:50%;background:' + couleur + ';display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:#fff;font-family:Syne,sans-serif';
+      el.textContent = boule;
+      hist.insertBefore(el, hist.firstChild);
+      
+      btn.disabled = false;
+    }
+  }, 60);
+}
+
+function resetTirage(){
+  if(!confirm('Réinitialiser le tirage ? Toutes les boules seront remises.')) return;
+  boulesTirees = [];
+  bouleRestantes = [...toutesLesBoules];
+  document.getElementById('boule-numero').textContent = '?';
+  document.getElementById('boule-label').textContent = 'Prêt à tirer';
+  document.getElementById('boule-display').querySelector('div').style.background = 'linear-gradient(135deg,#6366f1,#818cf8)';
+  document.getElementById('nb-tires').textContent = '0';
+  document.getElementById('nb-restants').textContent = '75';
+  document.getElementById('historique-boules').innerHTML = '';
+  document.getElementById('btn-tirer').disabled = false;
 }
 
 // === BINGO ===
