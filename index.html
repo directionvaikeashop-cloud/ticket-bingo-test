@@ -255,6 +255,25 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       </div>
       <div class="card" style="margin-top:14px">
         <div class="ct" style="justify-content:space-between">
+          <span>🎰 Tirage des boules</span>
+          <button class="btn-sm" onclick="resetTirage()" style="color:#f87171;border-color:rgba(239,68,68,.3)">🔄 Reset</button>
+        </div>
+        <div id="boule-display" style="text-align:center;padding:16px 0">
+          <div style="width:100px;height:100px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#818cf8);margin:0 auto;display:flex;align-items:center;justify-content:center;box-shadow:0 0 30px rgba(99,102,241,.4)">
+            <span id="boule-numero" style="font-family:'Syne',sans-serif;font-size:44px;font-weight:800;color:#fff">?</span>
+          </div>
+          <div id="boule-label" style="font-size:14px;color:var(--mu);margin-top:10px">Prêt à tirer</div>
+        </div>
+        <button class="btn btn-p" id="btn-tirer" onclick="tirerBoule()" style="font-size:16px;padding:14px;margin-bottom:12px">🎱 Tirer une boule</button>
+        <div class="g2" style="margin-bottom:12px">
+          <div class="stat"><div class="stat-v" id="nb-tires">0</div><div class="stat-l">Tirés</div></div>
+          <div class="stat"><div class="stat-v" id="nb-restants">75</div><div class="stat-l">Restants</div></div>
+        </div>
+        <div style="font-size:11px;color:var(--mu);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Numéros tirés</div>
+        <div id="historique-boules" style="display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow-y:auto"></div>
+      </div>
+      <div class="card" style="margin-top:14px">
+        <div class="ct" style="justify-content:space-between">
           <span>🚨 Alertes BINGO</span>
           <button class="btn-sm" onclick="loadAlertesBingo()">↻</button>
         </div>
