@@ -185,6 +185,45 @@ def nouvelle_vente():
     DB["acces_docs"][token_doc] = {"vente_id": vente["id"], "client": vente["client"],
                                     "jeu": vente["jeu"], "date_expiration": date_expiration, "acces_count": 0}
     save_data()
+
+    # Envoyer email au client si email fourni
+    if vente["email"] and SENDGRID_API_KEY:
+        try:
+            expire_str = date_expiration if date_expiration else "illimitée"
+            html = f"""
+            <div style='font-family:sans-serif;max-width:520px;margin:0 auto;background:#08090d;color:#f0f2f8;padding:24px;border-radius:12px'>
+              <div style='text-align:center;margin-bottom:24px'>
+                <div style='font-size:48px'>🎱</div>
+                <h1 style='font-family:sans-serif;font-size:24px;color:#818cf8;margin:8px 0'>Ticket Bingo</h1>
+              </div>
+              <p style='font-size:15px'>Bonjour <strong>{vente["client"]}</strong>,</p>
+              <p style='font-size:14px;color:#9ca3af'>Votre achat de tickets Bingo a bien été enregistré !</p>
+              <div style='background:#111218;border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:16px;margin:20px 0'>
+                <p style='margin:4px 0;font-size:13px'>🎮 <strong>Jeu :</strong> {vente["jeu"]}</p>
+                <p style='margin:4px 0;font-size:13px'>🔢 <strong>Série :</strong> {vente["serie"]}</p>
+                <p style='margin:4px 0;font-size:13px'>📦 <strong>Quantité :</strong> {vente["qty"]}x{vente["pack"]} feuilles</p>
+                <p style='margin:4px 0;font-size:13px'>💰 <strong>Total :</strong> {vente["total"]:,} XPF</p>
+              </div>
+              <div style='text-align:center;margin:24px 0'>
+                <a href='https://ticketbingo.space' style='display:inline-block;padding:14px 32px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600'>🎯 Accéder à mes tickets</a>
+              </div>
+              <p style='font-size:12px;color:#6b7280;text-align:center'>Accès valable jusqu'au : {expire_str}</p>
+              <hr style='border:none;border-top:1px solid rgba(255,255,255,0.1);margin:20px 0'/>
+              <p style='font-size:11px;color:#6b7280;text-align:center'>Ticket Bingo — ticketbingo.space</p>
+            </div>
+            """
+            message = Mail(
+                from_email=(FROM_EMAIL, FROM_NAME),
+                to_emails=vente["email"],
+                subject=f"🎱 Vos tickets Bingo — {vente['jeu']}",
+                html_content=html
+            )
+            sg = SendGridAPIClient(SENDGRID_API_KEY)
+            sg.send(message)
+            print(f"[EMAIL] Envoyé à {vente['email']}")
+        except Exception as e:
+            print(f"[EMAIL ERR] {e}")
+
     return jsonify({"ok": True, "vente": vente})
 
 @app.route("/api/ventes")
