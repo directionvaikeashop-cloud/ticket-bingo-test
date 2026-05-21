@@ -14,23 +14,17 @@ CLOUDINARY_CLOUD = os.environ.get("CLOUDINARY_CLOUD", "dz556b0ee")
 CLOUDINARY_PRESET = "alerte_upload"
 CLOUDINARY_PRESET_PDF = "bingo_pdf"
 
-JSONBIN_KEY = os.environ.get("JSONBIN_KEY", "$2a$10$mquv2tdX5OPVLvBDgOu2F.veB8ErmntNaMm/NhdqNPgC52RijJgd6")
-JSONBIN_BIN = os.environ.get("JSONBIN_BIN", "6a0ebbe9ee5a733b12f54d1d")
-JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN}"
+DATA_FILE = "/tmp/ticketbingo_data.json"
 
 def load_data():
     try:
-        req = urllib.request.Request(JSONBIN_URL, headers={
-            "X-Master-Key": JSONBIN_KEY,
-            "X-Bin-Meta": "false"
-        })
-        resp = urllib.request.urlopen(req, timeout=10)
-        data = json.loads(resp.read().decode())
-        for k in ["tickets_acheteurs", "acces_docs", "pdfs", "alertes_bingo", "tirage"]:
-            if k not in data: data[k] = [] if k in ["alertes_bingo", "tirage"] else {}
-        return data
-    except Exception as e:
-        print(f"[LOAD ERR] {e}")
+        if os.path.exists(DATA_FILE):
+            with open(DATA_FILE, "r") as f:
+                data = json.load(f)
+            for k in ["tickets_acheteurs", "acces_docs", "pdfs", "alertes_bingo", "tirage"]:
+                if k not in data: data[k] = [] if k in ["alertes_bingo", "tirage"] else {}
+            return data
+    except: pass
     return {
         "ventes": [], "tickets": [],
         "jeux": ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"],
@@ -42,12 +36,8 @@ def load_data():
 
 def save_data():
     try:
-        data = json.dumps(DB, ensure_ascii=False, default=str).encode("utf-8")
-        req = urllib.request.Request(JSONBIN_URL, data=data, method="PUT", headers={
-            "Content-Type": "application/json",
-            "X-Master-Key": JSONBIN_KEY
-        })
-        urllib.request.urlopen(req, timeout=10)
+        with open(DATA_FILE, "w") as f:
+            json.dump(DB, f, ensure_ascii=False, default=str)
     except Exception as e:
         print(f"[SAVE ERR] {e}")
 
