@@ -14,29 +14,40 @@ CLOUDINARY_CLOUD = os.environ.get("CLOUDINARY_CLOUD", "dz556b0ee")
 CLOUDINARY_PRESET = "alerte_upload"
 CLOUDINARY_PRESET_PDF = "bingo_pdf"
 
-DATA_FILE = "/opt/render/project/src/ticketbingo_data.json"
+JSONBIN_KEY = os.environ.get("JSONBIN_KEY", "$2a$10$mquv2tdX5OPVLvBDgOu2F.veB8ErmntNaMm/NhdqNPgC52RijJgd6")
+JSONBIN_BIN = os.environ.get("JSONBIN_BIN", "6a0ebbe9ee5a733b12f54d1d")
+JSONBIN_URL = f"https://api.jsonbin.io/v3/b/{JSONBIN_BIN}"
 
 def load_data():
     try:
-        if os.path.exists(DATA_FILE):
-            with open(DATA_FILE, "r") as f:
-                data = json.load(f)
-            for k in ["tickets_acheteurs", "acces_docs"]:
-                if k not in data: data[k] = {}
-            return data
-    except: pass
+        req = urllib.request.Request(JSONBIN_URL, headers={
+            "X-Master-Key": JSONBIN_KEY,
+            "X-Bin-Meta": "false"
+        })
+        resp = urllib.request.urlopen(req, timeout=10)
+        data = json.loads(resp.read().decode())
+        for k in ["tickets_acheteurs", "acces_docs", "pdfs", "alertes_bingo", "tirage"]:
+            if k not in data: data[k] = [] if k in ["alertes_bingo", "tirage"] else {}
+        return data
+    except Exception as e:
+        print(f"[LOAD ERR] {e}")
     return {
         "ventes": [], "tickets": [],
         "jeux": ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"],
         "tournois": [],
         "codes": {"ADMIN2024": {"duree": 36500, "nom": "Administrateur", "actif": True, "admin": True}},
-        "sessions": {}, "acces_docs": {}, "tickets_acheteurs": {}
+        "sessions": {}, "acces_docs": {}, "tickets_acheteurs": {},
+        "pdfs": {}, "alertes_bingo": [], "tirage": []
     }
 
 def save_data():
     try:
-        with open(DATA_FILE, "w") as f:
-            json.dump(DB, f, ensure_ascii=False, default=str)
+        data = json.dumps(DB, ensure_ascii=False, default=str).encode("utf-8")
+        req = urllib.request.Request(JSONBIN_URL, data=data, method="PUT", headers={
+            "Content-Type": "application/json",
+            "X-Master-Key": JSONBIN_KEY
+        })
+        urllib.request.urlopen(req, timeout=10)
     except Exception as e:
         print(f"[SAVE ERR] {e}")
 
