@@ -87,7 +87,7 @@ def login():
     token = secrets.token_hex(16)
     DB["sessions"][token] = {"code": code, "nom": info["nom"], "expire": expire.isoformat(), "admin": info.get("admin", False)}
     save_data()
-    return jsonify({"ok": True, "token": token, "nom": info["nom"], "admin": info.get("admin", False)})
+    return jsonify({"ok": True, "token": token, "nom": info["nom"], "admin": info.get("admin", False), "code_org": code})
 
 @app.route("/api/jeux")
 def get_jeux():
@@ -243,6 +243,9 @@ def get_stats():
 @app.route("/api/ticket", methods=["POST"])
 def enregistrer_ticket():
     d = request.json
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    code_org = s["code"] if s else "ADMIN"
     if not d.get("acheteur") or not d.get("jeu") or not d.get("serie"):
         return jsonify({"ok": False, "msg": "Champs manquants"}), 400
     code_acheteur = gen_code(6)
@@ -255,6 +258,7 @@ def enregistrer_ticket():
         "page_debut": d.get("page_debut", None),
         "page_fin": d.get("page_fin", None),
         "code_acheteur": code_acheteur,
+        "code_org": code_org,
         "date": datetime.datetime.now().isoformat()
     }
     DB["tickets"].insert(0, ticket)
@@ -264,6 +268,13 @@ def enregistrer_ticket():
 
 @app.route("/api/tickets")
 def get_tickets():
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if s and not s.get("admin"):
+        # Organisateur — voir seulement ses tickets
+        code_org = s["code"]
+        tickets = [t for t in DB["tickets"] if t.get("code_org") == code_org]
+        return jsonify(tickets)
     return jsonify(DB["tickets"])
 
 @app.route("/api/ticket/acheteur/<code>")
