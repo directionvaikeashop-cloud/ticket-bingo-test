@@ -196,16 +196,12 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <div><div class="lbl">N° de série</div><input id="t-serie" placeholder="Ex: 042"/></div>
           <div><div class="lbl">Prix (XPF)</div><input id="t-prix" type="number" placeholder="100"/></div>
         </div>
-        <div class="lbl" style="margin-bottom:8px">📎 Document du ticket</div>
-        <div id="pdf-org-zone" style="display:none;background:rgba(99,102,241,.1);border:.5px solid var(--ac);border-radius:var(--rs);padding:12px;margin-bottom:10px">
-          <div style="font-size:12px;color:var(--ac2);margin-bottom:8px">📄 Utiliser mon PDF existant</div>
-          <select id="t-pdf-existant" style="margin-bottom:8px" onchange="selectionnerPDFExistant(this.value)">
-            <option value="">-- Choisir un PDF existant --</option>
-          </select>
-        </div>
-        <div style="display:flex;gap:8px;margin-bottom:10px">
-          <button class="btn-sm" style="flex:1;padding:10px" onclick="document.getElementById('t-photo').click()">📸 Photo</button>
-          <button class="btn-sm" style="flex:1;padding:10px" onclick="document.getElementById('t-pdf').click()">📄 Nouveau PDF</button>
+        <div class="lbl" style="margin-bottom:8px">📎 Feuilles à envoyer au client</div>
+        <div style="background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:10px">
+          <div style="font-size:12px;color:var(--ac2);margin-bottom:8px">📄 Sélectionnez votre PDF reçu</div>
+          <div id="pdf-org-liste" style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:13px;color:var(--mu);text-align:center;padding:8px">Chargement...</div>
+          </div>
         </div>
         <input type="file" id="t-photo" accept="image/*" capture="environment" style="display:none" onchange="previewTicketDoc(this,'photo')"/>
         <input type="file" id="t-pdf" accept=".pdf" style="display:none" onchange="previewTicketDoc(this,'pdf')"/>
@@ -706,34 +702,65 @@ let tPdfUrlExistant = null;
 
 async function chargerPDFsOrganisateur(){
   try{
-    const r = await fetch('/api/tickets', {headers:{'X-Token':TOKEN}});
-    const ts = await r.json();
-    const pdfs = ts.filter(t => t.pdf_url);
-    const sel = document.getElementById('t-pdf-existant');
-    if(!sel) return;
-    sel.innerHTML = '<option value="">-- Choisir un PDF existant --</option>';
+    // Charger les ventes ET tickets de l'organisateur pour trouver ses PDFs
+    const [rV, rT] = await Promise.all([
+      fetch('/api/ventes', {headers:{'X-Token':TOKEN}}),
+      fetch('/api/tickets', {headers:{'X-Token':TOKEN}})
+    ]);
+    const vs = await rV.json();
+    const ts = await rT.json();
     
-    // Dédupliquer par pdf_url
-    const urls = [...new Set(pdfs.map(t => t.pdf_url))];
-    if(urls.length > 0){
-      document.getElementById('pdf-org-zone').style.display = 'block';
-      urls.forEach((url, i) => {
-        const o = document.createElement('option');
-        o.value = url;
-        o.textContent = 'PDF ' + (i+1);
-        sel.appendChild(o);
-      });
+    // Collecter tous les PDFs disponibles
+    const pdfs = [];
+    vs.filter(v => v.pdf_url).forEach(v => {
+      if(!pdfs.find(p => p.url === v.pdf_url)){
+        pdfs.push({url: v.pdf_url, nom: v.jeu + ' — Série ' + v.serie});
+      }
+    });
+    ts.filter(t => t.pdf_url).forEach(t => {
+      if(!pdfs.find(p => p.url === t.pdf_url)){
+        pdfs.push({url: t.pdf_url, nom: t.jeu + ' — Série ' + t.serie});
+      }
+    });
+    
+    const el = document.getElementById('pdf-org-liste');
+    if(!el) return;
+    
+    if(!pdfs.length){
+      el.innerHTML = '<div style="font-size:13px;color:var(--mu);text-align:center;padding:8px">Aucun PDF disponible — Vous devez d'abord recevoir un PDF de votre boutique</div>';
+      return;
     }
-  }catch(e){}
+    
+    el.innerHTML = pdfs.map((p, i) => `
+      <div onclick="selectionnerPDFExistant('${p.url}', this)" style="background:var(--s1);border:0.5px solid var(--bd2);border-radius:var(--rs);padding:10px;cursor:pointer;display:flex;align-items:center;gap:10px" id="pdf-item-${i}">
+        <div style="width:36px;height:36px;background:rgba(99,102,241,.2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">📄</div>
+        <div>
+          <div style="font-size:13px;font-weight:500">${p.nom}</div>
+          <div style="font-size:11px;color:var(--mu)">Appuyer pour sélectionner</div>
+        </div>
+      </div>
+    `).join('');
+  }catch(e){console.error(e);}
 }
 
-function selectionnerPDFExistant(url){
-  if(!url) { tPdfUrlExistant = null; return; }
+function selectionnerPDFExistant(url, el){
   tPdfUrlExistant = url;
   tDocFile = null; tDocType = null;
-  document.getElementById('t-doc-preview').style.display = 'block';
-  document.getElementById('t-doc-nom').textContent = '📄 PDF existant sélectionné';
+  
+  // Marquer visuellement le PDF sélectionné
+  document.querySelectorAll('[id^=pdf-item-]').forEach(e => {
+    e.style.borderColor = 'var(--bd2)';
+    e.style.background = 'var(--s1)';
+  });
+  if(el){
+    el.style.borderColor = 'var(--ac)';
+    el.style.background = 'rgba(99,102,241,.1)';
+    el.querySelector('div:last-child div:last-child').textContent = '✅ Sélectionné';
+  }
+  
+  // Afficher la sélection de pages
   document.getElementById('t-pages-zone').style.display = 'block';
+  
   // Compter les pages du PDF
   fetch(url).then(r => r.arrayBuffer()).then(async buf => {
     try{
