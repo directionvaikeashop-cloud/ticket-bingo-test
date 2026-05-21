@@ -14,7 +14,7 @@ CLOUDINARY_CLOUD = os.environ.get("CLOUDINARY_CLOUD", "dz556b0ee")
 CLOUDINARY_PRESET = "alerte_upload"
 CLOUDINARY_PRESET_PDF = "bingo_pdf"
 
-DATA_FILE = "/tmp/ticketbingo_data.json"
+DATA_FILE = "/data/ticketbingo_data.json"
 
 def load_data():
     try:
