@@ -9,7 +9,11 @@ app = Flask(__name__, static_folder=".")
 @app.before_request
 def reload_db():
     global DB
-    DB = load_data()
+    # Recharger depuis fichier mais garder les sessions actives en memoire
+    fresh = load_data()
+    # Fusionner les sessions memoire avec les donnees du fichier
+    fresh["sessions"].update(DB.get("sessions", {}))
+    DB = fresh
 
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "directionvaikeashop@gmail.com")
