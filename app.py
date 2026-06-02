@@ -99,6 +99,9 @@ def index():
 
 @app.route("/api/login", methods=["POST"])
 def login():
+    # Recharger depuis le fichier pour avoir les donnees a jour
+    global DB
+    DB = load_data()
     code = request.json.get("code", "").strip().upper()
     info = DB["codes"].get(code)
     if not info or not info["actif"]:
