@@ -14,7 +14,25 @@ CLOUDINARY_CLOUD = os.environ.get("CLOUDINARY_CLOUD", "dz556b0ee")
 CLOUDINARY_PRESET = "alerte_upload"
 CLOUDINARY_PRESET_PDF = "bingo_pdf"
 
-DATA_FILE = "/data/ticketbingo_data.json"
+# Essayer /data (volume persistant) sinon /tmp
+import tempfile
+_data_paths = ["/data/ticketbingo_data.json", "/tmp/ticketbingo_data.json"]
+
+def get_data_file():
+    for path in _data_paths:
+        try:
+            dir_path = os.path.dirname(path)
+            if os.path.exists(dir_path):
+                # Tester ecriture
+                test = path + ".test"
+                with open(test, "w") as f: f.write("ok")
+                os.remove(test)
+                print(f"[STORAGE] Utilisation de {path}")
+                return path
+        except: pass
+    return "/tmp/ticketbingo_data.json"
+
+DATA_FILE = get_data_file()
 
 def load_data():
     try:
@@ -38,6 +56,7 @@ def save_data():
     try:
         with open(DATA_FILE, "w") as f:
             json.dump(DB, f, ensure_ascii=False, default=str)
+        print(f"[SAVE OK] {DATA_FILE}")
     except Exception as e:
         print(f"[SAVE ERR] {e}")
 
