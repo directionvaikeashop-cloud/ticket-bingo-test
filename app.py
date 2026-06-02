@@ -66,6 +66,8 @@ def gen_code(n=8):
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(n))
 
 def verif_session(token):
+    global DB
+    DB = load_data()
     s = DB["sessions"].get(token)
     if not s: return None
     if datetime.datetime.now() > datetime.datetime.fromisoformat(s["expire"]):
@@ -302,6 +304,8 @@ def get_tickets():
 
 @app.route("/api/ticket/acheteur/<code>")
 def get_ticket_acheteur(code):
+    global DB
+    DB = load_data()
     ticket_id = DB["tickets_acheteurs"].get(code.upper())
     if not ticket_id:
         return jsonify({"ok": False, "msg": "Code introuvable"}), 404
