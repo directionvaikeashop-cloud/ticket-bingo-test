@@ -91,29 +91,88 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
 
 <!-- LOGIN -->
 <div id="s-login" class="screen active">
-  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:28px;background:linear-gradient(180deg,#1a1040,#0d0d1a);min-height:100vh">
-    <div style="text-align:center;margin-bottom:32px">
-      <div style="font-size:56px;margin-bottom:12px">🎱</div>
-      <div style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:#fff;letter-spacing:-1px">Ticket Bingo</div>
-      <div style="font-size:13px;color:rgba(255,255,255,.5);margin-top:6px">Gérez vos tickets facilement</div>
-    </div>
-    <div id="toast-login"></div>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;padding:24px;background:linear-gradient(180deg,#1a1040,#0d0d1a);min-height:100vh">
     
-    <!-- ACCES JOUEUR DIRECT -->
-    <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:20px;margin-bottom:20px">
-      <div style="font-size:14px;color:#34d399;font-weight:600;margin-bottom:12px;text-align:center">🎮 J'ai un code ticket</div>
-      <input id="joueur-code" type="text" placeholder="Ex: AB12CD" style="text-transform:uppercase;font-size:18px;letter-spacing:4px;text-align:center;background:rgba(255,255,255,.08);border-color:rgba(16,185,129,.4);color:#fff;margin-bottom:8px"/>
-      <button onclick="accesJoueurDirect()" style="width:100%;padding:12px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600">🎯 Jouer maintenant !</button>
+    <!-- TITRE -->
+    <div style="text-align:center;margin-bottom:28px">
+      <div style="font-size:52px;margin-bottom:10px">🎱</div>
+      <div style="font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:#fff;letter-spacing:-1px">Ticket Bingo</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:6px">Choisissez votre espace</div>
     </div>
 
-    <div style="text-align:center;color:rgba(255,255,255,.3);font-size:13px;margin:16px 0">— ou —</div>
+    <div id="toast-login"></div>
 
-    <!-- ACCES BOUTIQUE/ORGANISATEUR -->
-    <div class="lbl" style="color:rgba(255,255,255,.5)">Code d'accès boutique / organisateur</div>
-    <input id="login-code" type="text" placeholder="Ex: AB12CD34" style="text-transform:uppercase;font-size:18px;letter-spacing:4px;text-align:center;background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff"/>
-    <button class="btn btn-p" onclick="doLogin()" style="margin-top:8px">Accéder à Ticket Bingo</button>
-    <div style="text-align:center;margin-top:16px;font-size:12px;color:rgba(255,255,255,.3)">🎁 Offre de lancement 4 990 XPF / mois</div>
+    <!-- 1. JOUEUR -->
+    <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;color:#34d399;font-weight:600;margin-bottom:10px;text-align:center">🎮 Espace Joueur</div>
+      <input id="joueur-code" type="text" placeholder="Votre code ticket" style="text-transform:uppercase;font-size:16px;letter-spacing:3px;text-align:center;background:rgba(255,255,255,.08);border-color:rgba(16,185,129,.4);color:#fff;margin-bottom:8px"/>
+      <button onclick="accesJoueurDirect()" style="width:100%;padding:10px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🎯 Jouer maintenant !</button>
+    </div>
+
+    <!-- 2. ORGANISATEUR -->
+    <div style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;color:#818cf8;font-weight:600;margin-bottom:10px;text-align:center">🎪 Espace Organisateur</div>
+      <input id="org-code" type="text" placeholder="Votre code organisateur" style="text-transform:uppercase;font-size:16px;letter-spacing:3px;text-align:center;background:rgba(255,255,255,.08);border-color:rgba(99,102,241,.4);color:#fff;margin-bottom:8px"/>
+      <button onclick="accesOrganisateur()" style="width:100%;padding:10px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🎪 Accéder à mon espace</button>
+    </div>
+
+    <!-- 3. REVENDEUR -->
+    <div style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:12px;padding:16px;margin-bottom:12px">
+      <div style="font-size:13px;color:#60a5fa;font-weight:600;margin-bottom:10px;text-align:center">🛒 Espace Revendeur</div>
+      <input id="rev-login-code" type="text" placeholder="Votre code revendeur" style="text-transform:uppercase;font-size:16px;letter-spacing:3px;text-align:center;background:rgba(255,255,255,.08);border-color:rgba(59,130,246,.4);color:#fff;margin-bottom:8px"/>
+      <button onclick="accesRevendeur()" style="width:100%;padding:10px;background:linear-gradient(135deg,#2563eb,#3b82f6);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">🛒 Accéder à mon espace</button>
+    </div>
+
+    <!-- 4. ADMIN -->
+    <div style="background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.2);border-radius:12px;padding:16px">
+      <div style="font-size:13px;color:#fbbf24;font-weight:600;margin-bottom:10px;text-align:center">👑 Espace Admin</div>
+      <input id="login-code" type="text" placeholder="Code administrateur" style="text-transform:uppercase;font-size:16px;letter-spacing:3px;text-align:center;background:rgba(255,255,255,.08);border-color:rgba(245,158,11,.3);color:#fff;margin-bottom:8px"/>
+      <button onclick="doLogin()" style="width:100%;padding:10px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">👑 Accéder à l'admin</button>
+    </div>
+
   </div>
+</div>
+
+<!-- ECRAN ORGANISATEUR -->
+<div id="s-organisateur" class="screen">
+  <div class="hdr">
+    <div class="logo"><div class="logo-i">🎪</div>Organisateur</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:12px;color:var(--mu)" id="org-nom">--</span>
+      <button class="btn-sm" onclick="retourAccueil()">Quitter</button>
+    </div>
+  </div>
+  <div class="wrap">
+    <div id="tab-org-tickets" class="tab active"></div>
+    <div id="tab-org-jouer" class="tab"></div>
+    <div id="tab-org-verif" class="tab"></div>
+    <div id="tab-org-revendeurs" class="tab"></div>
+  </div>
+  <nav class="nav">
+    <button class="nb active" onclick="switchOrgTab('tickets',this)"><span class="ni">🎫</span>Tickets</button>
+    <button class="nb" onclick="switchOrgTab('jouer',this)"><span class="ni">🎮</span>Jouer</button>
+    <button class="nb" onclick="switchOrgTab('verif',this)"><span class="ni">🏆</span>Vérifier</button>
+    <button class="nb" onclick="switchOrgTab('revendeurs',this)"><span class="ni">🛒</span>Revendeurs</button>
+  </nav>
+</div>
+
+<!-- ECRAN REVENDEUR -->
+<div id="s-revendeur" class="screen">
+  <div class="hdr">
+    <div class="logo"><div class="logo-i" style="background:linear-gradient(135deg,#2563eb,#3b82f6)">🛒</div>Revendeur</div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span style="font-size:12px;color:var(--mu)" id="rev-nom-display">--</span>
+      <button class="btn-sm" onclick="retourAccueil()">Quitter</button>
+    </div>
+  </div>
+  <div class="wrap">
+    <div id="tab-rev-tickets" class="tab active"></div>
+    <div id="tab-rev-jouer" class="tab"></div>
+  </div>
+  <nav class="nav">
+    <button class="nb active" onclick="switchRevTab('tickets',this)"><span class="ni">🎫</span>Tickets</button>
+    <button class="nb" onclick="switchRevTab('jouer',this)"><span class="ni">🎮</span>Jouer</button>
+  </nav>
 </div>
 
 <!-- ECRAN JOUEUR DIRECT -->
@@ -453,6 +512,236 @@ function fermerPDF(){
   document.querySelectorAll('div[style*="z-index:1000"]').forEach(el => {
     if(el.querySelector('#pdf-canvas')) el.remove();
   });
+}
+
+// === ACCES ORGANISATEUR ===
+async function accesOrganisateur(){
+  const code = document.getElementById("org-code").value.trim().toUpperCase();
+  if(!code){alert("Entrez votre code organisateur");return;}
+  try{
+    const r = await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});
+    const d = await r.json();
+    if(d.ok){
+      if(d.admin){alert("Ce code est un code Admin. Utilisez l'espace Admin.");return;}
+      TOKEN = d.token;
+      USER_NOM = d.nom;
+      CODE_ORG = d.code_org||'';
+      document.getElementById("org-nom").textContent = d.nom;
+      // Construire l'espace organisateur
+      buildOrgSpace();
+      show("s-organisateur");
+    } else {
+      document.getElementById("toast-login").textContent = "✗ " + (d.msg||"Code invalide");
+      document.getElementById("toast-login").className = "toast t-er";
+      setTimeout(()=>document.getElementById("toast-login").className="toast",4000);
+    }
+  }catch(e){alert("Erreur de connexion");}
+}
+
+function buildOrgSpace(){
+  // Tickets
+  document.getElementById("tab-org-tickets").innerHTML = `
+    <div id="toast-t"></div>
+    <div class="card">
+      <div class="ct">📂 Mes tickets reçus</div>
+      <div id="docs-liste"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Chargement...</div></div>
+    </div>
+    <div class="card">
+      <div class="ct">🎫 Vendre un ticket</div>
+      <div class="g2">
+        <div><div class="lbl">Nom acheteur</div><input id="t-acheteur" placeholder="Jean Martin"/></div>
+        <div><div class="lbl">Jeu</div><select id="t-jeu"><option value="">-- Choisir --</option></select></div>
+      </div>
+      <div class="g2">
+        <div><div class="lbl">N° de série</div><input id="t-serie" placeholder="Ex: 042"/></div>
+        <div><div class="lbl">Prix (XPF)</div><input id="t-prix" type="number" placeholder="100"/></div>
+      </div>
+      <div class="lbl" style="margin-bottom:8px">📎 Feuilles à envoyer</div>
+      <div id="pdf-org-liste" style="margin-bottom:10px"><div style="font-size:13px;color:var(--mu);text-align:center;padding:8px">Chargement...</div></div>
+      <div id="t-pages-zone" style="display:none;background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:10px">
+        <div style="font-size:12px;color:var(--ac2);margin-bottom:8px">📄 Pages à envoyer au client</div>
+        <div class="g2">
+          <div><div class="lbl">Page début</div><input id="t-page-debut" type="number" placeholder="1" min="1" style="margin-bottom:0"/></div>
+          <div><div class="lbl">Page fin</div><input id="t-page-fin" type="number" placeholder="2" min="1" style="margin-bottom:0"/></div>
+        </div>
+        <div id="t-pages-info" style="font-size:11px;color:var(--mu);margin-top:6px;text-align:center"></div>
+      </div>
+      <button class="btn btn-p" onclick="regTicket()">Enregistrer et générer le code</button>
+      <div id="t-code-result"></div>
+    </div>
+    <div class="card">
+      <div class="ct">📊 Tickets vendus</div>
+      <div class="g2" style="margin-bottom:12px">
+        <div class="stat"><div class="stat-v" id="cnb">0</div><div class="stat-l">Tickets vendus</div></div>
+        <div class="stat"><div class="stat-v" id="cca">0 XPF</div><div class="stat-l">Chiffre d'affaires</div></div>
+      </div>
+      <div id="t-liste"></div>
+    </div>`;
+
+  // Jouer
+  document.getElementById("tab-org-jouer").innerHTML = `
+    <div id="toast-j"></div>
+    <div class="card">
+      <div class="ct">🎮 Jouer mon ticket</div>
+      <div class="lbl">Entrez votre code ticket</div>
+      <input id="j-code" placeholder="Ex: AB12CD" style="text-transform:uppercase;letter-spacing:3px;text-align:center;font-size:18px"/>
+      <button class="btn btn-p" onclick="chargerTicket()">Ouvrir mon ticket</button>
+    </div>
+    <div id="j-ticket-zone"></div>`;
+
+  // Vérifier
+  document.getElementById("tab-org-verif").innerHTML = `
+    <div class="card">
+      <div class="ct">🏆 Vérifier un gagnant</div>
+      <div class="lbl">Jeu du tournoi</div>
+      <select id="v-jeu"><option value="">-- Choisir --</option></select>
+      <div class="lbl">N° de série gagnant</div>
+      <input id="v-serie" placeholder="Ex: 042"/>
+      <button class="btn btn-g" onclick="verifier()">Vérifier maintenant</button>
+      <div id="v-result"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="ct" style="justify-content:space-between">
+        <span>🎰 Tirage des boules</span>
+        <button class="btn-sm" onclick="resetTirage()" style="color:#f87171">🔄 Reset</button>
+      </div>
+      <div id="boule-display" style="text-align:center;padding:16px 0">
+        <div style="width:100px;height:100px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#818cf8);margin:0 auto;display:flex;align-items:center;justify-content:center;box-shadow:0 0 30px rgba(99,102,241,.4)">
+          <span id="boule-numero" style="font-family:'Syne',sans-serif;font-size:44px;font-weight:800;color:#fff">?</span>
+        </div>
+        <div id="boule-label" style="font-size:14px;color:var(--mu);margin-top:10px">Prêt à tirer</div>
+      </div>
+      <button class="btn btn-p" id="btn-tirer" onclick="tirerBoule()" style="font-size:16px;padding:14px;margin-bottom:12px">🎱 Tirer une boule</button>
+      <div class="g2" style="margin-bottom:12px">
+        <div class="stat"><div class="stat-v" id="nb-tires">0</div><div class="stat-l">Tirés</div></div>
+        <div class="stat"><div class="stat-v" id="nb-restants">75</div><div class="stat-l">Restants</div></div>
+      </div>
+      <div style="font-size:11px;color:var(--mu);text-transform:uppercase;margin-bottom:8px">Numéros tirés</div>
+      <div id="historique-boules" style="display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow-y:auto"></div>
+    </div>
+    <div class="card" style="margin-top:14px">
+      <div class="ct" style="justify-content:space-between">
+        <span>🚨 Alertes BINGO</span>
+        <button class="btn-sm" onclick="loadAlertesBingo()">↻</button>
+      </div>
+      <div id="bingo-alertes"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune alerte</div></div>
+    </div>`;
+
+  // Revendeurs
+  document.getElementById("tab-org-revendeurs").innerHTML = `
+    <div id="toast-rev"></div>
+    <div class="card">
+      <div class="ct">🛒 Ajouter un revendeur</div>
+      <div class="lbl">Nom du revendeur</div>
+      <input id="rev-nom" placeholder="Ex: Jean Martin"/>
+      <div class="lbl">Email du revendeur</div>
+      <input id="rev-email" type="email" placeholder="revendeur@email.com"/>
+      <div class="lbl">Durée</div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
+        <div class="plan sel" id="rp30" onclick="selPlanRev(30,'rp30')"><div class="plan-n">1 mois</div></div>
+        <div class="plan" id="rp90" onclick="selPlanRev(90,'rp90')"><div class="plan-n">3 mois</div></div>
+        <div class="plan" id="rp180" onclick="selPlanRev(180,'rp180')"><div class="plan-n">6 mois</div></div>
+      </div>
+      <button class="btn btn-p" onclick="genRevendeur()">Générer le code revendeur</button>
+      <div id="rev-code-result"></div>
+    </div>
+    <div class="card">
+      <div class="ct" style="justify-content:space-between"><span>👥 Mes revendeurs</span><button class="btn-sm" onclick="loadRevendeurs()">↻</button></div>
+      <div id="rev-liste"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun revendeur</div></div>
+    </div>`;
+
+  // Charger les données
+  loadJeux();
+  loadDocs();
+  loadTickets();
+  chargerPDFsOrganisateur();
+  loadAlertesBingo();
+}
+
+function switchOrgTab(n, el){
+  document.querySelectorAll("#s-organisateur .tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll("#s-organisateur .nb").forEach(b=>b.classList.remove("active"));
+  document.getElementById("tab-org-"+n).classList.add("active");
+  el.classList.add("active");
+  if(n==="verif") loadAlertesBingo();
+  if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();}
+  if(n==="revendeurs") loadRevendeurs();
+}
+
+// === ACCES REVENDEUR ===
+async function accesRevendeur(){
+  const code = document.getElementById("rev-login-code").value.trim().toUpperCase();
+  if(!code){alert("Entrez votre code revendeur");return;}
+  try{
+    const r = await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});
+    const d = await r.json();
+    if(d.ok){
+      TOKEN = d.token;
+      USER_NOM = d.nom;
+      CODE_ORG = d.code_org||'';
+      document.getElementById("rev-nom-display").textContent = d.nom;
+      buildRevSpace();
+      show("s-revendeur");
+    } else {
+      document.getElementById("toast-login").textContent = "✗ " + (d.msg||"Code invalide");
+      document.getElementById("toast-login").className = "toast t-er";
+      setTimeout(()=>document.getElementById("toast-login").className="toast",4000);
+    }
+  }catch(e){alert("Erreur de connexion");}
+}
+
+function buildRevSpace(){
+  document.getElementById("tab-rev-tickets").innerHTML = `
+    <div id="toast-t"></div>
+    <div class="card">
+      <div class="ct">📂 Mes tickets reçus</div>
+      <div id="docs-liste"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Chargement...</div></div>
+    </div>
+    <div class="card">
+      <div class="ct">🎫 Vendre un ticket</div>
+      <div class="g2">
+        <div><div class="lbl">Nom acheteur</div><input id="t-acheteur" placeholder="Jean Martin"/></div>
+        <div><div class="lbl">Jeu</div><select id="t-jeu"><option value="">-- Choisir --</option></select></div>
+      </div>
+      <div class="g2">
+        <div><div class="lbl">N° de série</div><input id="t-serie" placeholder="Ex: 042"/></div>
+        <div><div class="lbl">Prix (XPF)</div><input id="t-prix" type="number" placeholder="100"/></div>
+      </div>
+      <div class="lbl" style="margin-bottom:8px">📎 Feuilles à envoyer</div>
+      <div id="pdf-org-liste" style="margin-bottom:10px"><div style="font-size:13px;color:var(--mu);text-align:center;padding:8px">Chargement...</div></div>
+      <div id="t-pages-zone" style="display:none;background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:10px">
+        <div style="font-size:12px;color:var(--ac2);margin-bottom:8px">📄 Pages à envoyer</div>
+        <div class="g2">
+          <div><div class="lbl">Page début</div><input id="t-page-debut" type="number" placeholder="1" min="1" style="margin-bottom:0"/></div>
+          <div><div class="lbl">Page fin</div><input id="t-page-fin" type="number" placeholder="2" min="1" style="margin-bottom:0"/></div>
+        </div>
+        <div id="t-pages-info" style="font-size:11px;color:var(--mu);margin-top:6px;text-align:center"></div>
+      </div>
+      <button class="btn btn-p" onclick="regTicket()">Enregistrer et générer le code</button>
+      <div id="t-code-result"></div>
+    </div>`;
+
+  document.getElementById("tab-rev-jouer").innerHTML = `
+    <div id="toast-j"></div>
+    <div class="card">
+      <div class="ct">🎮 Jouer mon ticket</div>
+      <div class="lbl">Entrez votre code ticket</div>
+      <input id="j-code" placeholder="Ex: AB12CD" style="text-transform:uppercase;letter-spacing:3px;text-align:center;font-size:18px"/>
+      <button class="btn btn-p" onclick="chargerTicket()">Ouvrir mon ticket</button>
+    </div>
+    <div id="j-ticket-zone"></div>`;
+
+  loadJeux();
+  loadDocs();
+  chargerPDFsOrganisateur();
+}
+
+function switchRevTab(n, el){
+  document.querySelectorAll("#s-revendeur .tab").forEach(t=>t.classList.remove("active"));
+  document.querySelectorAll("#s-revendeur .nb").forEach(b=>b.classList.remove("active"));
+  document.getElementById("tab-rev-"+n).classList.add("active");
+  el.classList.add("active");
+  if(n==="tickets"){loadDocs();chargerPDFsOrganisateur();}
 }
 
 function retourAccueil(){
