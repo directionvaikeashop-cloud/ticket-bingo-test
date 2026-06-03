@@ -23,6 +23,8 @@ def load_data():
             for k in ["tickets_acheteurs", "acces_docs", "alertes_bingo", "tirage"]:
                 if k not in data:
                     data[k] = [] if k in ["alertes_bingo", "tirage"] else {}
+            if not data.get("jeux"):
+                data["jeux"] = ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"]
             return data
     except Exception as e:
         print(f"[LOAD ERR] {e}")
@@ -33,6 +35,14 @@ def load_data():
         "codes": {"ADMIN2024": {"duree": 36500, "nom": "Administrateur", "actif": True, "admin": True}},
         "sessions": {}, "acces_docs": {}, "tickets_acheteurs": {},
         "alertes_bingo": [], "tirage": []
+    }
+
+# S'assurer que les jeux par defaut sont toujours presents
+def ensure_jeux(data):
+    jeux_defaut = ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"]
+    if not data.get("jeux"):
+        data["jeux"] = jeux_defaut
+    return data
     }
 
 def save_data():
