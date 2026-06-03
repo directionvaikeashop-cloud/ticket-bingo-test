@@ -37,14 +37,6 @@ def load_data():
         "alertes_bingo": [], "tirage": []
     }
 
-# S'assurer que les jeux par defaut sont toujours presents
-def ensure_jeux(data):
-    jeux_defaut = ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"]
-    if not data.get("jeux"):
-        data["jeux"] = jeux_defaut
-    return data
-    }
-
 def save_data():
     try:
         os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
