@@ -485,6 +485,25 @@ def get_tirage():
     DB = load_data()
     return jsonify({"boules": DB.get("tirage", [])})
 
+@app.route("/api/proxy-pdf")
+def proxy_pdf():
+    """Proxy pour servir les PDFs depuis Cloudinary"""
+    try:
+        url = request.args.get("url", "")
+        if not url or "cloudinary.com" not in url:
+            return jsonify({"ok": False}), 400
+        req = urllib.request.Request(url)
+        resp = urllib.request.urlopen(req, timeout=30)
+        data = resp.read()
+        return Response(data, content_type="application/pdf", headers={
+            "Access-Control-Allow-Origin": "*",
+            "Content-Disposition": "inline",
+            "Cache-Control": "public, max-age=3600"
+        })
+    except Exception as e:
+        print(f"[PROXY ERR] {e}")
+        return jsonify({"ok": False}), 500
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
