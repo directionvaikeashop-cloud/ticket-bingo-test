@@ -665,7 +665,9 @@ async function chargerPDFJoueur(url,cleCoches,overlay,cochesExistantes,pageDebut
   overlayActuel=overlay;cleCochesActuel=cleCoches;pageDebutActuel=pageDebut||1;
   try{
     pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    pdfDoc=await pdfjsLib.getDocument({url:url,withCredentials:false}).promise;
+    // Utiliser le proxy pour eviter les erreurs CORS/401 de Cloudinary
+    const proxyUrl = url.includes('cloudinary.com') ? '/api/proxy-pdf?url=' + encodeURIComponent(url) : url;
+    pdfDoc=await pdfjsLib.getDocument({url:proxyUrl,withCredentials:false}).promise;
     pageFinActuel=Math.min(pageFin||9999,pdfDoc.numPages);
     pageNum=pageDebutActuel;
     cochesParPage=cochesExistantes||{};
