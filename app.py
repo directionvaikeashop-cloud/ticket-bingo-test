@@ -325,13 +325,18 @@ def get_tickets():
 def get_ticket_acheteur(code):
     global DB
     DB = load_data()
-    ticket_id = DB["tickets_acheteurs"].get(code.upper())
-    if not ticket_id:
-        return jsonify({"ok": False, "msg": "Code introuvable"}), 404
-    ticket = next((t for t in DB["tickets"] if t["id"] == ticket_id), None)
-    if not ticket:
-        return jsonify({"ok": False, "msg": "Ticket introuvable"}), 404
-    return jsonify({"ok": True, "ticket": ticket})
+    code = code.upper().strip()
+    # Chercher dans tickets_acheteurs
+    ticket_id = DB.get("tickets_acheteurs", {}).get(code)
+    if ticket_id:
+        ticket = next((t for t in DB["tickets"] if t["id"] == ticket_id), None)
+        if ticket:
+            return jsonify({"ok": True, "ticket": ticket})
+    # Chercher directement dans tickets par code_acheteur
+    ticket = next((t for t in DB["tickets"] if t.get("code_acheteur", "").upper() == code), None)
+    if ticket:
+        return jsonify({"ok": True, "ticket": ticket})
+    return jsonify({"ok": False, "msg": "Code introuvable"}), 404
 
 @app.route("/api/verifier", methods=["POST"])
 def verifier():
