@@ -407,6 +407,71 @@ def admin_codes():
     codes = [{"code": c, **info} for c, info in DB["codes"].items() if c != "ADMIN2024"]
     return jsonify(codes)
 
+@app.route("/api/revendeur/generer", methods=["POST"])
+def generer_revendeur():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    code_org = s["code"]
+    d = request.json
+    nom = d.get("nom", "Revendeur").strip()
+    email_rev = d.get("email", "")
+    duree = int(d.get("duree", 30))
+    code = gen_code()
+    while code in DB["codes"]:
+        code = gen_code()
+    DB["codes"][code] = {
+        "duree": duree, "nom": nom, "actif": True, "email": email_rev,
+        "role": "revendeur", "code_org": code_org,
+        "created": datetime.datetime.now().isoformat(),
+        "expire": (datetime.datetime.now() + datetime.timedelta(days=duree)).isoformat()
+    }
+    save_data()
+
+    if email_rev and SENDGRID_API_KEY:
+        try:
+            html = f"""
+            <div style='font-family:sans-serif;max-width:520px;margin:0 auto;background:#08090d;color:#f0f2f8;padding:24px;border-radius:12px'>
+              <div style='text-align:center;margin-bottom:24px'>
+                <div style='font-size:48px'>🎱</div>
+                <h1 style='font-size:24px;color:#818cf8;margin:8px 0'>Ticket Bingo</h1>
+              </div>
+              <p>Bonjour <strong>{nom}</strong>,</p>
+              <p>Vous avez été ajouté comme revendeur sur Ticket Bingo !</p>
+              <div style='background:#111218;border:1px solid rgba(99,102,241,0.4);border-radius:10px;padding:20px;margin:20px 0;text-align:center'>
+                <div style='font-size:12px;color:#6b7280;margin-bottom:8px'>VOTRE CODE REVENDEUR</div>
+                <div style='font-family:monospace;font-size:32px;font-weight:800;letter-spacing:8px;color:#818cf8'>{code}</div>
+              </div>
+              <div style='text-align:center;margin:24px 0'>
+                <a href='https://ticketbingo.space' style='padding:14px 32px;background:#6366f1;color:#fff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600'>🎯 Accéder à Ticket Bingo</a>
+              </div>
+              <p style='font-size:12px;color:#6b7280;text-align:center'>Accès valable {duree} jours</p>
+            </div>"""
+            message = Mail(from_email=(FROM_EMAIL, FROM_NAME), to_emails=email_rev,
+                          subject=f"🎱 Votre accès Revendeur Ticket Bingo — Code {code}", html_content=html)
+            SendGridAPIClient(SENDGRID_API_KEY).send(message)
+            print(f"[EMAIL REV] Envoyé à {email_rev}")
+        except Exception as e:
+            print(f"[EMAIL REV ERR] {e}")
+
+    return jsonify({"ok": True, "code": code, "nom": nom, "duree": duree})
+
+@app.route("/api/revendeur/liste")
+def liste_revendeurs():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    code_org = s["code"]
+    revendeurs = [{"code": c, **info} for c, info in DB["codes"].items() 
+                  if info.get("role") == "revendeur" and info.get("code_org") == code_org]
+    return jsonify(revendeurs)
+
 @app.route("/api/admin/desactiver", methods=["POST"])
 def admin_desactiver():
     global DB
