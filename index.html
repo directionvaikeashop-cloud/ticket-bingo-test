@@ -718,6 +718,9 @@ async function accesJoueurDirect(){
       // Afficher directement le ticket sans connexion
       document.getElementById("s-login").classList.remove("active");
       document.getElementById("s-joueur").classList.add("active");
+      // Démarrer le refresh automatique des boules toutes les 5 secondes
+      startTirageAutoRefresh();
+      loadTirageJoueur();
       document.getElementById("joueur-ticket-zone").innerHTML = `
         <div class="card">
           <div class="ct">🎱 ${t.jeu} — Série ${t.serie}</div>
@@ -1034,6 +1037,7 @@ function switchRevTab(n, el){
 }
 
 function retourAccueil(){
+  stopTirageAutoRefresh();
   document.getElementById("s-joueur").classList.remove("active");
   document.getElementById("s-login").classList.add("active");
   document.getElementById("joueur-code").value="";
@@ -1758,6 +1762,17 @@ async function loadRevendeurs(){
 }
 
 // === TIRAGE JOUEUR ===
+// Auto-refresh tirage toutes les 5 secondes
+let tirageInterval = null;
+function startTirageAutoRefresh(){
+  if(tirageInterval) clearInterval(tirageInterval);
+  tirageInterval = setInterval(loadTirageJoueur, 5000);
+}
+function stopTirageAutoRefresh(){
+  if(tirageInterval) clearInterval(tirageInterval);
+  tirageInterval = null;
+}
+
 async function loadTirageJoueur(){
   try{
     const r = await fetch('/api/tirage');
