@@ -783,9 +783,11 @@ function afficherBarreBoules(){
   if(!barre){
     barre = document.createElement('div');
     barre.id = 'barre-boules-fixe';
-    barre.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#111218;border-top:1px solid rgba(99,102,241,.4);padding:8px 16px;z-index:9999;display:flex;align-items:center;gap:12px;';
+    barre.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#111218;border-top:1px solid rgba(99,102,241,.4);padding:8px 16px;z-index:999;display:flex;align-items:center;gap:12px;';
     document.body.appendChild(barre);
   }
+  // Ajouter espace en bas pour que le bouton BINGO reste visible
+  document.body.style.paddingBottom = '70px';
 }
 
 async function updateBarreBoules(){
@@ -1088,6 +1090,7 @@ function retourAccueil(){
   // Supprimer la barre fixe boules
   const barre = document.getElementById('barre-boules-fixe');
   if(barre) barre.remove();
+  document.body.style.paddingBottom = '0';
   document.getElementById("s-joueur").classList.remove("active");
   document.getElementById("s-login").classList.add("active");
   document.getElementById("joueur-code").value="";
