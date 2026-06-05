@@ -732,6 +732,10 @@ async function accesJoueurDirect(){
       // Démarrer le refresh automatique des boules toutes les 5 secondes
       startTirageAutoRefresh();
       loadTirageJoueur();
+      // Afficher la barre fixe boules
+      afficherBarreBoules();
+      setInterval(updateBarreBoules, 5000);
+      updateBarreBoules();
       document.getElementById("joueur-ticket-zone").innerHTML = `
         <div class="card">
           <div class="ct">🎱 ${t.jeu} — Série ${t.serie}</div>
@@ -767,12 +771,44 @@ async function doLogin(){
 }
 
 function fermerPDF(){
-  // Fermer tous les overlays PDF ouverts
   document.querySelectorAll('[id^=pdf-overlay-]').forEach(el => el.remove());
-  // Aussi chercher par style
   document.querySelectorAll('div[style*="z-index:1000"]').forEach(el => {
     if(el.querySelector('#pdf-canvas')) el.remove();
   });
+}
+
+// Barre fixe boules - visible même pendant le PDF
+function afficherBarreBoules(){
+  let barre = document.getElementById('barre-boules-fixe');
+  if(!barre){
+    barre = document.createElement('div');
+    barre.id = 'barre-boules-fixe';
+    barre.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#111218;border-top:1px solid rgba(99,102,241,.4);padding:8px 16px;z-index:9999;display:flex;align-items:center;gap:12px;';
+    document.body.appendChild(barre);
+  }
+}
+
+async function updateBarreBoules(){
+  try{
+    const r = await fetch('/api/tirage');
+    const d = await r.json();
+    const boules = d.boules || [];
+    let barre = document.getElementById('barre-boules-fixe');
+    if(!barre) return;
+    if(!boules.length){
+      barre.innerHTML = '<span style="font-size:12px;color:var(--mu)">🎰 En attente du tirage...</span>';
+      return;
+    }
+    const derniere = boules[boules.length-1];
+    const couleur = getCouleur(derniere);
+    const lettre = getLettre(derniere);
+    const derniereHtml = '<div style="width:36px;height:36px;border-radius:50%;background:'+couleur+';display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:#fff">'+derniere+'</div>';
+    const boutonsHtml = boules.slice(-8).map(b => {
+      const c = getCouleur(b);
+      return '<div style="min-width:24px;height:24px;border-radius:50%;background:'+c+';display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:#fff">'+b+'</div>';
+    }).join('');
+    barre.innerHTML = '<div style="display:flex;align-items:center;gap:10px;flex:1"><div style="font-size:11px;color:rgba(255,255,255,.5)">DERNIÈRE BOULE</div>'+derniereHtml+'<div style="font-size:13px;font-weight:600;color:#fff">'+lettre+' — '+derniere+'</div></div><div style="display:flex;gap:4px;overflow-x:auto;max-width:50%">'+boutonsHtml+'</div>';
+  }catch(e){}
 }
 
 // === DEMANDE ACCES ===
@@ -1049,6 +1085,9 @@ function switchRevTab(n, el){
 
 function retourAccueil(){
   stopTirageAutoRefresh();
+  // Supprimer la barre fixe boules
+  const barre = document.getElementById('barre-boules-fixe');
+  if(barre) barre.remove();
   document.getElementById("s-joueur").classList.remove("active");
   document.getElementById("s-login").classList.add("active");
   document.getElementById("joueur-code").value="";
