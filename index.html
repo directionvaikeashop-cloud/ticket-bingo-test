@@ -784,21 +784,10 @@ function afficherBarreBoules(){
   if(!barre){
     barre = document.createElement('div');
     barre.id = 'barre-boules-fixe';
-    barre.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#111218;border-top:1px solid rgba(99,102,241,.4);padding:8px 16px;z-index:999;display:flex;align-items:center;gap:12px;';
+    barre.style.cssText = 'position:fixed;bottom:0;left:0;right:0;background:#111218;border-top:2px solid #6366f1;padding:10px 16px;z-index:9999;display:flex;align-items:center;gap:12px;';
     document.body.appendChild(barre);
   }
-  // Bouton BINGO en HAUT
-  let btnBingo = document.getElementById('bingo-fixe-top');
-  if(!btnBingo){
-    btnBingo = document.createElement('div');
-    btnBingo.id = 'bingo-fixe-top';
-    btnBingo.style.cssText = 'position:fixed;top:0;left:0;right:0;background:linear-gradient(135deg,#7c3aed,#6366f1);padding:10px 16px;z-index:9999;text-align:center;';
-    btnBingo.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px"><button onclick="fermerPDF()" style="background:rgba(239,68,68,.8);color:#fff;border:none;border-radius:20px;padding:8px 20px;font-size:14px;font-weight:700;cursor:pointer;">✕ Fermer</button><button onclick="declarerBingo()" style="background:linear-gradient(135deg,#f59e0b,#fbbf24);color:#fff;border:none;border-radius:20px;padding:8px 28px;font-size:16px;font-weight:800;cursor:pointer;letter-spacing:1px;">🎉 BINGO !</button></div>';
-    document.body.appendChild(btnBingo);
-  }
-  // Espaces pour ne pas cacher le contenu
-  document.body.style.paddingBottom = '70px';
-  document.body.style.paddingTop = '50px';
+  document.body.style.paddingBottom = '80px';
 }
 
 async function updateBarreBoules(){
@@ -1101,10 +1090,7 @@ function retourAccueil(){
   // Supprimer la barre fixe boules
   const barre = document.getElementById('barre-boules-fixe');
   if(barre) barre.remove();
-  const btnBingo = document.getElementById('bingo-fixe-top');
-  if(btnBingo) btnBingo.remove();
   document.body.style.paddingBottom = '0';
-  document.body.style.paddingTop = '0';
   document.getElementById("s-joueur").classList.remove("active");
   document.getElementById("s-login").classList.add("active");
   document.getElementById("joueur-code").value="";
