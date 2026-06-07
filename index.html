@@ -158,7 +158,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
             <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:2px">Idéal pour tester</div>
           </div>
           <div style="text-align:right">
-            <div style="font-size:20px;font-weight:800;color:#818cf8">4 990 XPF</div>
+            <div style="font-size:20px;font-weight:800;color:#818cf8">9 990 XPF</div>
           </div>
         </div>
       </div>
@@ -682,7 +682,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <input id="rev-email" type="email" placeholder="revendeur@email.com"/>
         <div class="lbl">Durée</div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-          <div class="plan" id="rp30" onclick="selPlanRev(30,'rp30')"><div class="plan-n">1 mois</div><div class="plan-p">4 990 XPF</div></div>
+          <div class="plan" id="rp30" onclick="selPlanRev(30,'rp30')"><div class="plan-n">1 mois</div><div class="plan-p">9 990 XPF</div></div>
           <div class="plan sel" id="rp90" onclick="selPlanRev(90,'rp90')"><div class="plan-n">3 mois</div><div class="plan-p">12 000 XPF</div></div>
           <div class="plan" id="rp180" onclick="selPlanRev(180,'rp180')"><div class="plan-n">6 mois</div><div class="plan-p">22 000 XPF</div></div>
         </div>
@@ -759,6 +759,15 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div id="1dollar-result" style="margin-top:6px"></div>
       </div>
 
+      <!-- PAIEMENTS STRIPE -->
+      <div class="card" style="margin-bottom:14px;background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.05));border:1px solid rgba(99,102,241,.2)">
+        <div class="ct" style="justify-content:space-between">
+          <span>💳 Paiements Stripe reçus</span>
+          <button class="btn-sm" onclick="loadPaiementsStripe()">↻</button>
+        </div>
+        <div id="stripe-paiements-liste"><div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Chargement...</div></div>
+      </div>
+
       <!-- HISTORIQUE COMMANDES -->
       <div class="card" style="margin-bottom:14px">
         <div class="ct" style="justify-content:space-between">
@@ -788,7 +797,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <input id="a-email" type="email" placeholder="client@email.com"/>
         <div class="lbl">Durée</div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-          <div class="plan" id="p30" onclick="selPlan(30,'p30')"><div class="plan-n">1 mois</div><div class="plan-p">4 990 XPF</div></div>
+          <div class="plan" id="p30" onclick="selPlan(30,'p30')"><div class="plan-n">1 mois</div><div class="plan-p">9 990 XPF</div></div>
           <div class="plan" id="p90" onclick="selPlan(90,'p90')"><div class="plan-n">3 mois</div><div class="plan-p">12 000 XPF</div></div>
           <div class="plan" id="p180" onclick="selPlan(180,'p180')"><div class="plan-n">6 mois</div><div class="plan-p">22 000 XPF</div></div>
           <div class="plan sel" id="p365" onclick="selPlan(365,'p365')"><div class="plan-n">1 an 🎁</div><div class="plan-p">40 000 XPF</div><div style="font-size:11px;color:var(--gr);margin-top:4px">Offre de lancement</div></div>
@@ -1105,6 +1114,14 @@ function buildOrgSpace(){
       <div style="font-size:11px;color:var(--mu);text-transform:uppercase;margin-bottom:8px">Numéros tirés</div>
       <div id="historique-boules" style="display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow-y:auto"></div>
     </div>
+    <!-- PAIEMENT ABONNEMENT STRIPE -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1));border:1px solid rgba(99,102,241,.3);margin-bottom:14px">
+      <div class="ct" style="margin-bottom:8px">💳 Payer mon abonnement en ligne</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:12px">Abonnement mensuel — 9 990 XPF/mois — Paiement sécurisé par carte</div>
+      <button onclick="payerAbonnement()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">💳 Payer 9 990 XPF par carte</button>
+      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center;margin-top:8px">🔒 Paiement sécurisé par Stripe</div>
+    </div>
+
     <!-- CAGNOTTE 13% -->
     <div class="card" style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.3);margin-bottom:14px">
       <div class="ct" style="margin-bottom:12px">🏆 Cagnotte du tournoi</div>
@@ -1201,6 +1218,7 @@ function buildOrgSpace(){
   chargerPDFsOrganisateur();
   loadAlertesBingo();
   loadCommandes();
+  loadPaiementsStripe();
 }
 
 function switchOrgTab(n, el){
@@ -2053,6 +2071,64 @@ async function loadRevendeurs(){
       <span class="badge ${c.actif?"b-ok":"b-er"}">${c.actif?"Actif":"Désactivé"}</span>
     </div>`).join("");
   }catch(e){}
+}
+
+// === STRIPE PAIEMENT ===
+async function payerAbonnement(){
+  try{
+    const r = await fetch('/api/paiement/abonnement', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Token':TOKEN},
+      body: JSON.stringify({code_org: CODE_ORG || ''})
+    });
+    const d = await r.json();
+    if(d.ok && d.url){
+      window.open(d.url, '_blank');
+    } else {
+      alert(d.msg || 'Paiement en ligne bientôt disponible !');
+    }
+  }catch(e){
+    alert('Paiement en ligne bientôt disponible !');
+  }
+}
+
+async function loadPaiementsStripe(){
+  try{
+    const r = await fetch('/api/paiement/historique', {headers:{"X-Token":TOKEN}});
+    const paiements = await r.json();
+    const el = document.getElementById('stripe-paiements-liste');
+    if(!el) return;
+    if(!paiements.length){
+      el.innerHTML = '<div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Aucun paiement en ligne pour le moment</div>';
+      return;
+    }
+    let total = paiements.reduce((s,p) => s + (p.montant||0), 0);
+    el.innerHTML = `<div style="text-align:center;padding:8px;background:rgba(16,185,129,.1);border-radius:8px;margin-bottom:10px">
+      <div style="font-size:11px;color:rgba(255,255,255,.5)">TOTAL REÇU VIA STRIPE</div>
+      <div style="font-size:22px;font-weight:700;color:#34d399">${total.toLocaleString('fr-FR')} XPF</div>
+    </div>` + paiements.map(p => {
+      const date = new Date(p.date).toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric'});
+      return `<div style="background:var(--s2);border-radius:8px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#fff">${p.description || p.type}</div>
+          <div style="font-size:11px;color:var(--mu)">${p.code_org ? p.code_org+' — ' : ''}${date}</div>
+        </div>
+        <div style="font-size:14px;font-weight:700;color:#34d399">${(p.montant||0).toLocaleString('fr-FR')} XPF</div>
+      </div>`;
+    }).join('');
+  }catch(e){}
+}
+
+// Vérifier retour Stripe
+const urlParams = new URLSearchParams(window.location.search);
+if(urlParams.get('paiement') === 'success'){
+  setTimeout(() => {
+    const msg = document.createElement('div');
+    msg.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:16px 32px;border-radius:12px;font-size:15px;font-weight:600;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,.3)';
+    msg.textContent = '✅ Paiement réussi ! Merci !';
+    document.body.appendChild(msg);
+    setTimeout(() => msg.remove(), 5000);
+  }, 1000);
 }
 
 // === HISTORIQUE COMMANDES ===
