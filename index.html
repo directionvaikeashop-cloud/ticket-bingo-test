@@ -639,7 +639,10 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           </div>
           <div id="boule-label" style="font-size:14px;color:var(--mu);margin-top:10px">Prêt à tirer</div>
         </div>
-        <!-- Vitesse du tirage automatique -->
+        <!-- Cagnotte auto -->
+      <div id="cagnotte-auto-display" style="display:none"></div>
+
+      <!-- Vitesse du tirage automatique -->
       <div style="background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:12px">
         <div style="font-size:12px;color:var(--mu);margin-bottom:8px;text-align:center">⏱️ Vitesse du tirage automatique</div>
         <div style="display:flex;gap:8px;margin-bottom:10px">
@@ -1009,6 +1012,9 @@ function buildOrgSpace(){
         </div>
         <div id="boule-label" style="font-size:14px;color:var(--mu);margin-top:10px">Prêt à tirer</div>
       </div>
+      <!-- Cagnotte auto -->
+      <div id="cagnotte-auto-display" style="display:none"></div>
+
       <!-- Vitesse du tirage automatique -->
       <div style="background:var(--s2);border-radius:var(--rs);padding:12px;margin-bottom:12px">
         <div style="font-size:12px;color:var(--mu);margin-bottom:8px;text-align:center">⏱️ Vitesse du tirage automatique</div>
@@ -1029,6 +1035,15 @@ function buildOrgSpace(){
       <div style="font-size:11px;color:var(--mu);text-transform:uppercase;margin-bottom:8px">Numéros tirés</div>
       <div id="historique-boules" style="display:flex;flex-wrap:wrap;gap:6px;max-height:150px;overflow-y:auto"></div>
     </div>
+    <!-- CAGNOTTE 13% -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.3);margin-bottom:14px">
+      <div class="ct" style="margin-bottom:12px">🏆 Cagnotte du tournoi</div>
+      <div class="lbl">Total des mises (XPF)</div>
+      <input id="cagnotte-mises" type="number" placeholder="Ex: 25000" style="margin-bottom:10px"/>
+      <button onclick="calculerCagnotte()" style="width:100%;padding:12px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700;margin-bottom:10px">🎯 Calculer la cagnotte</button>
+      <div id="cagnotte-result"></div>
+    </div>
+
     <!-- MICRO ORGANISATEUR -->
     <div class="card" style="margin-top:14px;background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1));border:1px solid rgba(99,102,241,.3)">
       <div class="ct" style="margin-bottom:12px">🎤 Micro organisateur</div>
@@ -1969,6 +1984,51 @@ async function loadRevendeurs(){
   }catch(e){}
 }
 
+// === CAGNOTTE 13% ===
+async function calculerCagnotte(){
+  const mises = parseFloat(document.getElementById('cagnotte-mises')?.value || 0);
+  if(!mises || mises <= 0){
+    alert('Entrez le total des mises');
+    return;
+  }
+  try{
+    const r = await fetch('/api/cagnotte/calculer',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Token':TOKEN},
+      body: JSON.stringify({total_mises: mises})
+    });
+    const d = await r.json();
+    if(d.ok){
+      document.getElementById('cagnotte-result').innerHTML = `
+        <div style="background:rgba(0,0,0,.3);border-radius:10px;padding:16px;margin-top:8px">
+          <div style="text-align:center;margin-bottom:12px">
+            <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:4px">🎯 CAGNOTTE À ANNONCER AUX JOUEURS</div>
+            <div style="font-size:36px;font-weight:800;color:#fbbf24">${d.cagnotte_annoncee.toLocaleString('fr-FR')} XPF</div>
+          </div>
+          <div style="background:rgba(255,255,255,.05);border-radius:8px;padding:10px;font-size:12px;color:rgba(255,255,255,.6)">
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Total des mises</span><span>${d.total_mises.toLocaleString('fr-FR')} XPF</span></div>
+            <div style="display:flex;justify-content:space-between;margin-bottom:4px"><span>Cagnotte 13%</span><span>${d.cagnotte_13.toLocaleString('fr-FR')} XPF</span></div>
+            <div style="display:flex;justify-content:space-between;color:#fbbf24;font-weight:600"><span>✅ À annoncer (11%)</span><span>${d.cagnotte_annoncee.toLocaleString('fr-FR')} XPF</span></div>
+          </div>
+          <button onclick="annoncerCagnotte(${d.cagnotte_annoncee})" style="width:100%;padding:10px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600;margin-top:10px">📢 Annoncer aux joueurs</button>
+        </div>`;
+    }
+  }catch(e){alert('Erreur');}
+}
+
+async function annoncerCagnotte(montant){
+  // Envoyer message micro aux joueurs
+  await fetch('/api/micro/status',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({
+      actif: true,
+      message: '🏆 La cagnotte de ce tournoi est de ' + montant.toLocaleString('fr-FR') + ' XPF ! Bonne chance à tous !'
+    })
+  });
+  toast('toast-t','📢 Cagnotte annoncée aux joueurs !');
+}
+
 // === SYSTEME DE PIONS ===
 let pionsPack = {pions: 0, prix: 0};
 
@@ -2298,9 +2358,54 @@ function setVitesse(secondes, el){
   }
 }
 
-function toggleTirageAuto(){
+async function calculerCagnotteAuto(){
+  try{
+    // Récupérer les tickets du tournoi
+    const r = await fetch('/api/tickets', {headers:{"X-Token":TOKEN}});
+    const tickets = await r.json();
+    
+    // Calculer le total des mises
+    const totalMises = tickets.reduce((sum, t) => sum + (t.prix || 0), 0);
+    if(!totalMises) return;
+    
+    // Calculer la cagnotte
+    const r2 = await fetch('/api/cagnotte/calculer',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Token':TOKEN},
+      body: JSON.stringify({total_mises: totalMises})
+    });
+    const d = await r2.json();
+    if(d.ok){
+      // Afficher la cagnotte automatiquement
+      const el = document.getElementById('cagnotte-auto-display');
+      if(el){
+        el.style.display = 'block';
+        el.innerHTML = `
+          <div style="text-align:center;padding:12px;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;margin-bottom:12px">
+            <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:4px">🏆 CAGNOTTE DE CE TOURNOI</div>
+            <div style="font-size:28px;font-weight:800;color:#fbbf24">${d.cagnotte_annoncee.toLocaleString('fr-FR')} XPF</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:4px">Basé sur ${tickets.length} tickets — Total mises: ${totalMises.toLocaleString('fr-FR')} XPF</div>
+            <button onclick="annoncerCagnotte(${d.cagnotte_annoncee})" style="margin-top:8px;padding:6px 16px;background:#f59e0b;color:#fff;border:none;border-radius:20px;cursor:pointer;font-size:12px;font-weight:600">📢 Annoncer aux joueurs</button>
+          </div>`;
+      }
+      // Annoncer automatiquement via micro
+      await fetch('/api/micro/status',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          actif: true,
+          message: '🏆 La cagnotte de ce tournoi est de ' + d.cagnotte_annoncee.toLocaleString('fr-FR') + ' XPF ! Le tirage commence !'
+        })
+      });
+    }
+  }catch(e){}
+}
+
+async function toggleTirageAuto(){
   const btn = document.getElementById('btn-auto-tirer');
   if(!tirageAutoActif){
+    // Calculer et annoncer la cagnotte automatiquement
+    await calculerCagnotteAuto();
     // Démarrer
     tirageAutoActif = true;
     tirageAutoInterval = setInterval(tirerBoule, vitesseTirage * 1000);
