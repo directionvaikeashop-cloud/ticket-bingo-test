@@ -1,6 +1,16 @@
 import hashlib, datetime, os, secrets, string, json, base64
 import urllib.request, urllib.parse
 from flask import Flask, request, jsonify, send_from_directory, Response, send_file
+try:
+    import stripe
+    STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
+    STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    if STRIPE_SECRET_KEY:
+        stripe.api_key = STRIPE_SECRET_KEY
+except ImportError:
+    stripe = None
+    STRIPE_SECRET_KEY = ""
+    STRIPE_WEBHOOK_SECRET = ""
 from generate_triple_action_75 import generate_pdf as generate_ta75_pdf
 from generate_60_boules import generate_pdf as generate_60b_pdf
 from generate_40_boules import generate_pdf as generate_40b_pdf
@@ -884,7 +894,7 @@ def demande_acces():
     formule = d.get("formule", "")
     
     formules = {
-        "1mois": "1 mois — 4 990 XPF",
+        "1mois": "1 mois — 9 990 XPF",
         "3mois": "3 mois — 12 000 XPF",
         "6mois": "6 mois — 22 000 XPF",
         "1an": "1 an — 40 000 XPF"
@@ -1162,6 +1172,137 @@ def generer_1_dollar():
         generate_1dollar_pdf(nb_tickets=nb_tickets, serie_start=serie_start, output_path=output_path)
         save_commande("1 DOLLAR", nb_tickets, serie_start, output_path, d.get("client",""))
         return send_file(output_path, as_attachment=True, download_name=f"1_DOLLAR_{serie_start:05d}.pdf", mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+# === STRIPE PAIEMENT ===
+@app.route("/api/paiement/creer-session", methods=["POST"])
+def creer_session_paiement():
+    """Crée une session de paiement Stripe pour abonnement ou achat"""
+    if not stripe or not STRIPE_SECRET_KEY:
+        return jsonify({"ok": False, "msg": "Paiement en ligne non configuré"}), 503
+    
+    d = request.json
+    type_paiement = d.get("type", "abonnement")  # abonnement, tickets, pions
+    montant = int(d.get("montant", 0))  # en XPF
+    description = d.get("description", "Ticket Bingo")
+    code_org = d.get("code_org", "")
+    
+    if montant <= 0:
+        return jsonify({"ok": False, "msg": "Montant invalide"}), 400
+    
+    try:
+        # Stripe utilise les centimes — XPF = 1 XPF = 1 centime (pas de décimale)
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "xpf",
+                    "product_data": {
+                        "name": description,
+                        "description": f"Ticket Bingo — {description}"
+                    },
+                    "unit_amount": montant,
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=f"https://ticket-bingo-production.up.railway.app?paiement=success&session_id={{CHECKOUT_SESSION_ID}}&code={code_org}",
+            cancel_url=f"https://ticket-bingo-production.up.railway.app?paiement=cancel&code={code_org}",
+            metadata={
+                "type": type_paiement,
+                "code_org": code_org,
+                "description": description
+            }
+        )
+        return jsonify({"ok": True, "url": session.url, "session_id": session.id})
+    except Exception as e:
+        print(f"[STRIPE ERR] {e}")
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+@app.route("/api/paiement/webhook", methods=["POST"])
+def stripe_webhook():
+    """Reçoit les notifications Stripe après paiement"""
+    payload = request.get_data()
+    sig_header = request.headers.get("Stripe-Signature", "")
+    
+    try:
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+    except Exception as e:
+        return jsonify({"ok": False}), 400
+    
+    if event["type"] == "checkout.session.completed":
+        session = event["data"]["object"]
+        metadata = session.get("metadata", {})
+        type_p = metadata.get("type", "")
+        code_org = metadata.get("code_org", "")
+        montant = session.get("amount_total", 0)
+        
+        global DB
+        DB = load_data()
+        
+        if "paiements_stripe" not in DB:
+            DB["paiements_stripe"] = []
+        
+        DB["paiements_stripe"].append({
+            "id": session["id"],
+            "type": type_p,
+            "code_org": code_org,
+            "montant": montant,
+            "description": metadata.get("description", ""),
+            "date": datetime.datetime.now().isoformat(),
+            "statut": "paye"
+        })
+        
+        # Si c'est un abonnement, activer le code organisateur
+        if type_p == "abonnement" and code_org:
+            if code_org in DB["codes"]:
+                DB["codes"][code_org]["paiement_stripe"] = True
+                DB["codes"][code_org]["date_paiement"] = datetime.datetime.now().isoformat()
+        
+        save_data()
+        print(f"[STRIPE] Paiement reçu: {type_p} — {montant} XPF — {code_org}")
+    
+    return jsonify({"ok": True})
+
+@app.route("/api/paiement/historique")
+def get_paiements_stripe():
+    """Historique des paiements Stripe pour l'Admin"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    return jsonify(DB.get("paiements_stripe", []))
+
+@app.route("/api/paiement/abonnement", methods=["POST"])
+def payer_abonnement():
+    """Crée un lien de paiement pour abonnement organisateur"""
+    if not stripe or not STRIPE_SECRET_KEY:
+        return jsonify({"ok": False, "msg": "Paiement en ligne non configuré"}), 503
+    d = request.json
+    code_org = d.get("code_org", "")
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "xpf",
+                    "product_data": {
+                        "name": "Abonnement Organisateur Ticket Bingo",
+                        "description": "Accès organisateur pour 1 mois"
+                    },
+                    "unit_amount": 9990,
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=f"https://ticket-bingo-production.up.railway.app?paiement=success&code={code_org}",
+            cancel_url=f"https://ticket-bingo-production.up.railway.app?paiement=cancel",
+            metadata={"type": "abonnement", "code_org": code_org}
+        )
+        return jsonify({"ok": True, "url": session.url})
     except Exception as e:
         return jsonify({"ok": False, "msg": str(e)}), 500
 
