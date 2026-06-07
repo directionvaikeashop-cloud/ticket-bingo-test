@@ -227,6 +227,7 @@ def nouvelle_vente():
         "id": hashlib.md5(f"{d['client']}{datetime.datetime.now()}".encode()).hexdigest()[:8],
         "client": d["client"], "email": d.get("email", ""), "jeu": d["jeu"],
         "code_org": code_org_vente,
+        "paiement_statut": "en_attente",
         "pack": int(d.get("pack", 25)), "qty": int(d.get("qty", 1)),
         "total_feuilles": int(d.get("qty", 1)) * int(d.get("pack", 25)),
         "serie": d["serie"], "prix": int(d.get("prix", 0)), "total": total,
@@ -694,6 +695,61 @@ def proxy_pdf():
     except Exception as e:
         print(f"[PROXY ERR] {e}")
         return jsonify({"ok": False}), 500
+
+@app.route("/api/vente/confirmer-paiement", methods=["POST"])
+def confirmer_paiement():
+    global DB
+    DB = load_data()
+    d = request.json
+    vente_id = d.get("vente_id", "")
+    preuve = d.get("preuve", "")
+    
+    for v in DB["ventes"]:
+        if v["id"] == vente_id:
+            v["paiement_statut"] = "en_attente_validation"
+            v["preuve_paiement"] = preuve
+            v["date_paiement"] = datetime.datetime.now().isoformat()
+            break
+    save_data()
+    
+    # Notifier l'admin
+    if SENDGRID_API_KEY:
+        try:
+            vente = next((v for v in DB["ventes"] if v["id"] == vente_id), None)
+            if vente:
+                html = f"""
+                <div style='font-family:sans-serif;max-width:520px;margin:0 auto;background:#08090d;color:#f0f2f8;padding:24px;border-radius:12px'>
+                  <h2 style='color:#f59e0b'>💳 Confirmation de paiement reçue</h2>
+                  <p>Client : <strong>{vente['client']}</strong></p>
+                  <p>Jeu : {vente['jeu']} — Série {vente['serie']}</p>
+                  <p>Montant : {vente['total']:,} XPF</p>
+                  <p>Preuve : {preuve}</p>
+                  <p style='color:#f59e0b'>→ Connectez-vous sur l'application pour valider.</p>
+                </div>"""
+                message = Mail(from_email=(FROM_EMAIL, FROM_NAME), to_emails=FROM_EMAIL,
+                              subject=f"💳 Paiement reçu — {vente['client']}", html_content=html)
+                SendGridAPIClient(SENDGRID_API_KEY).send(message)
+        except Exception as e:
+            print(f"[PAIEMENT ERR] {e}")
+    
+    return jsonify({"ok": True})
+
+@app.route("/api/vente/valider-paiement", methods=["POST"])
+def valider_paiement():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    
+    vente_id = request.json.get("vente_id", "")
+    for v in DB["ventes"]:
+        if v["id"] == vente_id:
+            v["paiement_statut"] = "valide"
+            break
+    save_data()
+    return jsonify({"ok": True})
 
 @app.route("/api/demande-acces", methods=["POST"])
 def demande_acces():
