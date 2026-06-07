@@ -619,6 +619,62 @@ def get_alertes_bingo():
         return jsonify(alertes)
     return jsonify([])
 
+import threading
+
+def effacer_pdfs_apres_tournoi(code_org, delai_secondes=10800):
+    """Efface les PDFs 3 heures après validation du gagnant"""
+    import time
+    time.sleep(delai_secondes)
+    try:
+        global DB
+        DB = load_data()
+        
+        pdfs_supprimes = []
+        
+        # Effacer les PDFs de cet organisateur
+        tickets = [t for t in DB.get("tickets", []) if t.get("code_org") == code_org]
+        for ticket in tickets:
+            pdf_url = ticket.get("pdf_url", "")
+            if pdf_url:
+                # Extraire l'ID du PDF depuis l'URL
+                pdf_id = pdf_url.split("/")[-1].replace(".pdf", "")
+                pdf_path = f"/data/pdfs/{pdf_id}.pdf"
+                if os.path.exists(pdf_path):
+                    os.remove(pdf_path)
+                    pdfs_supprimes.append(pdf_path)
+        
+        # Effacer les PDFs de commandes
+        commandes = [c for c in DB.get("commandes", []) if c.get("code_org") == code_org]
+        for commande in commandes:
+            pdf_path = commande.get("pdf_path", "")
+            if pdf_path and os.path.exists(pdf_path):
+                os.remove(pdf_path)
+                pdfs_supprimes.append(pdf_path)
+        
+        # Effacer aussi les PDFs dans /data/*.pdf liés à cet organisateur
+        if os.path.exists("/data"):
+            for f in os.listdir("/data"):
+                if f.endswith(".pdf"):
+                    try:
+                        os.remove(f"/data/{f}")
+                        pdfs_supprimes.append(f"/data/{f}")
+                    except:
+                        pass
+        
+        # Enregistrer dans DB
+        if "historique_effacement" not in DB:
+            DB["historique_effacement"] = []
+        DB["historique_effacement"].append({
+            "code_org": code_org,
+            "date": datetime.datetime.now().isoformat(),
+            "nb_pdfs_supprimes": len(pdfs_supprimes),
+            "pdfs": pdfs_supprimes
+        })
+        save_data()
+        print(f"[AUTO-EFFACEMENT] {len(pdfs_supprimes)} PDFs effacés pour {code_org}")
+    except Exception as e:
+        print(f"[AUTO-EFFACEMENT ERR] {e}")
+
 @app.route("/api/bingo/valider", methods=["POST"])
 def valider_bingo():
     global DB
@@ -630,12 +686,35 @@ def valider_bingo():
     d = request.json
     alerte_id = d.get("alerte_id", "")
     statut = d.get("statut", "valide")
+    code_org = s["code"]
+    
     for a in DB.get("alertes_bingo", []):
         if a["id"] == alerte_id:
             a["statut"] = statut
             break
+    
+    # Enregistrer la fin du tournoi
+    if "tournois_termines" not in DB:
+        DB["tournois_termines"] = []
+    DB["tournois_termines"].append({
+        "code_org": code_org,
+        "alerte_id": alerte_id,
+        "date_fin": datetime.datetime.now().isoformat(),
+        "effacement_prevu": (datetime.datetime.now() + datetime.timedelta(hours=3)).isoformat()
+    })
     save_data()
-    return jsonify({"ok": True})
+    
+    # Lancer le timer d'effacement automatique (3 heures = 10800 secondes)
+    if statut == "valide":
+        timer = threading.Thread(
+            target=effacer_pdfs_apres_tournoi,
+            args=(code_org, 10800),
+            daemon=True
+        )
+        timer.start()
+        print(f"[TIMER] Effacement PDFs programmé dans 3h pour {code_org}")
+    
+    return jsonify({"ok": True, "message": "Gagnant validé ! PDFs effacés automatiquement dans 3 heures."})
 
 @app.route("/api/tirage", methods=["POST"])
 def sauvegarder_tirage():
@@ -1244,7 +1323,7 @@ def stripe_webhook():
         if "paiements_stripe" not in DB:
             DB["paiements_stripe"] = []
         
-        DB["paiements_stripe"].append({
+        paiement_data = {
             "id": session["id"],
             "type": type_p,
             "code_org": code_org,
@@ -1252,13 +1331,64 @@ def stripe_webhook():
             "description": metadata.get("description", ""),
             "date": datetime.datetime.now().isoformat(),
             "statut": "paye"
-        })
+        }
+        
+        # Si c'est un paiement de grille, ajouter les détails
+        if type_p == "grille":
+            paiement_data.update({
+                "nb_grilles": metadata.get("nb_grilles", "1"),
+                "jeu": metadata.get("jeu", ""),
+                "acheteur": metadata.get("acheteur", ""),
+                "tournoi_id": metadata.get("tournoi_id", ""),
+                "part_ticket_bingo": int(metadata.get("part_ticket_bingo", 0)),
+                "part_cagnotte": int(metadata.get("part_cagnotte", 0)),
+                "part_org": int(metadata.get("part_org", 0)),
+                "total": int(metadata.get("total", 0))
+            })
+        
+        DB["paiements_stripe"].append(paiement_data)
         
         # Si c'est un abonnement, activer le code organisateur
         if type_p == "abonnement" and code_org:
             if code_org in DB["codes"]:
                 DB["codes"][code_org]["paiement_stripe"] = True
                 DB["codes"][code_org]["date_paiement"] = datetime.datetime.now().isoformat()
+        
+        # Si c'est un achat de pions, créditer automatiquement
+        if type_p == "pions" and code_org:
+            nb_pions = int(metadata.get("nb_pions", 0))
+            if nb_pions > 0:
+                if "pions" not in DB:
+                    DB["pions"] = {}
+                DB["pions"][code_org] = DB["pions"].get(code_org, 0) + nb_pions
+                if "transactions_pions" not in DB:
+                    DB["transactions_pions"] = []
+                DB["transactions_pions"].append({
+                    "id": gen_code(6),
+                    "code_org": code_org,
+                    "pions": nb_pions,
+                    "prix": montant,
+                    "mode": "stripe",
+                    "date": datetime.datetime.now().isoformat()
+                })
+                print(f"[STRIPE] {nb_pions} pions crédités à {code_org}")
+        
+        # Si c'est un achat PDF, enregistrer la commande
+        if type_p == "pdf" and code_org:
+            nb_tickets = int(metadata.get("nb_tickets", 0))
+            jeu = metadata.get("jeu", "")
+            if "commandes_pdf_stripe" not in DB:
+                DB["commandes_pdf_stripe"] = []
+            DB["commandes_pdf_stripe"].append({
+                "id": gen_code(8),
+                "code_org": code_org,
+                "jeu": jeu,
+                "nb_tickets": nb_tickets,
+                "prix": montant,
+                "statut": "paye_en_attente_generation",
+                "date": datetime.datetime.now().isoformat()
+            })
+            print(f"[STRIPE] Commande PDF {jeu} {nb_tickets} tickets pour {code_org}")
         
         save_data()
         print(f"[STRIPE] Paiement reçu: {type_p} — {montant} XPF — {code_org}")
@@ -1283,6 +1413,16 @@ def payer_abonnement():
         return jsonify({"ok": False, "msg": "Paiement en ligne non configuré"}), 503
     d = request.json
     code_org = d.get("code_org", "")
+    montant = int(d.get("montant", 9990))
+    
+    # Définir le nom selon le montant
+    if montant == 4990:
+        nom = "Offre de lancement — 1er mois Ticket Bingo"
+        desc = "Engagement 1 an — À partir du 2ème mois : 9 990 XPF/mois"
+    else:
+        nom = "Abonnement mensuel Ticket Bingo"
+        desc = "Accès organisateur — Toutes fonctionnalités incluses"
+    
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
@@ -1290,21 +1430,308 @@ def payer_abonnement():
                 "price_data": {
                     "currency": "xpf",
                     "product_data": {
-                        "name": "Abonnement Organisateur Ticket Bingo",
-                        "description": "Accès organisateur pour 1 mois"
+                        "name": nom,
+                        "description": desc
                     },
-                    "unit_amount": 9990,
+                    "unit_amount": montant,
                 },
                 "quantity": 1,
             }],
             mode="payment",
             success_url=f"https://ticket-bingo-production.up.railway.app?paiement=success&code={code_org}",
             cancel_url=f"https://ticket-bingo-production.up.railway.app?paiement=cancel",
-            metadata={"type": "abonnement", "code_org": code_org}
+            metadata={"type": "abonnement", "code_org": code_org, "montant": str(montant)}
         )
         return jsonify({"ok": True, "url": session.url})
     except Exception as e:
         return jsonify({"ok": False, "msg": str(e)}), 500
+
+# === PAIEMENT PIONS VIA STRIPE ===
+@app.route("/api/paiement/pions", methods=["POST"])
+def payer_pions():
+    """Crée une session Stripe pour achat de pions par l'organisateur"""
+    if not stripe or not STRIPE_SECRET_KEY:
+        return jsonify({"ok": False, "msg": "Paiement en ligne non configuré"}), 503
+    
+    d = request.json
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    
+    nb_pions = int(d.get("nb_pions", 0))
+    prix = int(d.get("prix", 0))
+    code_org = s["code"]
+    
+    if nb_pions <= 0 or prix <= 0:
+        return jsonify({"ok": False, "msg": "Montant invalide"}), 400
+    
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "xpf",
+                    "product_data": {
+                        "name": f"{nb_pions} pions Ticket Bingo",
+                        "description": f"Pack de {nb_pions} pions pour vos tournois"
+                    },
+                    "unit_amount": prix,
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=f"https://ticket-bingo-production.up.railway.app?paiement=pions_ok&code={code_org}&nb={nb_pions}",
+            cancel_url=f"https://ticket-bingo-production.up.railway.app?paiement=cancel",
+            metadata={
+                "type": "pions",
+                "code_org": code_org,
+                "nb_pions": str(nb_pions),
+                "prix": str(prix)
+            }
+        )
+        return jsonify({"ok": True, "url": session.url, "session_id": session.id})
+    except Exception as e:
+        print(f"[STRIPE PIONS ERR] {e}")
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+# === PAIEMENT PDF VIA STRIPE ===
+@app.route("/api/paiement/pdf", methods=["POST"])
+def payer_pdf():
+    """Crée une session Stripe pour achat de tickets PDF"""
+    if not stripe or not STRIPE_SECRET_KEY:
+        return jsonify({"ok": False, "msg": "Paiement en ligne non configuré"}), 503
+    
+    d = request.json
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    
+    nb_tickets = int(d.get("nb_tickets", 0))
+    prix = int(d.get("prix", 0))
+    jeu = d.get("jeu", "Tickets Bingo")
+    code_org = s["code"]
+    
+    if nb_tickets <= 0 or prix <= 0:
+        return jsonify({"ok": False, "msg": "Montant invalide"}), 400
+    
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "xpf",
+                    "product_data": {
+                        "name": f"{nb_tickets} tickets {jeu}",
+                        "description": f"Pack de {nb_tickets} tickets — {jeu}"
+                    },
+                    "unit_amount": prix,
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=f"https://ticket-bingo-production.up.railway.app?paiement=pdf_ok&code={code_org}",
+            cancel_url=f"https://ticket-bingo-production.up.railway.app?paiement=cancel",
+            metadata={
+                "type": "pdf",
+                "code_org": code_org,
+                "nb_tickets": str(nb_tickets),
+                "jeu": jeu,
+                "prix": str(prix)
+            }
+        )
+        return jsonify({"ok": True, "url": session.url, "session_id": session.id})
+    except Exception as e:
+        print(f"[STRIPE PDF ERR] {e}")
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+# === PAIEMENT GRILLES JOUEURS ===
+@app.route("/api/paiement/grille", methods=["POST"])
+def payer_grille():
+    """Crée une session Stripe pour achat de grilles"""
+    if not stripe or not STRIPE_SECRET_KEY:
+        return jsonify({"ok": False, "msg": "Paiement en ligne non configuré"}), 503
+    
+    d = request.json
+    nb_grilles = int(d.get("nb_grilles", 1))
+    prix_grille = int(d.get("prix_grille", 100))  # en XPF
+    jeu = d.get("jeu", "Bingo")
+    code_org = d.get("code_org", "")
+    acheteur = d.get("acheteur", "Joueur")
+    tournoi_id = d.get("tournoi_id", "")
+    
+    total = nb_grilles * prix_grille
+    
+    # Calculer les parts
+    part_ticket_bingo = round(total * 0.02)  # 2% pour toi
+    part_cagnotte = round(total * 0.11)       # 11% cagnotte
+    part_org = total - part_ticket_bingo - part_cagnotte  # reste à l'organisateur
+    
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "xpf",
+                    "product_data": {
+                        "name": f"{nb_grilles} grille(s) — {jeu}",
+                        "description": f"Tournoi Ticket Bingo — {jeu}"
+                    },
+                    "unit_amount": total,
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url=f"https://ticket-bingo-production.up.railway.app?paiement=grille_ok&tournoi={tournoi_id}&acheteur={acheteur}",
+            cancel_url=f"https://ticket-bingo-production.up.railway.app?paiement=cancel",
+            metadata={
+                "type": "grille",
+                "nb_grilles": str(nb_grilles),
+                "prix_grille": str(prix_grille),
+                "jeu": jeu,
+                "code_org": code_org,
+                "acheteur": acheteur,
+                "tournoi_id": tournoi_id,
+                "part_ticket_bingo": str(part_ticket_bingo),
+                "part_cagnotte": str(part_cagnotte),
+                "part_org": str(part_org),
+                "total": str(total)
+            }
+        )
+        return jsonify({
+            "ok": True,
+            "url": session.url,
+            "session_id": session.id,
+            "total": total,
+            "part_ticket_bingo": part_ticket_bingo,
+            "part_cagnotte": part_cagnotte,
+            "part_org": part_org
+        })
+    except Exception as e:
+        print(f"[STRIPE GRILLE ERR] {e}")
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+@app.route("/api/paiement/cagnotte/<tournoi_id>")
+def get_cagnotte_stripe(tournoi_id):
+    """Récupère la cagnotte accumulée via Stripe pour un tournoi"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    
+    paiements = DB.get("paiements_stripe", [])
+    paiements_tournoi = [p for p in paiements if p.get("tournoi_id") == tournoi_id]
+    
+    total_mises = sum(int(p.get("total", 0)) for p in paiements_tournoi)
+    cagnotte = sum(int(p.get("part_cagnotte", 0)) for p in paiements_tournoi)
+    commission_tb = sum(int(p.get("part_ticket_bingo", 0)) for p in paiements_tournoi)
+    nb_joueurs = len(paiements_tournoi)
+    
+    return jsonify({
+        "ok": True,
+        "tournoi_id": tournoi_id,
+        "nb_joueurs": nb_joueurs,
+        "total_mises": total_mises,
+        "cagnotte_11": cagnotte,
+        "commission_ticket_bingo_2": commission_tb,
+        "paiements": paiements_tournoi
+    })
+
+@app.route("/api/paiement/calculer-gain-final", methods=["POST"])
+def calculer_gain_final():
+    """Calcule le gain final après prélèvement de tous les frais Ticket Bingo"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    
+    d = request.json
+    cagnotte = float(d.get("cagnotte", 0))
+    nb_revendeurs = int(d.get("nb_revendeurs", 0))
+    
+    if cagnotte <= 0:
+        return jsonify({"ok": False, "msg": "Montant invalide"}), 400
+    
+    # TOUS LES PRÉLÈVEMENTS SUR LE GAIN FINAL (sans frais revendeurs)
+    prel_cagnotte_2 = round(cagnotte * 0.02)        # 2% cagnotte invisible
+    prel_commissions_5 = round(cagnotte * 0.05)     # 5% commissions jeux
+    prel_pions_1 = round(cagnotte * 0.01)           # 1% pions
+    prel_tournoi = 500                               # Frais fixes tournoi
+    
+    total_preleve = prel_cagnotte_2 + prel_commissions_5 + prel_pions_1 + prel_tournoi
+    gain_gagnant = round(cagnotte - total_preleve)
+    
+    # Sauvegarder dans DB
+    if "gains_finaux" not in DB:
+        DB["gains_finaux"] = []
+    
+    gain_data = {
+        "id": gen_code(8),
+        "cagnotte": cagnotte,
+        "prel_cagnotte_2": prel_cagnotte_2,
+        "prel_commissions_5": prel_commissions_5,
+        "prel_pions_1": prel_pions_1,
+        "prel_tournoi": prel_tournoi,
+        "total_preleve": total_preleve,
+        "gain_gagnant": gain_gagnant,
+        "code_org": s["code"],
+        "date": datetime.datetime.now().isoformat()
+    }
+    DB["gains_finaux"].insert(0, gain_data)
+    save_data()
+    
+    return jsonify({
+        "ok": True,
+        "cagnotte": cagnotte,
+        "prel_cagnotte_2": prel_cagnotte_2,
+        "prel_commissions_5": prel_commissions_5,
+        "prel_pions_1": prel_pions_1,
+        "prel_tournoi": prel_tournoi,
+        "total_preleve": total_preleve,
+        "gain_gagnant": gain_gagnant
+    })
+
+@app.route("/api/paiement/virement-gagnant", methods=["POST"])
+def virement_gagnant():
+    """Enregistre le virement au gagnant"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    
+    d = request.json
+    if "virements_gagnants" not in DB:
+        DB["virements_gagnants"] = []
+    
+    DB["virements_gagnants"].append({
+        "id": gen_code(8),
+        "tournoi_id": d.get("tournoi_id", ""),
+        "gagnant": d.get("gagnant", ""),
+        "montant": d.get("montant", 0),
+        "mode": d.get("mode", ""),
+        "date": datetime.datetime.now().isoformat(),
+        "valide_par": s["code"]
+    })
+    save_data()
+    return jsonify({"ok": True})
+
+@app.route("/api/paiement/gains-finaux")
+def get_gains_finaux():
+    """Historique des gains finaux pour l'Admin"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    return jsonify(DB.get("gains_finaux", []))
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
