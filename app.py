@@ -220,9 +220,13 @@ def nouvelle_vente():
     tournoi = next((t for t in DB["tournois"] if t["id"] == tournoi_id), None)
     if tournoi and tournoi.get("date_tournoi"):
         date_expiration = tournoi["date_tournoi"]
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    code_org_vente = s["code"] if s else "ADMIN"
     vente = {
         "id": hashlib.md5(f"{d['client']}{datetime.datetime.now()}".encode()).hexdigest()[:8],
         "client": d["client"], "email": d.get("email", ""), "jeu": d["jeu"],
+        "code_org": code_org_vente,
         "pack": int(d.get("pack", 25)), "qty": int(d.get("qty", 1)),
         "total_feuilles": int(d.get("qty", 1)) * int(d.get("pack", 25)),
         "serie": d["serie"], "prix": int(d.get("prix", 0)), "total": total,
@@ -271,7 +275,17 @@ def nouvelle_vente():
 def get_ventes():
     global DB
     DB = load_data()
-    return jsonify(DB["ventes"])
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    # Admin voit tout
+    if s and s.get("admin"):
+        return jsonify(DB["ventes"])
+    # Organisateur voit seulement ses ventes
+    if s:
+        code_org = s["code"]
+        ventes = [v for v in DB["ventes"] if v.get("code_org") == code_org]
+        return jsonify(ventes)
+    return jsonify([])
 
 @app.route("/api/stats")
 def get_stats():
@@ -353,11 +367,24 @@ def get_tickets():
     DB = load_data()
     token = request.headers.get("X-Token", "")
     s = verif_session(token)
-    if s and not s.get("admin"):
+    # Admin voit tout
+    if s and s.get("admin"):
+        return jsonify(DB["tickets"])
+    # Organisateur/revendeur voit seulement ses tickets
+    if s:
         code_org = s["code"]
-        tickets = [t for t in DB["tickets"] if t.get("code_org") == code_org]
-        return jsonify(tickets)
-    return jsonify(DB["tickets"])
+        # Vérifier si c'est un revendeur
+        info = DB["codes"].get(code_org, {})
+        if info.get("role") == "revendeur":
+            # Revendeur voit ses propres tickets ET ceux de son organisateur
+            code_org_parent = info.get("code_org", "")
+            tickets = [t for t in DB["tickets"] if t.get("code_org") == code_org]
+            return jsonify(tickets)
+        else:
+            # Organisateur voit ses tickets
+            tickets = [t for t in DB["tickets"] if t.get("code_org") == code_org]
+            return jsonify(tickets)
+    return jsonify([])
 
 @app.route("/api/ticket/acheteur/<code>")
 def get_ticket_acheteur(code):
@@ -531,9 +558,17 @@ def declarer_bingo():
     global DB
     DB = load_data()
     d = request.json
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    # Trouver l'organisateur du ticket
+    ticket_id = d.get("ticketId", "")
+    ticket = next((t for t in DB["tickets"] if t["id"] == ticket_id), None)
+    code_org_alerte = ticket.get("code_org", "") if ticket else ""
+    
     alerte = {
         "id": gen_code(8),
         "acheteur": d.get("acheteur", "Inconnu"),
+        "code_org": code_org_alerte,
         "jeu": d.get("jeu", ""),
         "serie": d.get("serie", ""),
         "ticket_id": d.get("ticketId", ""),
@@ -554,7 +589,18 @@ def declarer_bingo():
 def get_alertes_bingo():
     global DB
     DB = load_data()
-    return jsonify(DB.get("alertes_bingo", []))
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    alertes = DB.get("alertes_bingo", [])
+    # Admin voit toutes les alertes
+    if s and s.get("admin"):
+        return jsonify(alertes)
+    # Organisateur voit seulement ses alertes
+    if s:
+        code_org = s["code"]
+        alertes = [a for a in alertes if a.get("code_org") == code_org or not a.get("code_org")]
+        return jsonify(alertes)
+    return jsonify([])
 
 @app.route("/api/bingo/valider", methods=["POST"])
 def valider_bingo():
