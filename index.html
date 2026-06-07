@@ -430,7 +430,21 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
   </div>
   <div class="wrap">
     <div id="joueur-ticket-zone"></div>
+    
+    <!-- Pointage automatique -->
     <div class="card" style="margin-top:14px;margin-left:16px;margin-right:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#fff">🤖 Pointage automatique</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px">Coche les numéros automatiquement</div>
+        </div>
+        <div onclick="togglePointageAuto(this)" id="toggle-pointage" style="width:48px;height:26px;background:rgba(255,255,255,.1);border-radius:13px;cursor:pointer;position:relative;transition:all .3s">
+          <div id="toggle-ball" style="width:22px;height:22px;background:#6b7280;border-radius:50%;position:absolute;top:2px;left:2px;transition:all .3s"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:10px;margin-left:16px;margin-right:16px">
       <div class="ct" style="justify-content:space-between">
         <span>🎰 Boules tirées en direct</span>
         <button class="btn-sm" onclick="loadTirageJoueur()">↻</button>
@@ -1884,6 +1898,59 @@ async function loadRevendeurs(){
   }catch(e){}
 }
 
+// === POINTAGE AUTOMATIQUE JOUEUR ===
+let pointageAutoActif = false;
+let dernieresBoulesCochees = [];
+
+function togglePointageAuto(el){
+  pointageAutoActif = !pointageAutoActif;
+  const ball = document.getElementById('toggle-ball');
+  const toggle = document.getElementById('toggle-pointage');
+  if(pointageAutoActif){
+    toggle.style.background = '#6366f1';
+    ball.style.background = '#fff';
+    ball.style.left = '24px';
+  } else {
+    toggle.style.background = 'rgba(255,255,255,.1)';
+    ball.style.background = '#6b7280';
+    ball.style.left = '2px';
+  }
+}
+
+async function pointageAutomatique(boules){
+  if(!pointageAutoActif || !cleCochesActuel) return;
+  
+  // Récupérer les coches actuelles
+  const coches = JSON.parse(localStorage.getItem(cleCochesActuel)||"{}");
+  let nouveauCochage = false;
+  
+  // Récupérer les numéros sur les feuilles du joueur (depuis le PDF overlay)
+  // On coche tous les numéros tirés qui correspondent aux cases cochables
+  const cases = document.querySelectorAll('[data-num]');
+  
+  boules.forEach(boule => {
+    if(!dernieresBoulesCochees.includes(boule)){
+      dernieresBoulesCochees.push(boule);
+      // Cocher la case correspondante si elle existe
+      cases.forEach(c => {
+        if(parseInt(c.getAttribute('data-num')) === boule && !c.classList.contains('coche')){
+          c.click(); // Simuler le clic pour cocher
+          nouveauCochage = true;
+        }
+      });
+      // Aussi mettre à jour dans localStorage
+      if(!coches[boule]){
+        coches[boule] = true;
+        nouveauCochage = true;
+      }
+    }
+  });
+  
+  if(nouveauCochage){
+    localStorage.setItem(cleCochesActuel, JSON.stringify(coches));
+  }
+}
+
 // === TIRAGE AUTOMATIQUE ===
 let vitesseTirage = 3; // secondes par défaut
 let tirageAutoInterval = null;
@@ -1972,6 +2039,8 @@ async function loadTirageJoueur(){
       const el = document.getElementById(id);
       if(el) el.innerHTML = htmlTirage;
     });
+    // Pointage automatique si activé
+    if(pointageAutoActif) pointageAutomatique(boules);
   }catch(e){}
 }
 
