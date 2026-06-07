@@ -951,6 +951,16 @@ function buildOrgSpace(){
   document.getElementById("tab-org-verif").innerHTML = `
     <div class="card">
       <div class="ct">🏆 Vérifier un gagnant</div>
+      
+      <!-- Vérification automatique via alerte BINGO -->
+      <div id="bingo-alertes-verif">
+        <div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">En attente d'alertes BINGO...</div>
+      </div>
+      
+      <div style="height:1px;background:var(--bd);margin:12px 0"></div>
+      
+      <!-- Vérification manuelle -->
+      <div style="font-size:12px;color:var(--mu);margin-bottom:8px">Vérification manuelle</div>
       <div class="lbl">Jeu du tournoi</div>
       <select id="v-jeu"><option value="">-- Choisir --</option></select>
       <div class="lbl">N° de série gagnant</div>
@@ -1748,10 +1758,14 @@ async function declarerBingo(){
   const btn = document.getElementById('bingo-btn');
   if(btn){btn.disabled=true;btn.textContent='⏳ Envoi...';}
   try{
+    // Recuperer les coches du joueur
+    const cochesObj = cleCochesActuel ? JSON.parse(localStorage.getItem(cleCochesActuel)||"{}") : {};
+    const cochesNums = Object.keys(cochesObj).map(Number);
+    const payload = Object.assign({}, bingoTicketActuel, {coches: cochesNums});
     const r = await fetch('/api/bingo', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(bingoTicketActuel)
+      body: JSON.stringify(payload)
     });
     const d = await r.json();
     if(d.ok){
@@ -1772,6 +1786,25 @@ async function declarerBingo(){
   }
 }
 
+async function verifierBingoAuto(ticketId, cochesList, alerteId){
+  try{
+    const r = await fetch("/api/verifier-bingo",{
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Token":TOKEN},
+      body: JSON.stringify({ticket_id: ticketId, coches: cochesList})
+    });
+    const d = await r.json();
+    const el = document.getElementById("verif-auto-"+alerteId);
+    if(!el) return;
+    if(d.valide){
+      el.innerHTML = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;margin-top:8px;text-align:center"><div style="font-size:15px;font-weight:700;color:#34d399">✅ BINGO VALIDE !</div><div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:4px">'+d.coches+' numéros cochés — tous sortis !</div></div>';
+    } else {
+      const invalides = d.details ? d.details.filter(x=>!x.sorti).map(x=>x.numero).join(", ") : "";
+      el.innerHTML = '<div style="background:rgba(239,68,68,.2);border:1px solid #ef4444;border-radius:8px;padding:10px;margin-top:8px;text-align:center"><div style="font-size:15px;font-weight:700;color:#f87171">❌ BINGO INVALIDE</div><div style="font-size:12px;color:rgba(255,255,255,.6);margin-top:4px">Numéros non sortis : '+invalides+'</div></div>';
+    }
+  }catch(e){}
+}
+
 async function loadAlertesBingo(){
   try{
     const r=await fetch('/api/bingo/alertes');
@@ -1786,6 +1819,8 @@ async function loadAlertesBingo(){
       <div style="font-size:12px;color:var(--mu);margin-bottom:8px">${a.jeu} · Série ${a.serie}</div>
       <div style="font-size:11px;color:var(--mu);margin-bottom:8px">${new Date(a.date).toLocaleString('fr-FR')}</div>
       ${a.pdf_url?`<button onclick="ouvrirPDFJoueur('${a.pdf_url}','${a.acheteur}','bingo_${a.id}','${a.page_debut||1}','${a.page_fin||9999}')" style="width:100%;padding:8px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:13px;margin-bottom:8px">📄 Voir la feuille du joueur</button>`:''}
+      ${a.statut==='en_attente'?`<button onclick="verifierBingoAuto('${a.ticket_id}',${JSON.stringify(a.coches||[])}, '${a.id}')" style="width:100%;padding:8px;background:rgba(245,158,11,.2);color:#fbbf24;border:0.5px solid rgba(245,158,11,.4);border-radius:6px;cursor:pointer;font-size:13px;margin-bottom:8px">⚡ Vérification automatique</button>`:''}
+      <div id="verif-auto-${a.id}"></div>
       ${a.statut==='en_attente'?`<div style="display:flex;gap:8px">
         <button onclick="validerBingo('${a.id}','valide')" style="flex:1;padding:8px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid rgba(16,185,129,.4);border-radius:6px;cursor:pointer;font-size:13px;font-weight:600">✅ Valider</button>
         <button onclick="validerBingo('${a.id}','refuse')" style="flex:1;padding:8px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:6px;cursor:pointer;font-size:13px">❌ Refuser</button>
