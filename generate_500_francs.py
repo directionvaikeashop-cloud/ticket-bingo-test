@@ -2,16 +2,10 @@ import random, os
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 
-FONT_PATH = '/usr/share/fonts/truetype/dejavu/DejaVuSans-ExtraLight.ttf'
-_font_registered = False
+FONT = 'Helvetica'
 def _register_font():
-    global _font_registered
-    if not _font_registered:
-        pdfmetrics.registerFont(TTFont('DJL', FONT_PATH))
-        _font_registered = True
+    pass  # Police intégrée ReportLab
 
 GREY = colors.Color(0.42, 0.42, 0.42)
 RAINBOW = ['#E53935','#FF7043','#FB8C00','#F9A825','#43A047','#00ACC1','#1E88E5','#3949AB','#8E24AA','#D81B60','#6D4C41','#546E7A']
@@ -47,7 +41,7 @@ def _draw_ticket(c, serie, color_hex):
     c.roundRect(CARD_X, hdr_y, CARD_W, HDR_H, 2*mm, stroke=0, fill=1)
     c.rect(CARD_X, hdr_y, CARD_W, HDR_H/2, stroke=0, fill=1)
     c.setFillColor(colors.white)
-    c.setFont('DJL', 9)
+    c.setFont('Helvetica', 9)
     c.drawCentredString(cx, hdr_y + 2.5*mm, "500 FRANCS   BY 2KEA")
 
     # Footer
@@ -56,9 +50,9 @@ def _draw_ticket(c, serie, color_hex):
     c.line(CARD_X, ftr_top, CARD_X + CARD_W, ftr_top)
     c.line(cx, CARD_Y, cx, ftr_top)
     c.setFillColor(GREY)
-    c.setFont('DJL', 6)
+    c.setFont('Helvetica', 6)
     c.drawCentredString(CARD_X + CARD_W/4, CARD_Y + 2*mm, "N° SÉRIE")
-    c.setFont('DJL', 8)
+    c.setFont('Helvetica', 8)
     c.drawCentredString(CARD_X + CARD_W*3/4, CARD_Y + 2*mm, f"{serie:06d}")
 
     # Grille 5×2
@@ -83,7 +77,7 @@ def _draw_ticket(c, serie, color_hex):
 
         fs = 36
         c.setFillColor(GREY)
-        c.setFont('DJL', fs)
+        c.setFont('Helvetica', fs)
         c.drawCentredString(px, py - fs*0.37, str(num))
 
 def generate_pdf(nb_tickets=500, serie_start=1, output_path=None, game_name="500FRANCS"):
