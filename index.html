@@ -1140,13 +1140,39 @@ function buildOrgSpace(){
     </div>
     <!-- PAIEMENT ABONNEMENT STRIPE -->
     <div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1));border:1px solid rgba(99,102,241,.3);margin-bottom:14px">
-      <div class="ct" style="margin-bottom:8px">💳 Payer mon abonnement en ligne</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:12px">Abonnement mensuel — 9 990 XPF/mois — Paiement sécurisé par carte</div>
-      <div style="display:flex;gap:8px;margin-bottom:8px">
-        <button onclick="payerAbonnement()" style="flex:1;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">💳 Payer par carte</button>
-        <button onclick="payerVirement('abonnement', 9990)" style="flex:1;padding:12px;background:rgba(99,102,241,.2);color:#818cf8;border:1px solid #6366f1;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🏦 Par virement</button>
+      <div class="ct" style="margin-bottom:8px">💳 Mon abonnement</div>
+      
+      <!-- Offre lancement -->
+      <div style="background:linear-gradient(135deg,rgba(245,158,11,.2),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.4);border-radius:10px;padding:14px;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:#fbbf24;margin-bottom:4px">🎯 Offre de lancement — 1er mois</div>
+        <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px">4 990 XPF</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:10px">Engagement 1 an — À partir du 2ème mois : 9 990 XPF/mois</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="payerAbonnement(4990)" style="flex:1;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">💳 Payer par carte</button>
+          <button onclick="payerVirement('abonnement-lancement', 4990)" style="flex:1;padding:10px;background:rgba(245,158,11,.2);color:#fbbf24;border:1px solid rgba(245,158,11,.4);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">🏦 Virement</button>
+        </div>
       </div>
-      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">🔒 Stripe sécurisé ou virement CCP/Deblock</div>
+
+      <!-- Abonnement mensuel -->
+      <div style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:#818cf8;margin-bottom:4px">📅 Abonnement mensuel — À partir du 2ème mois</div>
+        <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px">9 990 XPF<span style="font-size:13px;color:rgba(255,255,255,.4)">/mois</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:10px">Toutes les fonctionnalités incluses</div>
+        <div style="display:flex;gap:8px">
+          <button onclick="payerAbonnement(9990)" style="flex:1;padding:10px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">💳 Payer par carte</button>
+          <button onclick="payerVirement('abonnement', 9990)" style="flex:1;padding:10px;background:rgba(99,102,241,.2);color:#818cf8;border:1px solid #6366f1;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">🏦 Virement</button>
+        </div>
+      </div>
+      
+      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">🔒 Paiement sécurisé Stripe ou virement CCP/Deblock</div>
+    </div>
+
+    <!-- COMPTE A REBOURS EFFACEMENT -->
+    <div id="effacement-timer-card" style="display:none;background:linear-gradient(135deg,rgba(239,68,68,.15),rgba(220,38,38,.1));border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div class="ct" style="margin-bottom:6px">⏱️ Effacement automatique des PDFs</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:8px">Après validation du gagnant, tous les PDFs seront effacés dans :</div>
+      <div id="effacement-countdown" style="text-align:center;font-size:28px;font-weight:800;color:#f87171">3:00:00</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center;margin-top:4px">Les codes restent actifs — Seuls les PDFs sont effacés</div>
     </div>
 
     <!-- CAGNOTTE 13% -->
@@ -2050,9 +2076,41 @@ async function loadAlertesBingo(){
 
 async function validerBingo(alerteId, statut){
   try{
-    await fetch('/api/bingo/valider',{method:'POST',headers:{'Content-Type':'application/json','X-Token':TOKEN},body:JSON.stringify({alerte_id:alerteId,statut})});
+    const r = await fetch('/api/bingo/valider',{method:'POST',headers:{'Content-Type':'application/json','X-Token':TOKEN},body:JSON.stringify({alerte_id:alerteId,statut})});
+    const d = await r.json();
     loadAlertesBingo();
+    // Si gagnant validé, démarrer compte à rebours effacement 3h
+    if(statut === 'valide' && d.ok){
+      demarrerCompteARebours(3);
+      toast('toast-t', '🏆 Gagnant validé ! PDFs effacés automatiquement dans 3 heures.');
+    }
   }catch(e){}
+}
+
+// === COMPTE A REBOURS EFFACEMENT ===
+let effacementTimer = null;
+let effacementEndTime = null;
+
+function demarrerCompteARebours(heures){
+  const card = document.getElementById('effacement-timer-card');
+  if(card) card.style.display = 'block';
+  effacementEndTime = Date.now() + (heures * 3600 * 1000);
+  if(effacementTimer) clearInterval(effacementTimer);
+  effacementTimer = setInterval(function(){
+    const reste = effacementEndTime - Date.now();
+    if(reste <= 0){
+      clearInterval(effacementTimer);
+      const el = document.getElementById('effacement-countdown');
+      if(el) el.textContent = '✅ PDFs effacés !';
+      if(card) setTimeout(function(){ card.style.display = 'none'; }, 3000);
+      return;
+    }
+    const h = Math.floor(reste / 3600000);
+    const m = Math.floor((reste % 3600000) / 60000);
+    const s = Math.floor((reste % 60000) / 1000);
+    const el = document.getElementById('effacement-countdown');
+    if(el) el.textContent = h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+  }, 1000);
 }
 
 // === REVENDEUR ===
@@ -2104,12 +2162,13 @@ async function loadRevendeurs(){
 }
 
 // === STRIPE PAIEMENT ===
-async function payerAbonnement(){
+async function payerAbonnement(montant){
+  var prix = montant || 9990;
   try{
     const r = await fetch('/api/paiement/abonnement', {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Token':TOKEN},
-      body: JSON.stringify({code_org: CODE_ORG || ''})
+      body: JSON.stringify({code_org: CODE_ORG || '', montant: prix})
     });
     const d = await r.json();
     if(d.ok && d.url){
