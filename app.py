@@ -751,6 +751,78 @@ def valider_paiement():
     save_data()
     return jsonify({"ok": True})
 
+# === SYSTEME DE PIONS ===
+PIONS_TARIFS = [
+    {"pions": 1, "prix": 20, "label": "1 pion"},
+    {"pions": 2, "prix": 50, "label": "2 pions"},
+    {"pions": 4, "prix": 100, "label": "4 pions"},
+    {"pions": 8, "prix": 200, "label": "8 pions"},
+]
+
+@app.route("/api/pions/tarifs")
+def get_pions_tarifs():
+    return jsonify(PIONS_TARIFS)
+
+@app.route("/api/pions/solde/<code_joueur>")
+def get_pions_solde(code_joueur):
+    global DB
+    DB = load_data()
+    pions = DB.get("pions", {})
+    return jsonify({"solde": pions.get(code_joueur.upper(), 0)})
+
+@app.route("/api/pions/crediter", methods=["POST"])
+def crediter_pions():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    d = request.json
+    code_joueur = d.get("code_joueur", "").upper()
+    nb_pions = int(d.get("pions", 0))
+    prix = int(d.get("prix", 0))
+    
+    if "pions" not in DB:
+        DB["pions"] = {}
+    if "transactions_pions" not in DB:
+        DB["transactions_pions"] = []
+    
+    # Prendre 5% commission
+    commission = round(prix * 0.05)
+    
+    DB["pions"][code_joueur] = DB["pions"].get(code_joueur, 0) + nb_pions
+    DB["transactions_pions"].append({
+        "id": gen_code(6),
+        "code_joueur": code_joueur,
+        "pions": nb_pions,
+        "prix": prix,
+        "commission": commission,
+        "code_org": s["code"],
+        "date": datetime.datetime.now().isoformat()
+    })
+    save_data()
+    return jsonify({"ok": True, "solde": DB["pions"][code_joueur], "commission": commission})
+
+@app.route("/api/pions/utiliser", methods=["POST"])
+def utiliser_pions():
+    global DB
+    DB = load_data()
+    d = request.json
+    code_joueur = d.get("code_joueur", "").upper()
+    nb_pions = int(d.get("pions", 0))
+    
+    if "pions" not in DB:
+        DB["pions"] = {}
+    
+    solde = DB["pions"].get(code_joueur, 0)
+    if solde < nb_pions:
+        return jsonify({"ok": False, "msg": f"Solde insuffisant ({solde} pions)"}), 400
+    
+    DB["pions"][code_joueur] = solde - nb_pions
+    save_data()
+    return jsonify({"ok": True, "solde": DB["pions"][code_joueur]})
+
 @app.route("/api/demande-acces", methods=["POST"])
 def demande_acces():
     d = request.json
