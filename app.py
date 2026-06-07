@@ -292,6 +292,7 @@ def enregistrer_ticket():
     if not d.get("acheteur") or not d.get("jeu") or not d.get("serie"):
         return jsonify({"ok": False, "msg": "Champs manquants"}), 400
     code_acheteur = gen_code(6)
+    email_joueur = d.get("email", "")
     ticket = {
         "id": hashlib.md5(f"{d['acheteur']}{d['serie']}{datetime.datetime.now()}".encode()).hexdigest()[:8],
         "acheteur": d["acheteur"], "jeu": d["jeu"], "serie": d["serie"],
@@ -301,12 +302,49 @@ def enregistrer_ticket():
         "page_debut": d.get("page_debut", None),
         "page_fin": d.get("page_fin", None),
         "code_acheteur": code_acheteur,
+        "email": email_joueur,
         "code_org": code_org,
         "date": datetime.datetime.now().isoformat()
     }
     DB["tickets"].insert(0, ticket)
     DB["tickets_acheteurs"][code_acheteur] = ticket["id"]
     save_data()
+
+    # Envoyer email au joueur si email fourni
+    if email_joueur and SENDGRID_API_KEY:
+        try:
+            page_info = ""
+            if ticket["page_debut"] and ticket["page_fin"]:
+                page_info = f"<p>📄 Vos feuilles : pages {ticket['page_debut']} à {ticket['page_fin']}</p>"
+            html = f"""
+            <div style='font-family:sans-serif;max-width:520px;margin:0 auto;background:#08090d;color:#f0f2f8;padding:24px;border-radius:12px'>
+              <div style='text-align:center;margin-bottom:24px'>
+                <div style='font-size:48px'>🎱</div>
+                <h1 style='font-size:24px;color:#818cf8;margin:8px 0'>Ticket Bingo</h1>
+              </div>
+              <p>Bonjour <strong>{ticket['acheteur']}</strong> !</p>
+              <p>Votre ticket a été enregistré. Voici votre code d'accès :</p>
+              <div style='background:#111218;border:2px solid #6366f1;border-radius:12px;padding:24px;margin:20px 0;text-align:center'>
+                <div style='font-size:12px;color:#6b7280;margin-bottom:8px'>VOTRE CODE TICKET</div>
+                <div style='font-family:monospace;font-size:40px;font-weight:800;letter-spacing:10px;color:#818cf8'>{code_acheteur}</div>
+              </div>
+              <div style='background:#1a1040;border-radius:10px;padding:16px;margin:16px 0'>
+                <p>🎮 Jeu : <strong>{ticket['jeu']}</strong></p>
+                <p>🔢 Série : <strong>{ticket['serie']}</strong></p>
+                {page_info}
+              </div>
+              <div style='text-align:center;margin:24px 0'>
+                <a href='https://ticket-bingo-production.up.railway.app' style='padding:14px 32px;background:#6366f1;color:#fff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600'>🎯 Accéder à mon ticket</a>
+              </div>
+              <p style='font-size:12px;color:#6b7280;text-align:center'>Entrez votre code dans la section 🎮 Espace Joueur</p>
+            </div>"""
+            message = Mail(from_email=(FROM_EMAIL, FROM_NAME), to_emails=email_joueur,
+                          subject=f"🎱 Votre ticket Bingo — Code {code_acheteur}", html_content=html)
+            SendGridAPIClient(SENDGRID_API_KEY).send(message)
+            print(f"[EMAIL JOUEUR] Envoyé à {email_joueur}")
+        except Exception as e:
+            print(f"[EMAIL JOUEUR ERR] {e}")
+
     return jsonify({"ok": True, "ticket": ticket, "code_acheteur": code_acheteur})
 
 @app.route("/api/tickets")
