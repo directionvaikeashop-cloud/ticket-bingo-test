@@ -1,6 +1,12 @@
 import hashlib, datetime, os, secrets, string, json, base64
 import urllib.request, urllib.parse
-from flask import Flask, request, jsonify, send_from_directory, Response
+from flask import Flask, request, jsonify, send_from_directory, Response, send_file
+from generate_triple_action_75 import generate_pdf as generate_ta75_pdf
+from generate_60_boules import generate_pdf as generate_60b_pdf
+from generate_40_boules import generate_pdf as generate_40b_pdf
+from generate_4_coins import generate_pdf as generate_4coins_pdf
+from generate_500_francs import generate_pdf as generate_500f_pdf
+from generate_1_dollar import generate_pdf as generate_1dollar_pdf
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
@@ -823,6 +829,52 @@ def utiliser_pions():
     save_data()
     return jsonify({"ok": True, "solde": DB["pions"][code_joueur]})
 
+# === CAGNOTTE 13% ===
+@app.route("/api/cagnotte/calculer", methods=["POST"])
+def calculer_cagnotte():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    
+    d = request.json
+    total_mises = float(d.get("total_mises", 0))
+    
+    # Calcul cagnotte
+    cagnotte_totale = round(total_mises * 0.13)
+    ma_commission = round(total_mises * 0.02)  # 2% pour Ticket Bingo
+    frais_fixes = 500  # 500 XPF frais fixes
+    cagnotte_nette = cagnotte_totale - ma_commission - frais_fixes
+    cagnotte_annoncee = round(total_mises * 0.11)  # 11% annoncé aux joueurs
+    
+    # Sauvegarder la cagnotte du tournoi
+    if "cagnottes" not in DB:
+        DB["cagnottes"] = []
+    
+    cagnotte = {
+        "id": gen_code(6),
+        "code_org": s["code"],
+        "total_mises": total_mises,
+        "cagnotte_totale": cagnotte_totale,
+        "cagnotte_annoncee": cagnotte_annoncee,
+        "ma_commission": ma_commission,
+        "frais_fixes": frais_fixes,
+        "date": datetime.datetime.now().isoformat()
+    }
+    DB["cagnottes"].append(cagnotte)
+    save_data()
+    
+    return jsonify({
+        "ok": True,
+        "total_mises": total_mises,
+        "cagnotte_annoncee": cagnotte_annoncee,
+        "cagnotte_13": cagnotte_totale,
+        "ma_commission": ma_commission,
+        "frais_fixes": frais_fixes
+    })
+
 @app.route("/api/demande-acces", methods=["POST"])
 def demande_acces():
     d = request.json
@@ -917,6 +969,149 @@ def get_micro_status():
         "actif": DB.get("micro_actif", False),
         "message": DB.get("micro_message", "")
     })
+
+# === GENERATION TICKETS TRIPLE ACTION 75 ===
+@app.route("/api/admin/generer-ta75", methods=["POST"])
+def generer_ta75():
+    """Génère un PDF de tickets TRIPLE ACTION 75 et le retourne en téléchargement"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    
+    d = request.json or {}
+    nb_tickets = min(int(d.get("nb_tickets", 500)), 1000)
+    serie_start = int(d.get("serie_start", 1))
+    
+    output_path = f"/data/TA75_{serie_start:05d}_to_{serie_start + nb_tickets - 1:05d}.pdf"
+    os.makedirs("/data", exist_ok=True)
+    
+    try:
+        generate_ta75_pdf(
+            nb_tickets=nb_tickets,
+            serie_start=serie_start,
+            output_path=output_path
+        )
+        return send_file(
+            output_path,
+            as_attachment=True,
+            download_name=f"TRIPLE_ACTION_75_{serie_start:05d}.pdf",
+            mimetype="application/pdf"
+        )
+    except Exception as e:
+        print(f"[TA75 ERR] {e}")
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+@app.route("/api/admin/generer-ta75/status", methods=["GET"])
+def generer_ta75_status():
+    """Vérifie que la génération TA75 est disponible"""
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    return jsonify({"ok": True, "disponible": True})
+
+# === GENERATION 60 BOULES ===
+@app.route("/api/admin/generer-60-boules", methods=["POST"])
+def generer_60_boules():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    d = request.json or {}
+    nb_tickets = min(int(d.get("nb_tickets", 500)), 1000)
+    serie_start = int(d.get("serie_start", 1))
+    output_path = f"/data/60B_{serie_start:05d}.pdf"
+    os.makedirs("/data", exist_ok=True)
+    try:
+        generate_60b_pdf(nb_tickets=nb_tickets, serie_start=serie_start, output_path=output_path)
+        return send_file(output_path, as_attachment=True, download_name=f"60_BOULES_{serie_start:05d}.pdf", mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+# === GENERATION 40 BOULES ===
+@app.route("/api/admin/generer-40-boules", methods=["POST"])
+def generer_40_boules():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    d = request.json or {}
+    nb_tickets = min(int(d.get("nb_tickets", 500)), 1000)
+    serie_start = int(d.get("serie_start", 1))
+    output_path = f"/data/40B_{serie_start:05d}.pdf"
+    os.makedirs("/data", exist_ok=True)
+    try:
+        generate_40b_pdf(nb_tickets=nb_tickets, serie_start=serie_start, output_path=output_path)
+        return send_file(output_path, as_attachment=True, download_name=f"40_BOULES_{serie_start:05d}.pdf", mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+# === GENERATION 4 COINS ===
+@app.route("/api/admin/generer-4-coins", methods=["POST"])
+def generer_4_coins():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    d = request.json or {}
+    nb_tickets = min(int(d.get("nb_tickets", 500)), 1000)
+    serie_start = int(d.get("serie_start", 1))
+    output_path = f"/data/4COINS_{serie_start:05d}.pdf"
+    os.makedirs("/data", exist_ok=True)
+    try:
+        generate_4coins_pdf(nb_tickets=nb_tickets, serie_start=serie_start, output_path=output_path)
+        return send_file(output_path, as_attachment=True, download_name=f"4_COINS_{serie_start:05d}.pdf", mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+# === GENERATION 500 FRANCS ===
+@app.route("/api/admin/generer-500-francs", methods=["POST"])
+def generer_500_francs():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    d = request.json or {}
+    nb_tickets = min(int(d.get("nb_tickets", 500)), 1000)
+    serie_start = int(d.get("serie_start", 1))
+    output_path = f"/data/500F_{serie_start:05d}.pdf"
+    os.makedirs("/data", exist_ok=True)
+    try:
+        generate_500f_pdf(nb_tickets=nb_tickets, serie_start=serie_start, output_path=output_path)
+        return send_file(output_path, as_attachment=True, download_name=f"500_FRANCS_{serie_start:05d}.pdf", mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+# === GENERATION 1 DOLLAR ===
+@app.route("/api/admin/generer-1-dollar", methods=["POST"])
+def generer_1_dollar():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    d = request.json or {}
+    nb_tickets = min(int(d.get("nb_tickets", 500)), 1000)
+    serie_start = int(d.get("serie_start", 1))
+    output_path = f"/data/1DOLLAR_{serie_start:05d}.pdf"
+    os.makedirs("/data", exist_ok=True)
+    try:
+        generate_1dollar_pdf(nb_tickets=nb_tickets, serie_start=serie_start, output_path=output_path)
+        return send_file(output_path, as_attachment=True, download_name=f"1_DOLLAR_{serie_start:05d}.pdf", mimetype="application/pdf")
+    except Exception as e:
+        return jsonify({"ok": False, "msg": str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
