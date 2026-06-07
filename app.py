@@ -579,6 +579,7 @@ def sauvegarder_tirage():
     DB = load_data()
     d = request.json
     DB["tirage"] = d.get("boules", [])
+    DB["tirage_vitesse"] = d.get("vitesse", 3)
     save_data()
     return jsonify({"ok": True})
 
@@ -586,7 +587,7 @@ def sauvegarder_tirage():
 def get_tirage():
     global DB
     DB = load_data()
-    return jsonify({"boules": DB.get("tirage", [])})
+    return jsonify({"boules": DB.get("tirage", []), "vitesse": DB.get("tirage_vitesse", 3)})
 
 @app.route("/api/proxy-pdf")
 def proxy_pdf():
