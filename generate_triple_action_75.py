@@ -13,18 +13,11 @@ import os
 from reportlab.pdfgen import canvas
 from reportlab.lib import colors
 from reportlab.lib.units import mm
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 
 # ── Police ──────────────────────────────────────────────────────────────────
-FONT_PATH = '/usr/share/fonts/truetype/dejavu/DejaVuSans-ExtraLight.ttf'
-_font_registered = False
-
+FONT = 'Helvetica'
 def _register_font():
-    global _font_registered
-    if not _font_registered:
-        pdfmetrics.registerFont(TTFont('DJL', FONT_PATH))
-        _font_registered = True
+    pass  # Police intégrée ReportLab
 
 # ── Couleurs arc-en-ciel (12 couleurs) ──────────────────────────────────────
 RAINBOW = [
@@ -88,9 +81,9 @@ def _draw_ticket(c, serie: int, color_hex: str):
     c.rect(CARD_X, hdr_y, CARD_W, HDR_H / 2, stroke=0, fill=1)
 
     c.setFillColor(colors.white)
-    c.setFont('DJL', 10)
+    c.setFont('Helvetica', 10)
     c.drawCentredString(CARD_X + CARD_W / 2, hdr_y + HDR_H * 0.6, "T   R   I   P   L   75")
-    c.setFont('DJL', 7)
+    c.setFont('Helvetica', 7)
     c.drawCentredString(CARD_X + CARD_W / 2, hdr_y + HDR_H * 0.18, f'N° {serie:05d}')
 
     # ── 5 GROUPES ───────────────────────────────────────────────────────────
@@ -120,14 +113,14 @@ def _draw_ticket(c, serie: int, color_hex: str):
         c.circle(cx_circle, row1_cy, r, stroke=1, fill=1)
 
         c.setFillColor(GREY)
-        c.setFont('DJL', 28)
+        c.setFont('Helvetica', 28)
         c.drawCentredString(cx_circle, row1_cy - 10, str(num_cercle))
         c.drawCentredString(cx_right,  row1_cy - 10, str(num_grand))
 
         # Ligne 2 : petit numéro (agrandi)
         row2_cy = group_top - BIG_H - SMALL_H / 2
         c.setFillColor(GREY)
-        c.setFont('DJL', 24)
+        c.setFont('Helvetica', 24)
         c.drawCentredString(CARD_X + CARD_W / 2, row2_cy - 8, str(num_petit))
 
     # Bordure corps
