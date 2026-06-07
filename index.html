@@ -701,7 +701,9 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       
       <!-- GENERATION TICKETS -->
       <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px">🎯 Génération de tickets</div>
-      <div style="font-size:11px;color:var(--mu);margin-bottom:12px">Max 1000 tickets par génération — Le PDF se télécharge automatiquement</div>
+      <div style="font-size:11px;color:var(--mu);margin-bottom:8px">Max 1000 tickets par génération — Le PDF se télécharge automatiquement</div>
+      <div class="lbl">Nom du client (pour suivi)</div>
+      <input id="gen-client" placeholder="Ex: Marie Dupont" style="margin-bottom:12px"/>
       <div style="background:linear-gradient(135deg,rgba(30,136,229,rgba(30,136,229,.1));border:1px solid rgba(30,136,229,.3);border-radius:10px;padding:14px;margin-bottom:10px">
         <div style="font-size:13px;font-weight:600;color:#64b5f6;margin-bottom:10px">🎯 TRIPLE ACTION 75</div>
         <div class="g2">
@@ -755,6 +757,15 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         </div>
         <button onclick="genererJeu('1dollar','generer-1-dollar')" id="btn-1dollar" style="width:100%;padding:10px;background:linear-gradient(135deg,#26c6da,#006064);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer 1 DOLLAR</button>
         <div id="1dollar-result" style="margin-top:6px"></div>
+      </div>
+
+      <!-- HISTORIQUE COMMANDES -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="ct" style="justify-content:space-between">
+          <span>📋 Historique des commandes</span>
+          <button class="btn-sm" onclick="loadCommandes()">↻</button>
+        </div>
+        <div id="commandes-liste"><div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Chargement...</div></div>
       </div>
 
       <button class="btn btn-p" onclick="switchTab('tirage',document.getElementById('nb-admin'))" style="margin-bottom:14px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:16px">🎰 Lancer le Tirage des Boules</button>
@@ -1189,6 +1200,7 @@ function buildOrgSpace(){
   loadTickets();
   chargerPDFsOrganisateur();
   loadAlertesBingo();
+  loadCommandes();
 }
 
 function switchOrgTab(n, el){
@@ -2043,6 +2055,49 @@ async function loadRevendeurs(){
   }catch(e){}
 }
 
+// === HISTORIQUE COMMANDES ===
+async function loadCommandes(){
+  try{
+    const r = await fetch('/api/admin/commandes', {headers:{"X-Token":TOKEN}});
+    const commandes = await r.json();
+    const el = document.getElementById('commandes-liste');
+    if(!el) return;
+    if(!commandes.length){
+      el.innerHTML = '<div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Aucune commande pour le moment</div>';
+      return;
+    }
+    el.innerHTML = commandes.map(c => {
+      const date = new Date(c.date).toLocaleDateString('fr-FR', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      return `<div style="background:var(--s2);border-radius:8px;padding:10px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:#fff">${c.jeu}</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:2px">${c.client ? c.client+' — ' : ''}${c.nb_tickets} tickets — Série ${c.serie_start} à ${c.serie_end}</div>
+          <div style="font-size:10px;color:rgba(255,255,255,.3);margin-top:2px">${date}</div>
+        </div>
+        <button onclick="retelecharger('${c.id}')" style="padding:6px 12px;background:rgba(99,102,241,.3);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:12px;white-space:nowrap">📥 Copie</button>
+      </div>`;
+    }).join('');
+  }catch(e){}
+}
+
+async function retelecharger(commandeId){
+  try{
+    const r = await fetch('/api/admin/commande/telecharger/'+commandeId, {headers:{"X-Token":TOKEN}});
+    if(r.ok){
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'copie_'+commandeId+'.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+    } else {
+      const d = await r.json();
+      alert(d.msg || 'Fichier introuvable');
+    }
+  }catch(e){alert('Erreur');}
+}
+
 // === GENERATION TICKETS ===
 async function genererJeu(uid, route){
   const nb = parseInt(document.getElementById(uid+'-nb')?.value || 500);
@@ -2057,10 +2112,11 @@ async function genererJeu(uid, route){
   result.innerHTML = '<div style="text-align:center;padding:8px;font-size:12px;color:var(--mu)">⏳ Génération de '+nb+' tickets...</div>';
 
   try{
+    const client = document.getElementById('gen-client')?.value.trim() || '';
     const r = await fetch('/api/admin/'+route, {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Token':TOKEN},
-      body: JSON.stringify({nb_tickets:nb, serie_start:serie})
+      body: JSON.stringify({nb_tickets:nb, serie_start:serie, client:client})
     });
     if(r.ok){
       const blob = await r.blob();
@@ -2071,6 +2127,7 @@ async function genererJeu(uid, route){
       a.click();
       URL.revokeObjectURL(url);
       result.innerHTML = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:8px;text-align:center;color:#34d399;font-size:12px;font-weight:600">✅ '+nb+' tickets téléchargés !</div>';
+      loadCommandes(); // Rafraîchir historique
     } else {
       const d = await r.json();
       result.innerHTML = '<div style="background:rgba(239,68,68,.2);border:1px solid #ef4444;border-radius:8px;padding:8px;text-align:center;color:#f87171;font-size:12px">❌ '+(d.msg||'Erreur')+'</div>';
