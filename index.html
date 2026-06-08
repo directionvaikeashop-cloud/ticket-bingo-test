@@ -1551,7 +1551,9 @@ async function enregistrerVente(){
   const tournoi_id=document.getElementById("b-tournoi").value;
   const serie=document.getElementById("b-serie").value.trim();
   const prix=parseInt(document.getElementById("b-prix").value)||0;
+  const codeOrg=document.getElementById("b-code-org")?document.getElementById("b-code-org").value.trim().toUpperCase():"";
   if(!client||!jeu||!serie){toast("toast-b","Remplissez les champs obligatoires",false);return;}
+  if(!codeOrg){toast("toast-b","⚠️ Le code de l'organisateur est obligatoire !",false);document.getElementById("b-code-org").focus();return;}
   toast("toast-b","Enregistrement...");
   let photo_url=null,pdf_url=null;
   if(docFile){toast("toast-b","Upload sécurisé...");const url=await uploadDoc(docFile,docType);if(docType==="photo")photo_url=url;else pdf_url=url;}
