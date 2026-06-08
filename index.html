@@ -1784,12 +1784,15 @@ function renderTickets(){
   document.getElementById("cca").textContent=ca.toLocaleString()+" XPF";
   const el=document.getElementById("t-liste");
   if(!tickets.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun ticket vendu</div>';return;}
-  el.innerHTML=tickets.map(t=>`<div class="row">
-    <div><div style="font-size:13px;font-weight:500">${t.acheteur}</div>
-    <div style="font-size:12px;color:var(--mu)">${t.jeu} · Série ${t.serie}</div>
-    ${t.code_acheteur?`<div style="font-size:11px;color:var(--ac2);margin-top:3px">Code: <strong>${t.code_acheteur}</strong></div>`:""}
+  el.innerHTML=tickets.map(t=>`<div class="row" style="flex-direction:column;align-items:stretch">
+    <div style="display:flex;justify-content:space-between">
+      <div><div style="font-size:13px;font-weight:500">${t.acheteur}</div>
+      <div style="font-size:12px;color:var(--mu)">${t.jeu} · Série ${t.serie}</div>
+      ${t.code_acheteur?`<div style="font-size:11px;color:var(--ac2);margin-top:3px">Code: <strong>${t.code_acheteur}</strong></div>`:""}
+      </div>
+      <div style="text-align:right"><div style="font-size:13px;font-weight:500">${t.prix.toLocaleString()} XPF</div></div>
     </div>
-    <div style="text-align:right"><div style="font-size:13px;font-weight:500">${t.prix.toLocaleString()} XPF</div>${t.pdf_url||t.photo_url?`<span class="badge b-info" style="margin-top:4px">📎</span>`:""}</div>
+    ${t.pdf_url?`<a href="${t.pdf_url}" target="_blank" style="margin-top:6px;display:block;padding:6px;background:rgba(99,102,241,.15);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;font-size:12px;text-align:center;text-decoration:none">📄 Voir le PDF</a>`:""}
   </div>`).join("");
 }
 
