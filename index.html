@@ -1708,9 +1708,9 @@ async function chargerPDFsOrganisateur(){
     const vs = await rV.json();
     const ts = await rT.json();
     
-    // Collecter tous les PDFs disponibles
+    // Collecter tous les PDFs disponibles (ventes validées uniquement)
     const pdfs = [];
-    vs.filter(v => v.pdf_url).forEach(v => {
+    vs.filter(v => v.pdf_url && v.paiement_statut === 'valide').forEach(v => {
       if(!pdfs.find(p => p.url === v.pdf_url)){
         pdfs.push({url: v.pdf_url, nom: v.jeu + ' — Série ' + v.serie});
       }
