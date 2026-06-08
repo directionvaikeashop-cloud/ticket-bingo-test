@@ -503,6 +503,16 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div id="paiements-a-valider-liste"></div>
       </div>
 
+      <!-- PIONS A VALIDER - comme tickets -->
+      <div id="pions-validation-card" style="display:none;background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1));border:1px solid rgba(99,102,241,.4);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="font-size:14px;font-weight:700;color:#818cf8">🪙 Pions à valider !</div>
+          <div id="badge-pions-validation" style="background:#6366f1;color:#fff;font-size:12px;font-weight:700;padding:3px 8px;border-radius:20px">0</div>
+        </div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:10px">Organisateur a confirmé son paiement pions — validez pour créditer</div>
+        <div id="pions-a-valider-liste"></div>
+      </div>
+
       <!-- COMMANDES PIONS ADMIN -->
       <div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.05));border:1px solid rgba(99,102,241,.2);margin-bottom:14px">
         <div class="ct" style="justify-content:space-between">
@@ -2626,6 +2636,42 @@ async function marquerCommandeTraitee(commandeId){
 // === AUTO REFRESH ADMIN ===
 var adminRefreshTimer = null;
 
+function checkPionsEnAttente(){
+  fetch("/api/pions/mes-commandes",{headers:{"X-Token":TOKEN}})
+  .then(function(r){return r.json();})
+  .then(function(commandes){
+    var enAttente = commandes.filter(function(c){ return c.statut === 'en_attente_validation'; });
+    var card = document.getElementById('pions-validation-card');
+    var badge = document.getElementById('badge-pions-validation');
+    var liste = document.getElementById('pions-a-valider-liste');
+    if(!card) return;
+    if(enAttente.length > 0){
+      card.style.display = 'block';
+      if(badge) badge.textContent = enAttente.length;
+      if(liste){
+        liste.innerHTML = '';
+        enAttente.forEach(function(c){
+          var div = document.createElement('div');
+          div.style.cssText = 'background:rgba(0,0,0,.2);border-radius:8px;padding:10px;margin-bottom:6px';
+          div.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
+            '<div><div style="font-size:13px;font-weight:600;color:#fff">🪙 ' + (c.nom_org||'') + '</div>' +
+            '<div style="font-size:11px;color:rgba(255,255,255,.5)">' + c.nb_pions + ' pions à ' + c.valeur_pion + ' XPF — ' + (c.mode_paiement||'') + ' — ' + (c.ref_paiement||'') + '</div></div>' +
+            '<div style="font-size:12px;font-weight:600;color:#818cf8">' + ((c.montant_paye||0).toLocaleString('fr-FR')) + ' XPF</div></div>';
+          var btn = document.createElement('button');
+          btn.style.cssText = 'width:100%;padding:8px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600';
+          btn.textContent = '✅ Valider et créditer les pions';
+          (function(cid){ btn.onclick = function(){ validerCommandePions(cid); setTimeout(checkPionsEnAttente,1000); }; })(c.id);
+          div.appendChild(btn);
+          liste.appendChild(div);
+        });
+      }
+    } else {
+      card.style.display = 'none';
+    }
+  })
+  .catch(function(){});
+}
+
 function checkPaiementsEnAttente(){
   fetch("/api/ventes",{headers:{"X-Token":TOKEN}})
   .then(function(r){return r.json();})
@@ -2670,6 +2716,8 @@ function startAutoRefreshAdmin(){
     loadCommandesAdmin();
     loadVentes();
     checkPaiementsEnAttente();
+    checkPionsEnAttente();
+    loadCommandesPionsAdmin();
   }, 15000);
 }
 
