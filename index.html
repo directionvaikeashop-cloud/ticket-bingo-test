@@ -1523,18 +1523,43 @@ async function creerTournoi(){
 }
 
 async function loadVentes(){
-  try{
-    const r=await fetch("/api/ventes");ventes=await r.json();
-    const el=document.getElementById("b-liste");
-    if(!ventes.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune vente</div>';return;}
-    el.innerHTML=ventes.map(v=>`<div class="row">
-      <div><div style="font-size:13px;font-weight:500">${v.client}</div>
-      <div style="font-size:12px;color:var(--mu)">${v.jeu} · ${v.qty}x${v.pack} · Série ${v.serie}</div>
-      ${v.photo_url||v.pdf_url?`<span class="badge b-info" style="margin-top:4px">📎 Document protégé</span>`:""}
-      </div>
-      <div style="text-align:right"><div style="font-size:13px;font-weight:500">${v.total.toLocaleString()} XPF</div></div>
-    </div>`).join("");
-  }catch(e){}
+  fetch("/api/ventes",{headers:{"X-Token":TOKEN}})
+  .then(function(r){return r.json();})
+  .then(function(data){
+    var el = document.getElementById("b-liste");
+    if(!el) return;
+    if(!data.length){
+      el.innerHTML = '<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune vente</div>';
+      return;
+    }
+    var html = '';
+    data.forEach(function(v){
+      html += '<div style="background:var(--s2);border-radius:8px;padding:12px;margin-bottom:8px">';
+      html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
+      html += '<div>';
+      html += '<div style="font-size:13px;font-weight:600;color:#fff">' + (v.client||'') + '</div>';
+      html += '<div style="font-size:11px;color:var(--mu)">' + (v.jeu||'') + ' · Série ' + (v.serie||'') + '</div>';
+      html += '</div>';
+      html += '<div style="text-align:right">';
+      html += '<div style="font-size:13px;font-weight:600;color:#34d399">' + ((v.total||0).toLocaleString()) + ' XPF</div>';
+      var statut = v.paiement_statut === 'valide' ? '✅ Payé' : '⏳ En attente';
+      html += '<div style="font-size:10px;color:rgba(255,255,255,.3)">' + statut + '</div>';
+      html += '</div></div>';
+      if(v.pdf_url){
+        html += '<button onclick="ouvrirPDFAdmin('' + v.pdf_url + '','' + (v.client||'') + '')" style="width:100%;padding:7px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:12px;margin-bottom:4px">📄 Voir le PDF de ' + (v.client||'') + '</button>';
+      }
+      if(v.paiement_statut === 'en_attente_validation'){
+        html += '<button onclick="validerPaiementAdmin('' + v.id + '')" style="width:100%;padding:7px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid #10b981;border-radius:6px;cursor:pointer;font-size:12px">✅ Valider paiement</button>';
+      }
+      html += '</div>';
+    });
+    el.innerHTML = html;
+  })
+  .catch(function(){});
+}
+
+function ouvrirPDFAdmin(url, nom, pageDebut, pageFin){
+  ouvrirPDFJoueur(url, nom, 'admin_'+Date.now(), pageDebut, pageFin);
 }
 
 async function loadStats(){try{const r=await fetch("/api/stats");const s=await r.json();document.getElementById("sv").textContent=s.ventes_jour;document.getElementById("sc").textContent=s.total_jour.toLocaleString()+" XPF";}catch(e){}}
@@ -1723,7 +1748,7 @@ function resetCoches(cleCoches,overlay){
 // === PDF EXISTANT ORGANISATEUR ===
 let tPdfUrlExistant = null;
 
-async function chargerPDFsOrganisateur(){
+async async function chargerPDFsOrganisateur(){
   try{
     // Charger les ventes ET tickets de l'organisateur pour trouver ses PDFs
     const [rV, rT] = await Promise.all([
@@ -1822,10 +1847,17 @@ async function regTicket(){
     const d=await r.json();
     if(d.ok){
       document.getElementById("t-code-result").innerHTML=`
-        <div class="code-box" style="margin-top:12px">
-          <div style="font-size:12px;color:var(--mu);margin-bottom:8px">Code pour <strong>${a}</strong></div>
-          <div class="code-val">${d.code_acheteur}</div>
-          <div style="font-size:11px;color:var(--mu);margin-top:8px">Envoyez ce code à votre client<br/>Il l'utilise dans l'onglet 🎮 Jouer</div>
+        <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:16px;margin-top:12px">
+          <div style="font-size:13px;font-weight:600;color:#34d399;margin-bottom:10px">✅ Ticket enregistré pour ${a}</div>
+          <div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;margin-bottom:10px">
+            <div style="font-size:11px;color:var(--mu);margin-bottom:6px">CODE D'ACCÈS JOUEUR</div>
+            <div style="font-family:monospace;font-size:28px;font-weight:800;letter-spacing:6px;color:#818cf8">${d.code_acheteur}</div>
+          </div>
+          <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:10px">
+            🎮 Jeu : <strong>${j}</strong> — Série : <strong>${s}</strong>
+          </div>
+          ${pdf_url ? '<div style="margin-bottom:10px"><a href="'+pdf_url+'" target="_blank" style="display:block;padding:10px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid #6366f1;border-radius:8px;text-align:center;text-decoration:none;font-size:13px;font-weight:600">📄 Voir le PDF du ticket</a></div>' : ''}
+          <div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center">Envoyez ce code à votre client — Il accède directement à ses feuilles</div>
         </div>`;
       ["t-acheteur","t-serie","t-prix"].forEach(id=>document.getElementById(id).value="");
       document.getElementById("t-jeu").value="";if(document.getElementById("t-email"))document.getElementById("t-email").value="";supprimerTicketDoc();tPdfUrlExistant=null;document.getElementById('t-pdf-existant').value='';loadTickets();chargerPDFsOrganisateur();toast("toast-t","Ticket enregistré !");
@@ -1840,12 +1872,18 @@ function renderTickets(){
   document.getElementById("cca").textContent=ca.toLocaleString()+" XPF";
   const el=document.getElementById("t-liste");
   if(!tickets.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun ticket vendu</div>';return;}
-  el.innerHTML=tickets.map(t=>`<div class="row">
-    <div><div style="font-size:13px;font-weight:500">${t.acheteur}</div>
-    <div style="font-size:12px;color:var(--mu)">${t.jeu} · Série ${t.serie}</div>
-    ${t.code_acheteur?`<div style="font-size:11px;color:var(--ac2);margin-top:3px">Code: <strong>${t.code_acheteur}</strong></div>`:""}
+  el.innerHTML=tickets.map(t=>`<div style="background:var(--s2);border-radius:8px;padding:12px;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+      <div>
+        <div style="font-size:13px;font-weight:600;color:#fff">${t.acheteur}</div>
+        <div style="font-size:11px;color:var(--mu)">${t.jeu} · Série ${t.serie}</div>
+        ${t.code_acheteur?`<div style="font-size:12px;color:var(--ac2);margin-top:4px;font-family:monospace;font-weight:700">${t.code_acheteur}</div>`:""}
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:13px;font-weight:600;color:#34d399">${t.prix.toLocaleString()} XPF</div>
+      </div>
     </div>
-    <div style="text-align:right"><div style="font-size:13px;font-weight:500">${t.prix.toLocaleString()} XPF</div>${t.pdf_url||t.photo_url?`<span class="badge b-info" style="margin-top:4px">📎</span>`:""}</div>
+    ${t.pdf_url?`<button onclick="ouvrirPDFJoueur('${t.pdf_url}','${t.acheteur}','ticket_${t.id}','${t.page_debut||1}','${t.page_fin||9999}')" style="width:100%;padding:7px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:12px">📄 Voir le PDF</button>`:""}
   </div>`).join("");
 }
 
