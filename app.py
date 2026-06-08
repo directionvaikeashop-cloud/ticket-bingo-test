@@ -1273,7 +1273,7 @@ def save_commande(jeu, nb_tickets, serie_start, output_path, client=""):
     save_data()
 
 @app.route("/api/admin/commandes")
-def get_commandes():
+def get_commandes_admin():
     global DB
     DB = load_data()
     token = request.headers.get("X-Token", "")
