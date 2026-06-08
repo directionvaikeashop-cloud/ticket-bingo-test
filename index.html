@@ -301,43 +301,29 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       
       <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
         
-        <div onclick="selFormule('1mois',this)" id="f-1mois" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:12px;padding:16px;cursor:pointer;transition:all .2s">
+        <div onclick="selFormule('lancement',this)" id="f-lancement" style="background:rgba(245,158,11,.1);border:2px solid rgba(245,158,11,.5);border-radius:12px;padding:16px;cursor:pointer;transition:all .2s">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div>
-              <div style="font-size:15px;font-weight:600;color:#fff">1 mois</div>
-              <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:2px">Accès 30 jours</div>
+              <div style="font-size:15px;font-weight:600;color:#fff">🎯 1er mois — Offre de lancement</div>
+              <div style="font-size:12px;color:#fbbf24;margin-top:2px">Engagement 1 an — 2ème mois : 9 990 XPF/mois</div>
             </div>
-            <div id="check-1mois" style="width:20px;height:20px;border-radius:50%;border:2px solid rgba(99,102,241,.5)"></div>
+            <div style="text-align:right">
+              <div style="font-size:18px;font-weight:800;color:#fbbf24">4 990 XPF</div>
+              <div id="check-lancement" style="width:20px;height:20px;border-radius:50%;border:2px solid rgba(245,158,11,.5);margin:4px auto 0"></div>
+            </div>
           </div>
         </div>
 
-        <div onclick="selFormule('3mois',this)" id="f-3mois" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:12px;padding:16px;cursor:pointer;transition:all .2s">
+        <div onclick="selFormule('mensuel',this)" id="f-mensuel" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:12px;padding:16px;cursor:pointer;transition:all .2s">
           <div style="display:flex;justify-content:space-between;align-items:center">
             <div>
-              <div style="font-size:15px;font-weight:600;color:#fff">3 mois</div>
-              <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:2px">Accès 90 jours</div>
+              <div style="font-size:15px;font-weight:600;color:#fff">📅 Mensuel</div>
+              <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:2px">Toutes les fonctionnalités incluses</div>
             </div>
-            <div id="check-3mois" style="width:20px;height:20px;border-radius:50%;border:2px solid rgba(99,102,241,.5)"></div>
-          </div>
-        </div>
-
-        <div onclick="selFormule('6mois',this)" id="f-6mois" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:12px;padding:16px;cursor:pointer;transition:all .2s">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div>
-              <div style="font-size:15px;font-weight:600;color:#fff">6 mois</div>
-              <div style="font-size:12px;color:rgba(255,255,255,.5);margin-top:2px">Accès 180 jours</div>
+            <div style="text-align:right">
+              <div style="font-size:18px;font-weight:800;color:#818cf8">9 990 XPF</div>
+              <div id="check-mensuel" style="width:20px;height:20px;border-radius:50%;border:2px solid rgba(99,102,241,.5);margin:4px auto 0"></div>
             </div>
-            <div id="check-6mois" style="width:20px;height:20px;border-radius:50%;border:2px solid rgba(99,102,241,.5)"></div>
-          </div>
-        </div>
-
-        <div onclick="selFormule('1an',this)" id="f-1an" style="background:rgba(245,158,11,.1);border:2px solid rgba(245,158,11,.5);border-radius:12px;padding:16px;cursor:pointer;transition:all .2s">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div>
-              <div style="font-size:15px;font-weight:600;color:#fff">1 an 🎁</div>
-              <div style="font-size:12px;color:#fbbf24;margin-top:2px">Offre de lancement</div>
-            </div>
-            <div id="check-1an" style="width:20px;height:20px;border-radius:50%;border:2px solid rgba(245,158,11,.5)"></div>
           </div>
         </div>
 
