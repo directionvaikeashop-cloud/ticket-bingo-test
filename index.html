@@ -1001,6 +1001,7 @@ async function accesOrganisateur(){
         chargerPDFsOrganisateur();
         loadVentesPaiement();
         loadMesCommandes();
+        loadPionsPaiement();
         startAutoRefreshOrg();
       }, 800);
     } else {
@@ -1347,6 +1348,13 @@ function buildOrgSpace(){
       <button onclick="commanderPions()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Passer la commande</button>
     </div>
 
+    <!-- CONFIRMER PAIEMENT PIONS -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(251,191,36,.05));border:1px solid rgba(245,158,11,.3);margin-bottom:14px">
+      <div class="ct" style="margin-bottom:8px">💳 Confirmer paiement pions</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:10px">Confirmez votre paiement pour recevoir vos pions</div>
+      <div id="pions-paiement-liste"><div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Chargement...</div></div>
+    </div>
+
     <!-- MES COMMANDES PIONS -->
     <div class="card" style="margin-bottom:14px">
       <div class="ct" style="justify-content:space-between">
@@ -1392,7 +1400,7 @@ function switchOrgTab(n, el){
   if(n==="verif") loadAlertesBingo();
   if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();setTimeout(function(){loadVentesPaiement();loadMesCommandes();},500);startAutoRefreshOrg();}
   if(n==="revendeurs") loadRevendeurs();
-  if(n==="pions"){loadSoldesPions();loadCommandesPions();}
+  if(n==="pions"){loadSoldesPions();loadCommandesPions();setTimeout(function(){loadPionsPaiement();},500);}
 }
 
 // === ACCES REVENDEUR ===
@@ -2560,7 +2568,7 @@ function loadCommandesAdmin(){
   .then(function(commandes){
     var el = document.getElementById('commandes-admin-liste');
     if(!el) return;
-    var enAttente = commandes.filter(function(c){ return c.statut === 'en_attente'; });
+    var enAttente = commandes.filter(function(c){ return c.statut === 'en_attente' || c.statut === 'en_attente_validation'; });
     if(!enAttente.length){
       el.innerHTML = '<div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">✅ Aucune commande en attente</div>';
       return;
@@ -2905,6 +2913,63 @@ async function annoncerCagnotte(montant){
   toast('toast-t','📢 Cagnotte annoncée aux joueurs !');
 }
 
+// === PAIEMENT PIONS ORGANISATEUR ===
+function loadPionsPaiement(){
+  fetch('/api/pions/mes-commandes', {headers: {'X-Token': TOKEN}})
+  .then(function(r){ return r.json(); })
+  .then(function(commandes){
+    var el = document.getElementById('pions-paiement-liste');
+    if(!el) return;
+    var enAttente = commandes.filter(function(c){ return c.statut === 'en_attente' || c.statut === 'en_attente_validation'; });
+    if(!enAttente.length){
+      el.innerHTML = '<div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">✅ Tous vos paiements pions sont à jour</div>';
+      return;
+    }
+    el.innerHTML = '';
+    enAttente.forEach(function(c){
+      var div = document.createElement('div');
+      div.style.cssText = 'background:rgba(245,158,11,.1);border:0.5px solid rgba(245,158,11,.3);border-radius:8px;padding:12px;margin-bottom:8px';
+      div.innerHTML = '<div style="font-size:13px;font-weight:600;color:#fbbf24;margin-bottom:4px">🪙 ' + c.nb_pions + ' pions à ' + c.valeur_pion + ' XPF</div>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:8px">Montant : ' + (c.montant_paye||0).toLocaleString('fr-FR') + ' XPF — Réf: ' + c.id + '</div>' +
+        '<select id="pion-mode-' + c.id + '" style="font-size:12px;margin-bottom:6px;width:100%">' +
+        '<option value="">Mode de paiement...</option>' +
+        '<option value="CCP">CCP Papeete</option>' +
+        '<option value="Deblock">Deblock</option>' +
+        '<option value="Especes Papeete">Espèces — Boutique Papeete</option>' +
+        '<option value="Especes Raiatea">Espèces — Boutique Raiatea</option>' +
+        '<option value="Carte">Paiement par carte</option>' +
+        '</select>' +
+        '<input id="pion-ref-' + c.id + '" placeholder="Référence ou confirmation" style="font-size:12px;margin-bottom:6px;width:100%"/>';
+      var btn = document.createElement('button');
+      btn.style.cssText = 'width:100%;padding:8px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600';
+      btn.textContent = '💳 Confirmer mon paiement';
+      (function(cid){ btn.onclick = function(){ confirmerPaiementPions(cid); }; })(c.id);
+      div.appendChild(btn);
+      el.appendChild(div);
+    });
+  })
+  .catch(function(){});
+}
+
+async function confirmerPaiementPions(commandeId){
+  var mode = document.getElementById('pion-mode-' + commandeId);
+  var ref = document.getElementById('pion-ref-' + commandeId);
+  if(!mode || !mode.value){ alert('Choisissez un mode de paiement'); return; }
+  try{
+    const r = await fetch('/api/pions/confirmer-paiement', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({commande_id: commandeId, mode: mode.value, ref: ref ? ref.value : ''})
+    });
+    const d = await r.json();
+    if(d.ok){
+      toast('toast-pions', 'Paiement confirme ! En attente de validation.');
+      loadPionsPaiement();
+      loadCommandesPions();
+    }
+  }catch(e){}
+}
+
 // === COMMANDES PIONS ADMIN ===
 function loadCommandesPionsAdmin(){
   fetch('/api/pions/mes-commandes', {headers: {'X-Token': TOKEN}})
@@ -2912,7 +2977,7 @@ function loadCommandesPionsAdmin(){
   .then(function(commandes){
     var el = document.getElementById('commandes-pions-admin');
     if(!el) return;
-    var enAttente = commandes.filter(function(c){ return c.statut === 'en_attente'; });
+    var enAttente = commandes.filter(function(c){ return c.statut === 'en_attente' || c.statut === 'en_attente_validation'; });
     if(!enAttente.length){
       el.innerHTML = '<div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">✅ Aucune commande pions en attente</div>';
       return;
@@ -2921,8 +2986,7 @@ function loadCommandesPionsAdmin(){
     enAttente.forEach(function(c){
       var div = document.createElement('div');
       div.style.cssText = 'background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:10px;margin-bottom:6px';
-      div.innerHTML = '<div style="font-size:13px;font-weight:600;color:#818cf8;margin-bottom:4px">🪙 ' + c.nom_org + ' — ' + c.nb_pions + ' pions à ' + c.valeur_pion + ' XPF</div>' +
-        '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:6px">Payé : ' + (c.montant_paye||0).toLocaleString('fr-FR') + ' XPF — Commission : ' + (c.commission||0).toLocaleString('fr-FR') + ' XPF — Réf : ' + c.id + '</div>';
+      div.innerHTML = '<div style="font-size:13px;font-weight:600;color:#818cf8;margin-bottom:4px">🪙 ' + c.nom_org + ' — ' + c.nb_pions + ' pions à ' + c.valeur_pion + ' XPF</div>' + '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:6px">Payé : ' + (c.montant_paye||0).toLocaleString('fr-FR') + ' XPF — ' + (c.mode_paiement ? c.mode_paiement + ' — Réf: ' + (c.ref_paiement||'') : 'En attente paiement') + '</div>';
       var btn = document.createElement('button');
       btn.style.cssText = 'width:100%;padding:7px;background:rgba(99,102,241,.3);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600';
       btn.textContent = '✅ Valider et créditer les pions';
