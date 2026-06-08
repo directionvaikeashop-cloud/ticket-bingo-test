@@ -1305,7 +1305,7 @@ function switchOrgTab(n, el){
   document.getElementById("tab-org-"+n).classList.add("active");
   el.classList.add("active");
   if(n==="verif") loadAlertesBingo();
-  if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();loadVentesPaiement();loadMesCommandes();startAutoRefreshOrg();}
+  if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();setTimeout(function(){loadVentesPaiement();loadMesCommandes();},500);startAutoRefreshOrg();}
   if(n==="revendeurs") loadRevendeurs();
   if(n==="pions") {} // déjà chargé dans buildOrgSpace
 }
@@ -1475,7 +1475,7 @@ function switchTab(n,el){
   document.querySelectorAll(".nb").forEach(b=>b.classList.remove("active"));
   document.getElementById("tab-"+n).classList.add("active");
   el.classList.add("active");
-  if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();loadVentesPaiement();loadMesCommandes();startAutoRefreshOrg();}
+  if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();setTimeout(function(){loadVentesPaiement();loadMesCommandes();},500);startAutoRefreshOrg();}
   if(n==="admin"){loadCodes();loadTournois();}
   if(n==="revendeur"){loadRevendeurs();}
   if(n==="verif"){loadAlertesBingo();}
