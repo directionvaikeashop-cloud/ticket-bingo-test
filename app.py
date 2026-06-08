@@ -679,6 +679,103 @@ def effacer_pdfs_apres_tournoi(code_org, delai_secondes=10800):
     except Exception as e:
         print(f"[AUTO-EFFACEMENT ERR] {e}")
 
+# === COMMANDES TICKETS ORGANISATEUR ===
+@app.route("/api/commande/passer", methods=["POST"])
+def passer_commande():
+    """L'organisateur passe une commande de tickets"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    
+    d = request.json
+    code_org = s["code"]
+    jeu = d.get("jeu", "")
+    pack = int(d.get("pack", 0))
+    prix = int(d.get("prix", 0))
+    serie = d.get("serie", "1")
+    
+    if not jeu or not pack:
+        return jsonify({"ok": False, "msg": "Champs manquants"}), 400
+    
+    if "commandes_tickets" not in DB:
+        DB["commandes_tickets"] = []
+    
+    commande = {
+        "id": secrets.token_hex(4).upper(),
+        "code_org": code_org,
+        "nom_org": s.get("nom", code_org),
+        "jeu": jeu,
+        "pack": pack,
+        "prix": prix,
+        "serie": serie,
+        "statut": "en_attente",
+        "date": datetime.datetime.now().isoformat()
+    }
+    
+    DB["commandes_tickets"].insert(0, commande)
+    save_data()
+    print(f"[COMMANDE] {code_org} commande {pack} tickets {jeu}")
+    return jsonify({"ok": True, "commande_id": commande["id"]})
+
+@app.route("/api/commande/liste")
+def get_commandes():
+    """Liste des commandes"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify([])
+    
+    commandes = DB.get("commandes_tickets", [])
+    
+    # Admin voit tout, organisateur voit ses commandes
+    if s.get("admin"):
+        return jsonify(commandes)
+    
+    mes_commandes = [c for c in commandes if c.get("code_org") == s["code"]]
+    return jsonify(mes_commandes)
+
+@app.route("/api/commande/traiter", methods=["POST"])
+def traiter_commande():
+    """Marquer une commande comme traitée"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    
+    commande_id = request.json.get("commande_id", "")
+    for c in DB.get("commandes_tickets", []):
+        if c["id"] == commande_id:
+            c["statut"] = "traitee"
+            c["date_traitement"] = datetime.datetime.now().isoformat()
+            break
+    save_data()
+    return jsonify({"ok": True})
+
+@app.route("/api/commande/annuler", methods=["POST"])
+def annuler_commande():
+    """Annuler une commande"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    
+    commande_id = request.json.get("commande_id", "")
+    for c in DB.get("commandes_tickets", []):
+        if c["id"] == commande_id:
+            c["statut"] = "annulee"
+            break
+    save_data()
+    return jsonify({"ok": True})
+
 @app.route("/api/tournoi/reset", methods=["POST"])
 def reset_tournoi():
     """Remet tout à zéro après un tournoi"""
