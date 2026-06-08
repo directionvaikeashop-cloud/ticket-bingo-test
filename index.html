@@ -1680,10 +1680,10 @@ async function loadStats(){try{const r=await fetch("/api/stats");const s=await r
 // ✅ CORRIGE : charge ventes ET tickets avec PDF/photo
 async function loadDocs(){
   try{
-    const [rV,rT]=await Promise.all([fetch("/api/ventes"),fetch("/api/tickets")]);
+    const [rV,rT]=await Promise.all([fetch("/api/ventes",{headers:{"X-Token":TOKEN}}),fetch("/api/tickets",{headers:{"X-Token":TOKEN}})]);
     const vs=await rV.json();
     const ts=await rT.json();
-    const docsVentes=vs.filter(v=>v.photo_url||v.pdf_url).map(v=>({...v,_type:'vente',label:`${v.qty}x${v.pack} feuilles · Client: ${v.client}`}));
+    const docsVentes=vs.filter(v=>(v.photo_url||v.pdf_url)&&v.paiement_statut==='valide').map(v=>({...v,_type:'vente',label:`${v.qty}x${v.pack} feuilles · Client: ${v.client}`}));
     const docsTickets=ts.filter(t=>t.photo_url||t.pdf_url).map(t=>({...t,_type:'ticket',label:`Acheteur: ${t.acheteur}`}));
     const docs=[...docsVentes,...docsTickets];
     const el=document.getElementById("docs-liste");
