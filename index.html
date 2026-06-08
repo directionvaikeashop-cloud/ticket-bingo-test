@@ -710,11 +710,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <div><div class="lbl">Nb tickets</div><input id="ta75-nb" type="number" value="500" min="1" max="1000"/></div>
           <div><div class="lbl">Série départ</div><input id="ta75-serie" type="number" value="1" min="1"/></div>
         </div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button onclick="genererJeu('ta75','generer-ta75')" id="btn-ta75" style="flex:1;padding:10px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">⚡ Générer</button>
-          <button onclick="payerPDF('ta75')" style="flex:1;padding:10px;background:rgba(99,102,241,.2);color:#818cf8;border:1px solid #6366f1;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">💳 Carte</button>
-          <button onclick="payerVirement('pdf-TRIPLE ACTION 75', calculerPrixPDF('ta75'))" style="flex:1;padding:10px;background:rgba(16,185,129,.2);color:#34d399;border:1px solid #10b981;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">🏦 Virement</button>
-        </div>
+        <button onclick="genererJeu('ta75','generer-ta75')" id="btn-ta75" style="width:100%;padding:10px;background:linear-gradient(135deg,#64b5f6,#3949ab);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer TRIPLE ACTION 75</button>
         <div id="ta75-result" style="margin-top:6px"></div>
       </div>
       <div style="background:linear-gradient(135deg,rgba(229,57,53,rgba(229,57,53,.1));border:1px solid rgba(229,57,53,.3);border-radius:10px;padding:14px;margin-bottom:10px">
@@ -723,11 +719,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <div><div class="lbl">Nb tickets</div><input id="60b-nb" type="number" value="500" min="1" max="1000"/></div>
           <div><div class="lbl">Série départ</div><input id="60b-serie" type="number" value="1" min="1"/></div>
         </div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button onclick="genererJeu('60b','generer-60-boules')" id="btn-60b" style="flex:1;padding:10px;background:linear-gradient(135deg,#ef5350,#b71c1c);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">⚡ Générer</button>
-          <button onclick="payerPDF('60b')" style="flex:1;padding:10px;background:rgba(99,102,241,.2);color:#818cf8;border:1px solid #6366f1;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">💳 Carte</button>
-          <button onclick="payerVirement('pdf-60 BOULES', calculerPrixPDF('60b'))" style="flex:1;padding:10px;background:rgba(16,185,129,.2);color:#34d399;border:1px solid #10b981;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">🏦 Virement</button>
-        </div>
+        <button onclick="genererJeu('60b','generer-60-boules')" id="btn-60b" style="width:100%;padding:10px;background:linear-gradient(135deg,#ef5350,#b71c1c);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer 60 BOULES</button>
         <div id="60b-result" style="margin-top:6px"></div>
       </div>
       <div style="background:linear-gradient(135deg,rgba(67,160,71,rgba(67,160,71,.1));border:1px solid rgba(67,160,71,.3);border-radius:10px;padding:14px;margin-bottom:10px">
@@ -736,11 +728,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <div><div class="lbl">Nb tickets</div><input id="40b-nb" type="number" value="500" min="1" max="1000"/></div>
           <div><div class="lbl">Série départ</div><input id="40b-serie" type="number" value="1" min="1"/></div>
         </div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button onclick="genererJeu('40b','generer-40-boules')" id="btn-40b" style="flex:1;padding:10px;background:linear-gradient(135deg,#66bb6a,#1b5e20);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">⚡ Générer</button>
-          <button onclick="payerPDF('40b')" style="flex:1;padding:10px;background:rgba(99,102,241,.2);color:#818cf8;border:1px solid #6366f1;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">💳 Carte</button>
-          <button onclick="payerVirement('pdf-40 BOULES', calculerPrixPDF('40b'))" style="flex:1;padding:10px;background:rgba(16,185,129,.2);color:#34d399;border:1px solid #10b981;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">🏦 Virement</button>
-        </div>
+        <button onclick="genererJeu('40b','generer-40-boules')" id="btn-40b" style="width:100%;padding:10px;background:linear-gradient(135deg,#66bb6a,#1b5e20);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer 40 BOULES</button>
         <div id="40b-result" style="margin-top:6px"></div>
       </div>
       <div style="background:linear-gradient(135deg,rgba(251,140,0,rgba(251,140,0,.1));border:1px solid rgba(251,140,0,.3);border-radius:10px;padding:14px;margin-bottom:10px">
@@ -749,11 +737,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <div><div class="lbl">Nb tickets</div><input id="4coins-nb" type="number" value="500" min="1" max="1000"/></div>
           <div><div class="lbl">Série départ</div><input id="4coins-serie" type="number" value="1" min="1"/></div>
         </div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button onclick="genererJeu('4coins','generer-4-coins')" id="btn-4coins" style="flex:1;padding:10px;background:linear-gradient(135deg,#ffa726,#e65100);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">⚡ Générer</button>
-          <button onclick="payerPDF('4coins')" style="flex:1;padding:10px;background:rgba(99,102,241,.2);color:#818cf8;border:1px solid #6366f1;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">💳 Carte</button>
-          <button onclick="payerVirement('pdf-4 COINS', calculerPrixPDF('4coins'))" style="flex:1;padding:10px;background:rgba(16,185,129,.2);color:#34d399;border:1px solid #10b981;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">🏦 Virement</button>
-        </div>
+        <button onclick="genererJeu('4coins','generer-4-coins')" id="btn-4coins" style="width:100%;padding:10px;background:linear-gradient(135deg,#ffa726,#e65100);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer 4 COINS</button>
         <div id="4coins-result" style="margin-top:6px"></div>
       </div>
       <div style="background:linear-gradient(135deg,rgba(142,36,170,rgba(142,36,170,.1));border:1px solid rgba(142,36,170,.3);border-radius:10px;padding:14px;margin-bottom:10px">
@@ -762,11 +746,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <div><div class="lbl">Nb tickets</div><input id="500f-nb" type="number" value="500" min="1" max="1000"/></div>
           <div><div class="lbl">Série départ</div><input id="500f-serie" type="number" value="1" min="1"/></div>
         </div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button onclick="genererJeu('500f','generer-500-francs')" id="btn-500f" style="flex:1;padding:10px;background:linear-gradient(135deg,#ab47bc,#4a148c);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">⚡ Générer</button>
-          <button onclick="payerPDF('500f')" style="flex:1;padding:10px;background:rgba(99,102,241,.2);color:#818cf8;border:1px solid #6366f1;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">💳 Carte</button>
-          <button onclick="payerVirement('pdf-500 FRANCS', calculerPrixPDF('500f'))" style="flex:1;padding:10px;background:rgba(16,185,129,.2);color:#34d399;border:1px solid #10b981;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">🏦 Virement</button>
-        </div>
+        <button onclick="genererJeu('500f','generer-500-francs')" id="btn-500f" style="width:100%;padding:10px;background:linear-gradient(135deg,#ab47bc,#4a148c);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer 500 FRANCS</button>
         <div id="500f-result" style="margin-top:6px"></div>
       </div>
       <div style="background:linear-gradient(135deg,rgba(0,172,193,rgba(0,172,193,.1));border:1px solid rgba(0,172,193,.3);border-radius:10px;padding:14px;margin-bottom:10px">
@@ -775,11 +755,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <div><div class="lbl">Nb tickets</div><input id="1dollar-nb" type="number" value="500" min="1" max="1000"/></div>
           <div><div class="lbl">Série départ</div><input id="1dollar-serie" type="number" value="1" min="1"/></div>
         </div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <button onclick="genererJeu('1dollar','generer-1-dollar')" id="btn-1dollar" style="flex:1;padding:10px;background:linear-gradient(135deg,#26c6da,#006064);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">⚡ Générer</button>
-          <button onclick="payerPDF('1dollar')" style="flex:1;padding:10px;background:rgba(99,102,241,.2);color:#818cf8;border:1px solid #6366f1;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">💳 Carte</button>
-          <button onclick="payerVirement('pdf-1 DOLLAR', calculerPrixPDF('1dollar'))" style="flex:1;padding:10px;background:rgba(16,185,129,.2);color:#34d399;border:1px solid #10b981;border-radius:8px;cursor:pointer;font-size:11px;font-weight:600">🏦 Virement</button>
-        </div>
+        <button onclick="genererJeu('1dollar','generer-1-dollar')" id="btn-1dollar" style="width:100%;padding:10px;background:linear-gradient(135deg,#26c6da,#006064);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer 1 DOLLAR</button>
         <div id="1dollar-result" style="margin-top:6px"></div>
       </div>
 
@@ -1140,39 +1116,10 @@ function buildOrgSpace(){
     </div>
     <!-- PAIEMENT ABONNEMENT STRIPE -->
     <div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1));border:1px solid rgba(99,102,241,.3);margin-bottom:14px">
-      <div class="ct" style="margin-bottom:8px">💳 Mon abonnement</div>
-      
-      <!-- Offre lancement -->
-      <div style="background:linear-gradient(135deg,rgba(245,158,11,.2),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.4);border-radius:10px;padding:14px;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:700;color:#fbbf24;margin-bottom:4px">🎯 Offre de lancement — 1er mois</div>
-        <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px">4 990 XPF</div>
-        <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:10px">Engagement 1 an — À partir du 2ème mois : 9 990 XPF/mois</div>
-        <div style="display:flex;gap:8px">
-          <button onclick="payerAbonnement(4990)" style="flex:1;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">💳 Payer par carte</button>
-          <button onclick="payerVirement('abonnement-lancement', 4990)" style="flex:1;padding:10px;background:rgba(245,158,11,.2);color:#fbbf24;border:1px solid rgba(245,158,11,.4);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">🏦 Virement</button>
-        </div>
-      </div>
-
-      <!-- Abonnement mensuel -->
-      <div style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:14px;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:700;color:#818cf8;margin-bottom:4px">📅 Abonnement mensuel — À partir du 2ème mois</div>
-        <div style="font-size:22px;font-weight:800;color:#fff;margin-bottom:4px">9 990 XPF<span style="font-size:13px;color:rgba(255,255,255,.4)">/mois</span></div>
-        <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:10px">Toutes les fonctionnalités incluses</div>
-        <div style="display:flex;gap:8px">
-          <button onclick="payerAbonnement(9990)" style="flex:1;padding:10px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">💳 Payer par carte</button>
-          <button onclick="payerVirement('abonnement', 9990)" style="flex:1;padding:10px;background:rgba(99,102,241,.2);color:#818cf8;border:1px solid #6366f1;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">🏦 Virement</button>
-        </div>
-      </div>
-      
-      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">🔒 Paiement sécurisé Stripe ou virement CCP/Deblock</div>
-    </div>
-
-    <!-- COMPTE A REBOURS EFFACEMENT -->
-    <div id="effacement-timer-card" style="display:none;background:linear-gradient(135deg,rgba(239,68,68,.15),rgba(220,38,38,.1));border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px;margin-bottom:14px">
-      <div class="ct" style="margin-bottom:6px">⏱️ Effacement automatique des PDFs</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:8px">Après validation du gagnant, tous les PDFs seront effacés dans :</div>
-      <div id="effacement-countdown" style="text-align:center;font-size:28px;font-weight:800;color:#f87171">0:10:00</div>
-      <div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center;margin-top:4px">Les codes restent actifs — Seuls les PDFs sont effacés dans 10 minutes</div>
+      <div class="ct" style="margin-bottom:8px">💳 Payer mon abonnement en ligne</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:12px">Abonnement mensuel — 9 990 XPF/mois — Paiement sécurisé par carte</div>
+      <button onclick="payerAbonnement()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">💳 Payer 9 990 XPF par carte</button>
+      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center;margin-top:8px">🔒 Paiement sécurisé par Stripe</div>
     </div>
 
     <!-- CAGNOTTE 13% -->
@@ -1254,10 +1201,7 @@ function buildOrgSpace(){
           <div style="font-size:18px;font-weight:700;color:#fbbf24">200 XPF</div>
         </div>
       </div>
-      <div style="display:flex;gap:8px">
-          <button class="btn btn-p" onclick="vendrePoins()" style="flex:1">💳 Carte</button>
-          <button onclick="payerVirement('pions', pionsPack ? pionsPack.prix : 0)" style="flex:1;padding:12px;background:rgba(99,102,241,.2);color:#818cf8;border:1px solid #6366f1;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🏦 Virement</button>
-        </div>
+      <button class="btn btn-p" onclick="vendrePoins()">💳 Vendre les pions</button>
       <div id="pions-result"></div>
     </div>
     <div class="card">
@@ -1522,44 +1466,19 @@ async function creerTournoi(){
   }catch(e){toast("toast-adm","Erreur",false);}
 }
 
-function loadVentes(){
-  fetch("/api/ventes",{headers:{"X-Token":TOKEN}})
-  .then(function(r){return r.json();})
-  .then(function(data){
-    var el = document.getElementById("b-liste");
-    if(!el) return;
-    if(!data.length){
-      el.innerHTML = '<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune vente</div>';
-      return;
-    }
-    var html = '';
-    data.forEach(function(v){
-      html += '<div style="background:var(--s2);border-radius:8px;padding:12px;margin-bottom:8px">';
-      html += '<div style="display:flex;justify-content:space-between;margin-bottom:6px">';
-      html += '<div>';
-      html += '<div style="font-size:13px;font-weight:600;color:#fff">' + (v.client||'') + '</div>';
-      html += '<div style="font-size:11px;color:var(--mu)">' + (v.jeu||'') + ' · Série ' + (v.serie||'') + '</div>';
-      html += '</div>';
-      html += '<div style="text-align:right">';
-      html += '<div style="font-size:13px;font-weight:600;color:#34d399">' + ((v.total||0).toLocaleString()) + ' XPF</div>';
-      var statut = v.paiement_statut === 'valide' ? '✅ Payé' : '⏳ En attente';
-      html += '<div style="font-size:10px;color:rgba(255,255,255,.3)">' + statut + '</div>';
-      html += '</div></div>';
-      if(v.pdf_url){
-        html += '<button onclick="ouvrirPDFAdmin('' + v.pdf_url + '','' + (v.client||'') + '')" style="width:100%;padding:7px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:12px;margin-bottom:4px">📄 Voir le PDF de ' + (v.client||'') + '</button>';
-      }
-      if(v.paiement_statut === 'en_attente_validation'){
-        html += '<button onclick="validerPaiementAdmin('' + v.id + '')" style="width:100%;padding:7px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid #10b981;border-radius:6px;cursor:pointer;font-size:12px">✅ Valider paiement</button>';
-      }
-      html += '</div>';
-    });
-    el.innerHTML = html;
-  })
-  .catch(function(){});
-}
-
-function ouvrirPDFAdmin(url, nom, pageDebut, pageFin){
-  ouvrirPDFJoueur(url, nom, 'admin_'+Date.now(), pageDebut, pageFin);
+async function loadVentes(){
+  try{
+    const r=await fetch("/api/ventes");ventes=await r.json();
+    const el=document.getElementById("b-liste");
+    if(!ventes.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune vente</div>';return;}
+    el.innerHTML=ventes.map(v=>`<div class="row">
+      <div><div style="font-size:13px;font-weight:500">${v.client}</div>
+      <div style="font-size:12px;color:var(--mu)">${v.jeu} · ${v.qty}x${v.pack} · Série ${v.serie}</div>
+      ${v.photo_url||v.pdf_url?`<span class="badge b-info" style="margin-top:4px">📎 Document protégé</span>`:""}
+      </div>
+      <div style="text-align:right"><div style="font-size:13px;font-weight:500">${v.total.toLocaleString()} XPF</div></div>
+    </div>`).join("");
+  }catch(e){}
 }
 
 async function loadStats(){try{const r=await fetch("/api/stats");const s=await r.json();document.getElementById("sv").textContent=s.ventes_jour;document.getElementById("sc").textContent=s.total_jour.toLocaleString()+" XPF";}catch(e){}}
@@ -1748,7 +1667,7 @@ function resetCoches(cleCoches,overlay){
 // === PDF EXISTANT ORGANISATEUR ===
 let tPdfUrlExistant = null;
 
-function chargerPDFsOrganisateur(){
+async function chargerPDFsOrganisateur(){
   try{
     // Charger les ventes ET tickets de l'organisateur pour trouver ses PDFs
     const [rV, rT] = await Promise.all([
@@ -1847,17 +1766,10 @@ async function regTicket(){
     const d=await r.json();
     if(d.ok){
       document.getElementById("t-code-result").innerHTML=`
-        <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:16px;margin-top:12px">
-          <div style="font-size:13px;font-weight:600;color:#34d399;margin-bottom:10px">✅ Ticket enregistré pour ${a}</div>
-          <div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;margin-bottom:10px">
-            <div style="font-size:11px;color:var(--mu);margin-bottom:6px">CODE D'ACCÈS JOUEUR</div>
-            <div style="font-family:monospace;font-size:28px;font-weight:800;letter-spacing:6px;color:#818cf8">${d.code_acheteur}</div>
-          </div>
-          <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:10px">
-            🎮 Jeu : <strong>${j}</strong> — Série : <strong>${s}</strong>
-          </div>
-          ${pdf_url ? '<div style="margin-bottom:10px"><a href="'+pdf_url+'" target="_blank" style="display:block;padding:10px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid #6366f1;border-radius:8px;text-align:center;text-decoration:none;font-size:13px;font-weight:600">📄 Voir le PDF du ticket</a></div>' : ''}
-          <div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center">Envoyez ce code à votre client — Il accède directement à ses feuilles</div>
+        <div class="code-box" style="margin-top:12px">
+          <div style="font-size:12px;color:var(--mu);margin-bottom:8px">Code pour <strong>${a}</strong></div>
+          <div class="code-val">${d.code_acheteur}</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:8px">Envoyez ce code à votre client<br/>Il l'utilise dans l'onglet 🎮 Jouer</div>
         </div>`;
       ["t-acheteur","t-serie","t-prix"].forEach(id=>document.getElementById(id).value="");
       document.getElementById("t-jeu").value="";if(document.getElementById("t-email"))document.getElementById("t-email").value="";supprimerTicketDoc();tPdfUrlExistant=null;document.getElementById('t-pdf-existant').value='';loadTickets();chargerPDFsOrganisateur();toast("toast-t","Ticket enregistré !");
@@ -1872,18 +1784,12 @@ function renderTickets(){
   document.getElementById("cca").textContent=ca.toLocaleString()+" XPF";
   const el=document.getElementById("t-liste");
   if(!tickets.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun ticket vendu</div>';return;}
-  el.innerHTML=tickets.map(t=>`<div style="background:var(--s2);border-radius:8px;padding:12px;margin-bottom:8px">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-      <div>
-        <div style="font-size:13px;font-weight:600;color:#fff">${t.acheteur}</div>
-        <div style="font-size:11px;color:var(--mu)">${t.jeu} · Série ${t.serie}</div>
-        ${t.code_acheteur?`<div style="font-size:12px;color:var(--ac2);margin-top:4px;font-family:monospace;font-weight:700">${t.code_acheteur}</div>`:""}
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:13px;font-weight:600;color:#34d399">${t.prix.toLocaleString()} XPF</div>
-      </div>
+  el.innerHTML=tickets.map(t=>`<div class="row">
+    <div><div style="font-size:13px;font-weight:500">${t.acheteur}</div>
+    <div style="font-size:12px;color:var(--mu)">${t.jeu} · Série ${t.serie}</div>
+    ${t.code_acheteur?`<div style="font-size:11px;color:var(--ac2);margin-top:3px">Code: <strong>${t.code_acheteur}</strong></div>`:""}
     </div>
-    ${t.pdf_url?`<button onclick="ouvrirPDFJoueur('${t.pdf_url}','${t.acheteur}','ticket_${t.id}','${t.page_debut||1}','${t.page_fin||9999}')" style="width:100%;padding:7px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:12px">📄 Voir le PDF</button>`:""}
+    <div style="text-align:right"><div style="font-size:13px;font-weight:500">${t.prix.toLocaleString()} XPF</div>${t.pdf_url||t.photo_url?`<span class="badge b-info" style="margin-top:4px">📎</span>`:""}</div>
   </div>`).join("");
 }
 
@@ -2114,41 +2020,9 @@ async function loadAlertesBingo(){
 
 async function validerBingo(alerteId, statut){
   try{
-    const r = await fetch('/api/bingo/valider',{method:'POST',headers:{'Content-Type':'application/json','X-Token':TOKEN},body:JSON.stringify({alerte_id:alerteId,statut})});
-    const d = await r.json();
+    await fetch('/api/bingo/valider',{method:'POST',headers:{'Content-Type':'application/json','X-Token':TOKEN},body:JSON.stringify({alerte_id:alerteId,statut})});
     loadAlertesBingo();
-    // Si gagnant validé, démarrer compte à rebours effacement 3h
-    if(statut === 'valide' && d.ok){
-      demarrerCompteARebours(0.167);
-      toast('toast-t', '🏆 Gagnant validé ! PDFs effacés automatiquement dans 10 minutes.');
-    }
   }catch(e){}
-}
-
-// === COMPTE A REBOURS EFFACEMENT ===
-let effacementTimer = null;
-let effacementEndTime = null;
-
-function demarrerCompteARebours(heures){
-  const card = document.getElementById('effacement-timer-card');
-  if(card) card.style.display = 'block';
-  effacementEndTime = Date.now() + (heures * 3600 * 1000);
-  if(effacementTimer) clearInterval(effacementTimer);
-  effacementTimer = setInterval(function(){
-    const reste = effacementEndTime - Date.now();
-    if(reste <= 0){
-      clearInterval(effacementTimer);
-      const el = document.getElementById('effacement-countdown');
-      if(el) el.textContent = '✅ PDFs effacés !';
-      if(card) setTimeout(function(){ card.style.display = 'none'; }, 3000);
-      return;
-    }
-    const h = Math.floor(reste / 3600000);
-    const m = Math.floor((reste % 3600000) / 60000);
-    const s = Math.floor((reste % 60000) / 1000);
-    const el = document.getElementById('effacement-countdown');
-    if(el) el.textContent = h+':'+String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
-  }, 1000);
 }
 
 // === REVENDEUR ===
@@ -2200,13 +2074,12 @@ async function loadRevendeurs(){
 }
 
 // === STRIPE PAIEMENT ===
-async function payerAbonnement(montant){
-  var prix = montant || 9990;
+async function payerAbonnement(){
   try{
     const r = await fetch('/api/paiement/abonnement', {
       method:'POST',
       headers:{'Content-Type':'application/json','X-Token':TOKEN},
-      body: JSON.stringify({code_org: CODE_ORG || '', montant: prix})
+      body: JSON.stringify({code_org: CODE_ORG || ''})
     });
     const d = await r.json();
     if(d.ok && d.url){
@@ -2344,67 +2217,6 @@ async function genererJeu(uid, route){
 
 // Garder genererTA75 pour compatibilité
 function genererTA75(){ genererJeu('ta75','generer-ta75'); }
-
-// === PAIEMENT PDF ===
-function calculerPrixPDF(uid){
-  const nb = parseInt(document.getElementById(uid+'-nb')?.value || 500);
-  if(nb <= 100) return 800;
-  if(nb <= 250) return 1500;
-  if(nb <= 500) return 2500;
-  return 4500;
-}
-
-async function payerPDF(uid){
-  const nb = parseInt(document.getElementById(uid+'-nb')?.value || 500);
-  const serie = parseInt(document.getElementById(uid+'-serie')?.value || 1);
-  const client = document.getElementById('gen-client')?.value.trim() || '';
-  const prix = calculerPrixPDF(uid);
-  const jeux = {'ta75':'TRIPLE ACTION 75','60b':'60 BOULES','40b':'40 BOULES','4coins':'4 COINS','500f':'500 FRANCS','1dollar':'1 DOLLAR'};
-  const jeu = jeux[uid] || uid;
-  try{
-    const r = await fetch('/api/paiement/pdf', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','X-Token':TOKEN},
-      body: JSON.stringify({nb_tickets: nb, prix, jeu, client, serie_start: serie})
-    });
-    const d = await r.json();
-    if(d.ok && d.url){ window.open(d.url, '_blank'); }
-    else { alert(d.msg || 'Erreur paiement'); }
-  }catch(e){alert('Erreur de connexion');}
-}
-
-function payerVirement(type, montant){
-  if(!montant || montant <= 0){ alert("Choisissez un pack avant de payer"); return; }
-  var ref = String(type).replace(/[^A-Za-z0-9]/g,"").toUpperCase()+"-"+Date.now().toString().slice(-6);
-  var montantStr = Number(montant).toLocaleString("fr-FR");
-  var overlay = document.createElement("div");
-  overlay.id = "virement-overlay";
-  overlay.style.cssText = "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
-  overlay.innerHTML = [
-    "<div style='background:#111218;border:1px solid #6366f1;border-radius:16px;padding:24px;max-width:400px;width:100%'>",
-    "<div style='font-size:18px;font-weight:700;color:#fff;margin-bottom:16px;text-align:center'>🏦 Paiement par virement</div>",
-    "<div style='font-size:14px;font-weight:700;color:#fbbf24;text-align:center;margin-bottom:16px'>Montant : "+montantStr+" XPF</div>",
-    "<div style='background:rgba(99,102,241,.1);border-radius:10px;padding:14px;margin-bottom:12px'>",
-    "<div style='font-size:12px;font-weight:600;color:#818cf8;margin-bottom:8px'>Option 1 — CCP Papeete</div>",
-    "<div style='font-size:12px;color:rgba(255,255,255,.7);line-height:2'>IBAN : FR76 14168 00001 10002580501 50<br>BIC : OFTPPFT1XXX<br>Bénéficiaire : EI TUKEA IMPORT<br>Référence : "+ref+"</div></div>",
-    "<div style='background:rgba(99,102,241,.1);border-radius:10px;padding:14px;margin-bottom:16px'>",
-    "<div style='font-size:12px;font-weight:600;color:#818cf8;margin-bottom:8px'>Option 2 — Deblock</div>",
-    "<div style='font-size:12px;color:rgba(255,255,255,.7);line-height:2'>Compte : EI TUKEA IMPORT<br>Référence : "+ref+"</div></div>",
-    "<div style='font-size:11px;color:rgba(255,255,255,.4);text-align:center;margin-bottom:16px'>⚠️ Envoyez votre preuve de virement<br>Activation sous 24h après réception</div>",
-    "<div style='display:flex;gap:8px'>",
-    "<button id='btn-jai-vire' style='flex:1;padding:10px;background:#10b981;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600'>✅ J ai viré</button>",
-    "<button id='btn-fermer-virement' style='flex:1;padding:10px;background:rgba(239,68,68,.3);color:#f87171;border:0.5px solid #ef4444;border-radius:8px;cursor:pointer;font-size:13px'>✕ Fermer</button>",
-    "</div></div>"
-  ].join("");
-  document.body.appendChild(overlay);
-  document.getElementById("btn-jai-vire").onclick = function(){
-    overlay.remove();
-    toast("toast-t","✅ Virement signalé ! Activation sous 24h.");
-  };
-  document.getElementById("btn-fermer-virement").onclick = function(){
-    overlay.remove();
-  };
-}
 
 // === GENERATION TICKETS TA75 ===
 async function genererTA75(){
