@@ -680,6 +680,42 @@ def effacer_pdfs_apres_tournoi(code_org, delai_secondes=10800):
         print(f"[AUTO-EFFACEMENT ERR] {e}")
 
 # === COMMANDES TICKETS ORGANISATEUR ===
+@app.route("/api/admin/reset-donnees", methods=["POST"])
+def reset_donnees_admin():
+    """Remet toutes les données à zéro sauf les codes"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    
+    # Effacer toutes les données de test
+    DB["ventes"] = []
+    DB["tickets"] = []
+    DB["alertes_bingo"] = []
+    DB["tirage"] = []
+    DB["tirage_vitesse"] = 3
+    DB["coches"] = {}
+    DB["commandes_tickets"] = []
+    DB["paiements_stripe"] = []
+    DB["gains_finaux"] = []
+    
+    # Effacer les PDFs physiques
+    import os
+    pdf_dir = "/data/pdfs"
+    if os.path.exists(pdf_dir):
+        for f in os.listdir(pdf_dir):
+            if f.endswith(".pdf"):
+                try:
+                    os.remove(os.path.join(pdf_dir, f))
+                except:
+                    pass
+    
+    save_data()
+    print("[RESET ADMIN] Toutes les données remises à zéro")
+    return jsonify({"ok": True})
+
 @app.route("/api/commande/passer", methods=["POST"])
 def passer_commande():
     """L'organisateur passe une commande de tickets"""
