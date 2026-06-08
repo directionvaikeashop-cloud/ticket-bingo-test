@@ -699,6 +699,12 @@ def commander_pions():
         return jsonify({"ok": False, "msg": "Données invalides"}), 400
     if "commandes_pions" not in DB:
         DB["commandes_pions"] = []
+    mode_paiement = d.get("mode_paiement", "")
+    ref_paiement = d.get("ref_paiement", "")
+    
+    # Si le mode de paiement est fourni, passer directement en en_attente_validation
+    statut_initial = "en_attente_validation" if mode_paiement else "en_attente"
+    
     commande = {
         "id": secrets.token_hex(4).upper(),
         "code_org": code_org,
@@ -707,7 +713,9 @@ def commander_pions():
         "montant_paye": montant_paye,
         "commission": commission,
         "nb_pions": nb_pions,
-        "statut": "en_attente",
+        "statut": statut_initial,
+        "mode_paiement": mode_paiement,
+        "ref_paiement": ref_paiement,
         "date": datetime.datetime.now().isoformat()
     }
     DB["commandes_pions"].insert(0, commande)
