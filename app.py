@@ -680,6 +680,121 @@ def effacer_pdfs_apres_tournoi(code_org, delai_secondes=10800):
         print(f"[AUTO-EFFACEMENT ERR] {e}")
 
 # === COMMANDES TICKETS ORGANISATEUR ===
+# === NOUVEAU SYSTEME PIONS ===
+@app.route("/api/pions/commande", methods=["POST"])
+def commander_pions():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    d = request.json
+    code_org = s["code"]
+    valeur_pion = int(d.get("valeur_pion", 0))
+    montant_paye = float(d.get("montant_paye", 0))
+    commission = float(d.get("commission", 0))
+    nb_pions = int(d.get("nb_pions", 0))
+    if not valeur_pion or montant_paye < 500 or nb_pions <= 0:
+        return jsonify({"ok": False, "msg": "Données invalides"}), 400
+    if "commandes_pions" not in DB:
+        DB["commandes_pions"] = []
+    commande = {
+        "id": secrets.token_hex(4).upper(),
+        "code_org": code_org,
+        "nom_org": s.get("nom", code_org),
+        "valeur_pion": valeur_pion,
+        "montant_paye": montant_paye,
+        "commission": commission,
+        "nb_pions": nb_pions,
+        "statut": "en_attente",
+        "date": datetime.datetime.now().isoformat()
+    }
+    DB["commandes_pions"].insert(0, commande)
+    save_data()
+    return jsonify({"ok": True, "commande_id": commande["id"]})
+
+@app.route("/api/pions/mes-commandes")
+def mes_commandes_pions():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify([])
+    commandes = DB.get("commandes_pions", [])
+    if s.get("admin"):
+        return jsonify(commandes)
+    return jsonify([c for c in commandes if c.get("code_org") == s["code"]])
+
+@app.route("/api/pions/soldes")
+def get_soldes_pions():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    code_org = s["code"]
+    pions = DB.get("pions_org", {}).get(code_org, {})
+    return jsonify({
+        "pions_20": pions.get("20", 0),
+        "pions_50": pions.get("50", 0),
+        "pions_100": pions.get("100", 0)
+    })
+
+@app.route("/api/pions/valider-commande", methods=["POST"])
+def valider_commande_pions():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    commande_id = request.json.get("commande_id", "")
+    for c in DB.get("commandes_pions", []):
+        if c["id"] == commande_id:
+            c["statut"] = "validee"
+            code_org = c["code_org"]
+            valeur = str(c["valeur_pion"])
+            nb = c["nb_pions"]
+            if "pions_org" not in DB:
+                DB["pions_org"] = {}
+            if code_org not in DB["pions_org"]:
+                DB["pions_org"][code_org] = {}
+            DB["pions_org"][code_org][valeur] = DB["pions_org"][code_org].get(valeur, 0) + nb
+            break
+    save_data()
+    return jsonify({"ok": True})
+
+@app.route("/api/pions/donner", methods=["POST"])
+def donner_pions():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    d = request.json
+    code_org = s["code"]
+    code_joueur = d.get("code_joueur", "").upper()
+    valeur_pion = str(d.get("valeur_pion", 0))
+    nb_pions = int(d.get("nb_pions", 0))
+    # Vérifier solde
+    solde = DB.get("pions_org", {}).get(code_org, {}).get(valeur_pion, 0)
+    if nb_pions > solde:
+        return jsonify({"ok": False, "msg": f"Solde insuffisant — vous avez {solde} pions à {valeur_pion} XPF"}), 400
+    # Débiter organisateur
+    DB["pions_org"][code_org][valeur_pion] -= nb_pions
+    # Créditer joueur
+    if "pions_joueurs" not in DB:
+        DB["pions_joueurs"] = {}
+    if code_joueur not in DB["pions_joueurs"]:
+        DB["pions_joueurs"][code_joueur] = {}
+    DB["pions_joueurs"][code_joueur][valeur_pion] = DB["pions_joueurs"][code_joueur].get(valeur_pion, 0) + nb_pions
+    save_data()
+    return jsonify({"ok": True})
+
 @app.route("/api/admin/reset-donnees", methods=["POST"])
 def reset_donnees_admin():
     """Remet toutes les données à zéro sauf les codes"""
