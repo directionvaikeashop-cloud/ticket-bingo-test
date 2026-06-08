@@ -644,11 +644,10 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <input id="rev-nom" placeholder="Ex: Jean Martin"/>
         <div class="lbl">Email du revendeur</div>
         <input id="rev-email" type="email" placeholder="revendeur@email.com"/>
-        <div class="lbl">Durée</div>
-        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-          <div class="plan" id="rp30" onclick="selPlanRev(30,'rp30')"><div class="plan-n">1 mois</div><div class="plan-p">9 990 XPF</div></div>
-          <div class="plan sel" id="rp90" onclick="selPlanRev(90,'rp90')"><div class="plan-n">3 mois</div><div class="plan-p">12 000 XPF</div></div>
-          <div class="plan" id="rp180" onclick="selPlanRev(180,'rp180')"><div class="plan-n">6 mois</div><div class="plan-p">22 000 XPF</div></div>
+        <div class="lbl">Durée d'accès</div>
+        <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:10px;padding:12px;margin-bottom:12px">
+          <div style="font-size:13px;font-weight:600;color:#34d399">✅ Accès gratuit inclus dans votre abonnement</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:4px">Le revendeur travaille pour vous — aucun frais supplémentaire</div>
         </div>
         <button class="btn btn-p" onclick="genRevendeur()">Générer le code revendeur</button>
         <div id="rev-code-result"></div>
