@@ -503,6 +503,15 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div id="paiements-a-valider-liste"></div>
       </div>
 
+      <!-- COMMANDES PIONS ADMIN -->
+      <div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.05));border:1px solid rgba(99,102,241,.2);margin-bottom:14px">
+        <div class="ct" style="justify-content:space-between">
+          <span>🪙 Commandes pions à traiter</span>
+          <button class="btn-sm" onclick="loadCommandesPionsAdmin()">↻</button>
+        </div>
+        <div id="commandes-pions-admin"></div>
+      </div>
+
       <!-- COMMANDES EN ATTENTE ADMIN -->
       <div class="card" style="background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(251,191,36,.05));border:1px solid rgba(245,158,11,.2);margin-bottom:14px">
         <div class="ct" style="justify-content:space-between">
@@ -876,7 +885,7 @@ async function doLogin(){
       if(ADMIN){document.getElementById("nb-admin").style.display="flex";}
       // Afficher revendeur pour tous sauf joueur
       document.getElementById("nb-revendeur").style.display="flex";
-      show("s-app");loadJeux();loadVentes();loadStats();loadDocs();loadTournois();setTimeout(function(){loadCommandesAdmin();checkPaiementsEnAttente();startAutoRefreshAdmin();},1000);}
+      show("s-app");loadJeux();loadVentes();loadStats();loadDocs();loadTournois();setTimeout(function(){loadCommandesAdmin();loadCommandesPionsAdmin();checkPaiementsEnAttente();startAutoRefreshAdmin();},1000);}
     else toast("toast-login",d.msg||"Code invalide",false);
   }catch(e){toast("toast-login","Erreur",false);}
 }
@@ -1283,38 +1292,87 @@ function buildOrgSpace(){
   // Tab pions
   document.getElementById("tab-org-pions").innerHTML = `
     <div id="toast-pions"></div>
-    <div class="card">
-      <div class="ct">🪙 Vendre des pions à un joueur</div>
-      <div class="lbl">Code du joueur</div>
-      <input id="pions-code-joueur" placeholder="Ex: AB12CD" style="text-transform:uppercase;letter-spacing:2px"/>
-      <div class="lbl" style="margin-top:10px">Choisir le pack</div>
-      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
-        <div onclick="selPionsPack(1,20,this)" class="pions-pack" style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-          <div><div style="font-size:15px;font-weight:600">🪙 1 pion</div><div style="font-size:12px;color:var(--mu)">Idéal pour 1 grille</div></div>
-          <div style="font-size:18px;font-weight:700;color:var(--ac)">20 XPF</div>
+
+    <!-- SOLDES PIONS -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1));border:1px solid rgba(99,102,241,.3);margin-bottom:14px">
+      <div class="ct" style="margin-bottom:12px">🪙 Mes pions disponibles</div>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <div style="flex:1;background:var(--s2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:rgba(255,255,255,.4)">🪙 20 XPF</div>
+          <div id="solde-pions-20" style="font-size:22px;font-weight:800;color:#818cf8">0</div>
         </div>
-        <div onclick="selPionsPack(2,50,this)" class="pions-pack" style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-          <div><div style="font-size:15px;font-weight:600">🪙🪙 2 pions</div><div style="font-size:12px;color:var(--mu)">2 grilles</div></div>
-          <div style="font-size:18px;font-weight:700;color:var(--ac)">50 XPF</div>
+        <div style="flex:1;background:var(--s2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:rgba(255,255,255,.4)">🪙 50 XPF</div>
+          <div id="solde-pions-50" style="font-size:22px;font-weight:800;color:#818cf8">0</div>
         </div>
-        <div onclick="selPionsPack(4,100,this)" class="pions-pack" style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-          <div><div style="font-size:15px;font-weight:600">🪙×4 pions</div><div style="font-size:12px;color:var(--mu)">4 grilles</div></div>
-          <div style="font-size:18px;font-weight:700;color:var(--ac)">100 XPF</div>
-        </div>
-        <div onclick="selPionsPack(8,200,this)" class="pions-pack" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
-          <div><div style="font-size:15px;font-weight:600">🪙×8 pions ⭐</div><div style="font-size:12px;color:var(--mu)">Meilleure valeur !</div></div>
-          <div style="font-size:18px;font-weight:700;color:#fbbf24">200 XPF</div>
+        <div style="flex:1;background:var(--s2);border-radius:8px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:rgba(255,255,255,.4)">🪙 100 XPF</div>
+          <div id="solde-pions-100" style="font-size:22px;font-weight:800;color:#818cf8">0</div>
         </div>
       </div>
-      <button class="btn btn-p" onclick="vendrePoins()">💳 Vendre les pions</button>
-      <div id="pions-result"></div>
+      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">Commission 20% incluse dans chaque commande</div>
     </div>
+
+    <!-- COMMANDER PIONS -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="ct" style="margin-bottom:10px">📦 Commander des pions</div>
+      <div class="lbl">Valeur du pion</div>
+      <div style="display:flex;gap:8px;margin-bottom:12px">
+        <div onclick="selValeurPion(20,this)" class="pion-val" style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;cursor:pointer;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:#fff">🪙 20</div>
+          <div style="font-size:10px;color:var(--mu)">XPF</div>
+        </div>
+        <div onclick="selValeurPion(50,this)" class="pion-val" style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;cursor:pointer;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:#fff">🪙 50</div>
+          <div style="font-size:10px;color:var(--mu)">XPF</div>
+        </div>
+        <div onclick="selValeurPion(100,this)" class="pion-val" style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;cursor:pointer;text-align:center">
+          <div style="font-size:16px;font-weight:700;color:#fff">🪙 100</div>
+          <div style="font-size:10px;color:var(--mu)">XPF</div>
+        </div>
+      </div>
+      <div class="lbl">Montant à commander (XPF)</div>
+      <input id="pion-montant" type="number" placeholder="Ex: 1000" min="500" step="500" oninput="calcPions()" style="margin-bottom:8px"/>
+      <div id="pion-calcul" style="display:none;background:rgba(99,102,241,.1);border-radius:8px;padding:10px;margin-bottom:10px">
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:4px">
+          <span>Montant payé</span><span id="pion-prix">0 XPF</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#f87171;margin-bottom:4px">
+          <span>Commission (20%)</span><span id="pion-commission">0 XPF</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#818cf8">
+          <span>Pions reçus</span><span id="pion-nb-recus">0 pions</span>
+        </div>
+      </div>
+      <button onclick="commanderPions()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Passer la commande</button>
+    </div>
+
+    <!-- MES COMMANDES PIONS -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="ct" style="justify-content:space-between">
+        <span>📋 Mes commandes pions</span>
+        <button class="btn-sm" onclick="loadCommandesPions()">↻</button>
+      </div>
+      <div id="commandes-pions-liste"><div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Aucune commande</div></div>
+    </div>
+
+    <!-- DONNER PIONS JOUEURS -->
     <div class="card">
-      <div class="ct">🔍 Vérifier le solde d'un joueur</div>
-      <input id="pions-check-code" placeholder="Code du joueur" style="text-transform:uppercase;letter-spacing:2px;margin-bottom:8px"/>
-      <button class="btn-sm" style="width:100%;padding:10px" onclick="checkSoldePions()">Vérifier le solde</button>
-      <div id="pions-solde-result"></div>
-    </div>`;
+      <div class="ct">🎁 Donner des pions à un joueur</div>
+      <div class="lbl">Code du joueur</div>
+      <input id="pions-joueur-code" placeholder="Ex: AB12CD" style="text-transform:uppercase;letter-spacing:2px;margin-bottom:8px"/>
+      <div class="lbl">Valeur du pion</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button onclick="selDonPion(20,this)" class="pion-don" style="flex:1;padding:8px;background:var(--s2);color:var(--mu);border:0.5px solid var(--bd);border-radius:6px;cursor:pointer;font-size:12px">🪙 20</button>
+        <button onclick="selDonPion(50,this)" class="pion-don" style="flex:1;padding:8px;background:var(--s2);color:var(--mu);border:0.5px solid var(--bd);border-radius:6px;cursor:pointer;font-size:12px">🪙 50</button>
+        <button onclick="selDonPion(100,this)" class="pion-don" style="flex:1;padding:8px;background:var(--s2);color:var(--mu);border:0.5px solid var(--bd);border-radius:6px;cursor:pointer;font-size:12px">🪙 100</button>
+      </div>
+      <div class="lbl">Nombre de pions</div>
+      <input id="pions-joueur-nb" type="number" placeholder="Ex: 5" min="1" style="margin-bottom:8px"/>
+      <button onclick="donnerPionsJoueur()" style="width:100%;padding:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🎁 Donner les pions</button>
+      <div id="pions-don-result" style="margin-top:8px"></div>
+    </div>
+  `
 
   // Charger les données
   loadJeux();
@@ -1334,7 +1392,7 @@ function switchOrgTab(n, el){
   if(n==="verif") loadAlertesBingo();
   if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();setTimeout(function(){loadVentesPaiement();loadMesCommandes();},500);startAutoRefreshOrg();}
   if(n==="revendeurs") loadRevendeurs();
-  if(n==="pions") {} // déjà chargé dans buildOrgSpace
+  if(n==="pions"){loadSoldesPions();loadCommandesPions();}
 }
 
 // === ACCES REVENDEUR ===
@@ -2845,6 +2903,187 @@ async function annoncerCagnotte(montant){
     })
   });
   toast('toast-t','📢 Cagnotte annoncée aux joueurs !');
+}
+
+// === COMMANDES PIONS ADMIN ===
+function loadCommandesPionsAdmin(){
+  fetch('/api/pions/mes-commandes', {headers: {'X-Token': TOKEN}})
+  .then(function(r){ return r.json(); })
+  .then(function(commandes){
+    var el = document.getElementById('commandes-pions-admin');
+    if(!el) return;
+    var enAttente = commandes.filter(function(c){ return c.statut === 'en_attente'; });
+    if(!enAttente.length){
+      el.innerHTML = '<div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">✅ Aucune commande pions en attente</div>';
+      return;
+    }
+    el.innerHTML = '';
+    enAttente.forEach(function(c){
+      var div = document.createElement('div');
+      div.style.cssText = 'background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:10px;margin-bottom:6px';
+      div.innerHTML = '<div style="font-size:13px;font-weight:600;color:#818cf8;margin-bottom:4px">🪙 ' + c.nom_org + ' — ' + c.nb_pions + ' pions à ' + c.valeur_pion + ' XPF</div>' +
+        '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:6px">Payé : ' + (c.montant_paye||0).toLocaleString('fr-FR') + ' XPF — Commission : ' + (c.commission||0).toLocaleString('fr-FR') + ' XPF — Réf : ' + c.id + '</div>';
+      var btn = document.createElement('button');
+      btn.style.cssText = 'width:100%;padding:7px;background:rgba(99,102,241,.3);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600';
+      btn.textContent = '✅ Valider et créditer les pions';
+      (function(cid){ btn.onclick = function(){ validerCommandePions(cid); }; })(c.id);
+      div.appendChild(btn);
+      el.appendChild(div);
+    });
+  })
+  .catch(function(){});
+}
+
+async function validerCommandePions(commandeId){
+  try{
+    const r = await fetch('/api/pions/valider-commande', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({commande_id: commandeId})
+    });
+    const d = await r.json();
+    if(d.ok){
+      loadCommandesPionsAdmin();
+      toast('toast-adm', 'Pions credites avec succes !');
+    }
+  }catch(e){}
+}
+
+// === NOUVEAU SYSTEME PIONS ===
+var valeurPionSelectionne = 0;
+var valeurDonPion = 0;
+
+function selValeurPion(val, el){
+  valeurPionSelectionne = val;
+  document.querySelectorAll('.pion-val').forEach(function(p){
+    p.style.borderColor = 'var(--bd)';
+    p.style.background = 'var(--s2)';
+  });
+  el.style.borderColor = 'var(--ac)';
+  el.style.background = 'rgba(99,102,241,.2)';
+  calcPions();
+}
+
+function selDonPion(val, el){
+  valeurDonPion = val;
+  document.querySelectorAll('.pion-don').forEach(function(p){
+    p.style.background = 'var(--s2)';
+    p.style.color = 'var(--mu)';
+  });
+  el.style.background = 'rgba(99,102,241,.3)';
+  el.style.color = '#818cf8';
+}
+
+function calcPions(){
+  var montant = parseFloat(document.getElementById('pion-montant').value || 0);
+  var calcDiv = document.getElementById('pion-calcul');
+  if(!calcDiv || montant <= 0 || !valeurPionSelectionne){
+    if(calcDiv) calcDiv.style.display = 'none';
+    return;
+  }
+  var commission = Math.round(montant * 0.20);
+  var valeurRecue = montant - commission;
+  var nbPions = Math.floor(valeurRecue / valeurPionSelectionne);
+  calcDiv.style.display = 'block';
+  document.getElementById('pion-prix').textContent = montant.toLocaleString('fr-FR') + ' XPF';
+  document.getElementById('pion-commission').textContent = commission.toLocaleString('fr-FR') + ' XPF';
+  document.getElementById('pion-nb-recus').textContent = nbPions + ' pions à ' + valeurPionSelectionne + ' XPF';
+}
+
+async function commanderPions(){
+  if(!valeurPionSelectionne){ alert('Choisissez la valeur du pion'); return; }
+  var montant = parseFloat(document.getElementById('pion-montant').value || 0);
+  if(montant < 500){ alert('Montant minimum : 500 XPF'); return; }
+  var commission = Math.round(montant * 0.20);
+  var valeurRecue = montant - commission;
+  var nbPions = Math.floor(valeurRecue / valeurPionSelectionne);
+  try{
+    const r = await fetch('/api/pions/commande', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({
+        valeur_pion: valeurPionSelectionne,
+        montant_paye: montant,
+        commission: commission,
+        nb_pions: nbPions
+      })
+    });
+    const d = await r.json();
+    if(d.ok){
+      toast('toast-pions', '✅ Commande envoyée ! Réf: ' + d.commande_id);
+      document.getElementById('pion-montant').value = '';
+      document.getElementById('pion-calcul').style.display = 'none';
+      valeurPionSelectionne = 0;
+      document.querySelectorAll('.pion-val').forEach(function(p){
+        p.style.borderColor = 'var(--bd)';
+        p.style.background = 'var(--s2)';
+      });
+      loadCommandesPions();
+    } else {
+      alert(d.msg || 'Erreur');
+    }
+  }catch(e){ alert('Erreur de connexion'); }
+}
+
+function loadCommandesPions(){
+  fetch('/api/pions/mes-commandes', {headers: {'X-Token': TOKEN}})
+  .then(function(r){ return r.json(); })
+  .then(function(commandes){
+    var el = document.getElementById('commandes-pions-liste');
+    if(!el) return;
+    if(!commandes.length){
+      el.innerHTML = '<div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Aucune commande</div>';
+      return;
+    }
+    el.innerHTML = '';
+    commandes.forEach(function(c){
+      var div = document.createElement('div');
+      div.style.cssText = 'background:var(--s2);border-radius:8px;padding:10px;margin-bottom:6px';
+      var statut = c.statut === 'validee' ? '✅ Validée' : '⏳ En attente';
+      var couleur = c.statut === 'validee' ? '#34d399' : '#fbbf24';
+      div.innerHTML = '<div style="display:flex;justify-content:space-between">' +
+        '<div><div style="font-size:13px;font-weight:600;color:#fff">🪙 ' + c.nb_pions + ' pions à ' + c.valeur_pion + ' XPF</div>' +
+        '<div style="font-size:11px;color:var(--mu)">' + (c.montant_paye||0).toLocaleString('fr-FR') + ' XPF payés — Réf: ' + c.id + '</div></div>' +
+        '<div style="font-size:12px;font-weight:600;color:' + couleur + '">' + statut + '</div></div>';
+      el.appendChild(div);
+    });
+  })
+  .catch(function(){});
+}
+
+function loadSoldesPions(){
+  fetch('/api/pions/soldes', {headers: {'X-Token': TOKEN}})
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    if(document.getElementById('solde-pions-20')) document.getElementById('solde-pions-20').textContent = d.pions_20 || 0;
+    if(document.getElementById('solde-pions-50')) document.getElementById('solde-pions-50').textContent = d.pions_50 || 0;
+    if(document.getElementById('solde-pions-100')) document.getElementById('solde-pions-100').textContent = d.pions_100 || 0;
+  })
+  .catch(function(){});
+}
+
+async function donnerPionsJoueur(){
+  var code = document.getElementById('pions-joueur-code').value.trim().toUpperCase();
+  var nb = parseInt(document.getElementById('pions-joueur-nb').value || 0);
+  if(!code){ alert('Entrez le code du joueur'); return; }
+  if(!valeurDonPion){ alert('Choisissez la valeur du pion'); return; }
+  if(!nb || nb <= 0){ alert('Entrez un nombre de pions'); return; }
+  try{
+    const r = await fetch('/api/pions/donner', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({code_joueur: code, valeur_pion: valeurDonPion, nb_pions: nb})
+    });
+    const d = await r.json();
+    if(d.ok){
+      document.getElementById('pions-don-result').innerHTML = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399;margin-top:6px">✅ ' + nb + ' pions à ' + valeurDonPion + ' XPF donnés à ' + code + ' !</div>';
+      document.getElementById('pions-joueur-code').value = '';
+      document.getElementById('pions-joueur-nb').value = '';
+      loadSoldesPions();
+    } else {
+      alert(d.msg || 'Erreur');
+    }
+  }catch(e){ alert('Erreur'); }
 }
 
 // === SYSTEME DE PIONS ===
