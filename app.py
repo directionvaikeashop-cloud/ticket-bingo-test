@@ -743,6 +743,28 @@ def get_soldes_pions():
         "pions_100": pions.get("100", 0)
     })
 
+@app.route("/api/pions/confirmer-paiement", methods=["POST"])
+def confirmer_paiement_pions():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    d = request.json
+    commande_id = d.get("commande_id", "")
+    mode = d.get("mode", "")
+    ref = d.get("ref", "")
+    for c in DB.get("commandes_pions", []):
+        if c["id"] == commande_id and c["code_org"] == s["code"]:
+            c["statut"] = "en_attente_validation"
+            c["mode_paiement"] = mode
+            c["ref_paiement"] = ref
+            c["date_confirmation"] = datetime.datetime.now().isoformat()
+            break
+    save_data()
+    return jsonify({"ok": True})
+
 @app.route("/api/pions/valider-commande", methods=["POST"])
 def valider_commande_pions():
     global DB
@@ -753,7 +775,7 @@ def valider_commande_pions():
         return jsonify({"ok": False}), 403
     commande_id = request.json.get("commande_id", "")
     for c in DB.get("commandes_pions", []):
-        if c["id"] == commande_id:
+        if c["id"] == commande_id and c.get("statut") in ["en_attente", "en_attente_validation"]:
             c["statut"] = "validee"
             code_org = c["code_org"]
             valeur = str(c["valeur_pion"])
