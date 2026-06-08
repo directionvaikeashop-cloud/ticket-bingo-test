@@ -695,8 +695,8 @@ def reset_tournoi():
     DB["tirage"] = []
     DB["tirage_vitesse"] = 3
     
-    # 2. Effacer TOUTES les alertes bingo de cet organisateur
-    DB["alertes_bingo"] = [a for a in DB.get("alertes_bingo", []) if a.get("code_org") != code_org]
+    # 2. Effacer TOUTES les alertes bingo
+    DB["alertes_bingo"] = []
     
     # 3. Effacer les tickets de cet organisateur
     DB["tickets"] = [t for t in DB.get("tickets", []) if t.get("code_org") != code_org]
