@@ -967,6 +967,15 @@ async function accesOrganisateur(){
       // Construire l'espace organisateur
       buildOrgSpace();
       show("s-organisateur");
+      // Charger les données après que le DOM est prêt
+      setTimeout(function(){
+        loadDocs();
+        loadTickets();
+        chargerPDFsOrganisateur();
+        loadVentesPaiement();
+        loadMesCommandes();
+        startAutoRefreshOrg();
+      }, 800);
     } else {
       document.getElementById("toast-login").textContent = "✗ " + (d.msg||"Code invalide");
       document.getElementById("toast-login").className = "toast t-er";
