@@ -1560,14 +1560,15 @@ async function enregistrerVente(){
   const tournoi_id=document.getElementById("b-tournoi").value;
   const serie=document.getElementById("b-serie").value.trim();
   const prix=parseInt(document.getElementById("b-prix").value)||0;
-  const codeOrg=document.getElementById("b-code-org")?document.getElementById("b-code-org").value.trim().toUpperCase():"";
+  var codeOrg=document.getElementById("b-code-org")?document.getElementById("b-code-org").value.trim().toUpperCase():"";
+  if(!codeOrg && codeOrgActuel) codeOrg = codeOrgActuel;
   if(!client||!jeu||!serie){toast("toast-b","Remplissez les champs obligatoires",false);return;}
   if(!codeOrg){toast("toast-b","⚠️ Le code de l'organisateur est obligatoire !",false);document.getElementById("b-code-org").focus();return;}
   toast("toast-b","Enregistrement...");
   let photo_url=null,pdf_url=null;
   if(docFile){toast("toast-b","Upload sécurisé...");const url=await uploadDoc(docFile,docType);if(docType==="photo")photo_url=url;else pdf_url=url;}
   try{
-    const r=await fetch("/api/vente",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({client,email,jeu,tournoi_id,pack:pk,qty,serie,prix,photo_url,pdf_url,code_org_destinataire:(document.getElementById("b-code-org")?document.getElementById("b-code-org").value.trim().toUpperCase():"")})});
+    const r=await fetch("/api/vente",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({client,email,jeu,tournoi_id,pack:pk,qty,serie,prix,photo_url,pdf_url,code_org_destinataire:codeOrg})});
     const d=await r.json();
     if(d.ok){toast("toast-b","Vente enregistrée !");["b-client","b-email","b-serie","b-prix"].forEach(id=>document.getElementById(id).value="");document.getElementById("b-jeu").value="";document.getElementById("b-tournoi").value="";supprimerDoc();qty=1;document.getElementById("qv").textContent="1";document.getElementById("btv").textContent="0 XPF";loadVentes();loadStats();}
     else toast("toast-b",d.msg,false);
@@ -2397,6 +2398,7 @@ if(urlParams.get('paiement') === 'success'){
 
 // === COMMANDES TICKETS ===
 var packCmdSelectionne = {nb: 0, prix: 0};
+var codeOrgActuel = "";
 
 function selPackCmd(nb, prix, el){
   packCmdSelectionne = {nb, prix};
@@ -2496,8 +2498,25 @@ function loadCommandesAdmin(){
         '<div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:8px">Code org : ' + c.code_org + ' — Réf : ' + c.id + '</div>';
       var btnTraiter = document.createElement('button');
       btnTraiter.style.cssText = 'width:100%;padding:8px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid #10b981;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600';
-      btnTraiter.textContent = '✅ Marquer comme traitée';
-      (function(cid){ btnTraiter.onclick = function(){ marquerCommandeTraitee(cid); }; })(c.id);
+      btnTraiter.textContent = '✅ Traiter cette commande';
+      (function(cid, corg, cjeu, cpack, cprix){ 
+        btnTraiter.onclick = function(){ 
+          // Remplir automatiquement le formulaire boutique
+          codeOrgActuel = corg;
+          var fieldOrg = document.getElementById('b-code-org');
+          if(fieldOrg){ fieldOrg.value = corg; }
+          var fieldJeu = document.getElementById('b-jeu');
+          if(fieldJeu){ 
+            for(var i=0; i<fieldJeu.options.length; i++){
+              if(fieldJeu.options[i].text.indexOf(cjeu) >= 0 || fieldJeu.options[i].value === cjeu){
+                fieldJeu.selectedIndex = i; break;
+              }
+            }
+          }
+          marquerCommandeTraitee(cid);
+          toast('toast-b', '✅ Commande de ' + corg + ' — Complétez et envoyez la vente !');
+        }; 
+      })(c.id, c.code_org, c.jeu, c.pack, c.prix);
       div.appendChild(btnTraiter);
       el.appendChild(div);
     });
