@@ -685,6 +685,13 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     <div id="tab-admin" class="tab">
       <div id="toast-adm"></div>
       
+      <!-- RESET ADMIN -->
+      <div style="background:linear-gradient(135deg,rgba(239,68,68,.1),rgba(220,38,38,.05));border:1px solid rgba(239,68,68,.3);border-radius:10px;padding:12px;margin-bottom:14px">
+        <div style="font-size:13px;font-weight:600;color:#f87171;margin-bottom:6px">🔄 Remise à zéro des données</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:10px">Efface toutes les ventes, tickets, tirages et commandes de test. Les codes organisateurs restent actifs.</div>
+        <button onclick="resetDonneesAdmin()" style="width:100%;padding:10px;background:rgba(239,68,68,.2);color:#f87171;border:1px solid rgba(239,68,68,.4);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🗑️ Remettre à zéro</button>
+      </div>
+
       <!-- GENERATION TICKETS -->
       <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:12px">🎯 Génération de tickets</div>
       <div style="font-size:11px;color:var(--mu);margin-bottom:8px">Max 1000 tickets par génération — Le PDF se télécharge automatiquement</div>
@@ -1196,11 +1203,11 @@ function buildOrgSpace(){
     </div>
 
     <!-- RESET TOURNOI -->
-    <div id="reset-tournoi-zone" style="margin-bottom:14px">
+    <div style="margin-bottom:14px">
       <button onclick="resetTournoi()" style="width:100%;padding:14px;background:linear-gradient(135deg,rgba(239,68,68,.3),rgba(220,38,38,.2));color:#f87171;border:1px solid rgba(239,68,68,.4);border-radius:12px;cursor:pointer;font-size:15px;font-weight:700">
         🔄 Nouveau tournoi — Remettre à zéro
       </button>
-      <div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center;margin-top:6px">Efface les boules et les PDFs — Les codes restent actifs</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center;margin-top:6px">Efface les boules, PDFs et tickets — Les codes restent actifs</div>
     </div>
 
     <!-- COMPTE A REBOURS EFFACEMENT -->
@@ -3303,6 +3310,25 @@ async function verifier(){
     if(d.gagnant)el.innerHTML=`<div style="background:rgba(16,185,129,.1);border:.5px solid rgba(16,185,129,.4);border-radius:var(--r);padding:20px;text-align:center;margin-top:10px"><div style="font-size:36px">🏆</div><div style="font-size:15px;font-weight:700;color:#34d399;margin-top:8px">TICKET GAGNANT !</div><div style="font-size:13px;color:#34d399;margin-top:6px">Acheteur : <strong>${d.ticket.acheteur}</strong><br/>Série ${d.ticket.serie}</div></div>`;
     else el.innerHTML=`<div style="background:rgba(239,68,68,.1);border:.5px solid rgba(239,68,68,.4);border-radius:var(--r);padding:20px;text-align:center;margin-top:10px"><div style="font-size:36px">❌</div><div style="font-size:15px;font-weight:700;color:#f87171;margin-top:8px">Non trouvé</div></div>`;
   }catch(e){}
+}
+
+// === RESET ADMIN ===
+async function resetDonneesAdmin(){
+  if(!confirm('Remettre toutes les données à zéro ? Les codes organisateurs restent actifs.')) return;
+  try{
+    const r = await fetch('/api/admin/reset-donnees', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN}
+    });
+    const d = await r.json();
+    if(d.ok){
+      toast('toast-adm', '✅ Données remises à zéro !');
+      loadVentes();
+      loadCommandes();
+    } else {
+      alert(d.msg || 'Erreur');
+    }
+  }catch(e){ alert('Erreur de connexion'); }
 }
 
 // === ADMIN ===
