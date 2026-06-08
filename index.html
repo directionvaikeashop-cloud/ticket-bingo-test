@@ -759,10 +759,8 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <input id="a-email" type="email" placeholder="client@email.com"/>
         <div class="lbl">Durée</div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
-          <div class="plan" id="p30" onclick="selPlan(30,'p30')"><div class="plan-n">1 mois</div><div class="plan-p">9 990 XPF</div></div>
-          <div class="plan" id="p90" onclick="selPlan(90,'p90')"><div class="plan-n">3 mois</div><div class="plan-p">12 000 XPF</div></div>
-          <div class="plan" id="p180" onclick="selPlan(180,'p180')"><div class="plan-n">6 mois</div><div class="plan-p">22 000 XPF</div></div>
-          <div class="plan sel" id="p365" onclick="selPlan(365,'p365')"><div class="plan-n">1 an 🎁</div><div class="plan-p">40 000 XPF</div><div style="font-size:11px;color:var(--gr);margin-top:4px">Offre de lancement</div></div>
+          <div class="plan sel" id="p30" onclick="selPlan(30,'p30')"><div class="plan-n">🎯 1er mois — Lancement</div><div class="plan-p">4 990 XPF</div><div style="font-size:11px;color:var(--gr);margin-top:4px">Engagement 1 an — 2ème mois : 9 990 XPF</div></div>
+          <div class="plan" id="p365" onclick="selPlan(365,'p365')"><div class="plan-n">📅 Mensuel</div><div class="plan-p">9 990 XPF</div><div style="font-size:11px;color:var(--gr);margin-top:4px">Toutes fonctionnalités incluses</div></div>
         </div>
         <button class="btn btn-p" onclick="genCode()">Générer le code</button>
         <div id="code-result"></div>
