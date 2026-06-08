@@ -1499,7 +1499,7 @@ async function loadVentes(){
   .catch(function(e){console.error(e);});
 }
 function validerPaiementVente(id){
-  fetch("/api/valider-paiement",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({vente_id:id})})
+  fetch("/api/vente/valider-paiement",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({vente_id:id})})
   .then(function(r){return r.json();})
   .then(function(d){if(d.ok){loadVentes();toast("toast-b","✅ Paiement validé !");}})
   .catch(function(){});
