@@ -1461,18 +1461,48 @@ async function creerTournoi(){
 }
 
 async function loadVentes(){
-  try{
-    const r=await fetch("/api/ventes",{headers:{"X-Token":TOKEN}});ventes=await r.json();
-    const el=document.getElementById("b-liste");
-    if(!ventes.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune vente</div>';return;}
-    el.innerHTML=ventes.map(v=>`<div class="row">
-      <div><div style="font-size:13px;font-weight:500">${v.client}</div>
-      <div style="font-size:12px;color:var(--mu)">${v.jeu} · ${v.qty}x${v.pack} · Série ${v.serie}</div>
-      ${v.photo_url||v.pdf_url?`<span class="badge b-info" style="margin-top:4px">📎 Document protégé</span>`:""}
-      </div>
-      <div style="text-align:right"><div style="font-size:13px;font-weight:500">${v.total.toLocaleString()} XPF</div></div>
-    </div>`).join("");
-  }catch(e){}
+  fetch("/api/ventes",{headers:{"X-Token":TOKEN}})
+  .then(function(r){return r.json();})
+  .then(function(ventes){
+    var el=document.getElementById("b-liste");
+    if(!el) return;
+    if(!ventes.length){
+      el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune vente</div>';
+      return;
+    }
+    el.innerHTML="";
+    ventes.forEach(function(v){
+      var div=document.createElement("div");
+      div.className="row";
+      div.style.cssText="flex-direction:column;align-items:stretch;margin-bottom:8px";
+      var info=document.createElement("div");
+      info.style.cssText="display:flex;justify-content:space-between";
+      info.innerHTML='<div><div style="font-size:13px;font-weight:500">'+v.client+'</div><div style="font-size:12px;color:var(--mu)">'+v.jeu+' · Série '+v.serie+'</div></div><div style="text-align:right"><div style="font-size:13px;font-weight:500">'+(v.total||0).toLocaleString()+' XPF</div><div style="font-size:11px;color:var(--mu)">'+(v.paiement_statut==="valide"?"✅ Payé":"⏳ En attente")+'</div></div>';
+      div.appendChild(info);
+      if(v.pdf_url){
+        var lnk=document.createElement("a");
+        lnk.href=v.pdf_url; lnk.target="_blank";
+        lnk.style.cssText="margin-top:4px;display:block;padding:6px;background:rgba(99,102,241,.15);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;font-size:12px;text-align:center;text-decoration:none";
+        lnk.textContent="📄 Voir le PDF de "+v.client;
+        div.appendChild(lnk);
+      }
+      if(v.paiement_statut!=="valide"){
+        var btn=document.createElement("button");
+        btn.style.cssText="margin-top:4px;width:100%;padding:6px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid #10b981;border-radius:6px;cursor:pointer;font-size:12px";
+        btn.textContent="✅ Valider paiement";
+        (function(vid){btn.onclick=function(){validerPaiementVente(vid);};})(v.id);
+        div.appendChild(btn);
+      }
+      el.appendChild(div);
+    });
+  })
+  .catch(function(e){console.error(e);});
+}
+function validerPaiementVente(id){
+  fetch("/api/valider-paiement",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({vente_id:id})})
+  .then(function(r){return r.json();})
+  .then(function(d){if(d.ok){loadVentes();toast("toast-b","✅ Paiement validé !");}})
+  .catch(function(){});
 }
 
 async function loadStats(){try{const r=await fetch("/api/stats");const s=await r.json();document.getElementById("sv").textContent=s.ventes_jour;document.getElementById("sc").textContent=s.total_jour.toLocaleString()+" XPF";}catch(e){}}
