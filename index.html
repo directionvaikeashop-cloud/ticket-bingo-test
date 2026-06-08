@@ -151,51 +151,27 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     <!-- FORMULES -->
     <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
       
-      <div onclick="selFormule('1mois',this)" class="formule-card" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:12px;padding:16px;cursor:pointer">
+      <div onclick="selFormule('lancement',this)" class="formule-card" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:16px;cursor:pointer">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div>
-            <div style="font-size:15px;font-weight:600;color:#fff">1 mois</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:2px">Idéal pour tester</div>
+            <div style="font-size:15px;font-weight:600;color:#fff">🎯 1er mois — Offre de lancement</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:2px">Engagement 1 an — À partir du 2ème mois : 9 990 XPF/mois</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-size:20px;font-weight:800;color:#fbbf24">4 990 XPF</div>
+          </div>
+        </div>
+      </div>
+
+      <div onclick="selFormule('mensuel',this)" class="formule-card" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:12px;padding:16px;cursor:pointer">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:15px;font-weight:600;color:#fff">📅 Mensuel</div>
+            <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:2px">Toutes les fonctionnalités incluses</div>
           </div>
           <div style="text-align:right">
             <div style="font-size:20px;font-weight:800;color:#818cf8">9 990 XPF</div>
-          </div>
-        </div>
-      </div>
-
-      <div onclick="selFormule('3mois',this)" class="formule-card" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:12px;padding:16px;cursor:pointer">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-size:15px;font-weight:600;color:#fff">3 mois</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:2px">Économisez 2 990 XPF</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:20px;font-weight:800;color:#818cf8">12 000 XPF</div>
-          </div>
-        </div>
-      </div>
-
-      <div onclick="selFormule('6mois',this)" class="formule-card" style="background:rgba(99,102,241,.15);border:2px solid rgba(99,102,241,.6);border-radius:12px;padding:16px;cursor:pointer;position:relative">
-        <div style="position:absolute;top:-10px;right:16px;background:#6366f1;color:#fff;font-size:10px;font-weight:600;padding:3px 10px;border-radius:20px">POPULAIRE</div>
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-size:15px;font-weight:600;color:#fff">6 mois</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:2px">Économisez 7 940 XPF</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:20px;font-weight:800;color:#818cf8">22 000 XPF</div>
-          </div>
-        </div>
-      </div>
-
-      <div onclick="selFormule('1an',this)" class="formule-card" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:16px;cursor:pointer">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-size:15px;font-weight:600;color:#fff">1 an 🎁</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:2px">Offre de lancement</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:20px;font-weight:800;color:#fbbf24">40 000 XPF</div>
+            <div style="font-size:11px;color:rgba(255,255,255,.4)">/mois</div>
           </div>
         </div>
       </div>
