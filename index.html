@@ -1098,6 +1098,13 @@ function buildOrgSpace(){
       <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">🔒 Stripe sécurisé ou virement CCP/Deblock</div>
     </div>
 
+    <!-- COMPTE A REBOURS EFFACEMENT -->
+    <div id="effacement-card" style="display:none;background:linear-gradient(135deg,rgba(239,68,68,.15),rgba(220,38,38,.1));border:1px solid rgba(239,68,68,.3);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-size:13px;font-weight:600;color:#f87171;margin-bottom:6px">⏱️ Effacement automatique des PDFs</div>
+      <div id="effacement-countdown" style="text-align:center;font-size:32px;font-weight:800;color:#f87171">10:00</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center;margin-top:4px">Les codes restent actifs — Seuls les PDFs sont effacés</div>
+    </div>
+
     <!-- CAGNOTTE 13% -->
     <div class="card" style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.3);margin-bottom:14px">
       <div class="ct" style="margin-bottom:12px">🏆 Cagnotte du tournoi</div>
@@ -2001,7 +2008,31 @@ async function validerBingo(alerteId, statut){
   try{
     await fetch('/api/bingo/valider',{method:'POST',headers:{'Content-Type':'application/json','X-Token':TOKEN},body:JSON.stringify({alerte_id:alerteId,statut})});
     loadAlertesBingo();
+    if(statut === 'valide'){
+      demarrerEffacement(10);
+      toast('toast-t','🏆 Gagnant validé ! PDFs effacés dans 10 minutes.');
+    }
   }catch(e){}
+}
+
+function demarrerEffacement(minutes){
+  var card = document.getElementById('effacement-card');
+  if(card) card.style.display = 'block';
+  var fin = Date.now() + minutes * 60 * 1000;
+  var timer = setInterval(function(){
+    var reste = fin - Date.now();
+    if(reste <= 0){
+      clearInterval(timer);
+      var el = document.getElementById('effacement-countdown');
+      if(el) el.textContent = '✅ PDFs effacés !';
+      setTimeout(function(){ if(card) card.style.display = 'none'; }, 3000);
+      return;
+    }
+    var m = Math.floor(reste / 60000);
+    var s = Math.floor((reste % 60000) / 1000);
+    var el = document.getElementById('effacement-countdown');
+    if(el) el.textContent = m + ':' + String(s).padStart(2,'0');
+  }, 1000);
 }
 
 // === REVENDEUR ===
