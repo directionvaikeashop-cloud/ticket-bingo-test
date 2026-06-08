@@ -695,10 +695,13 @@ def reset_tournoi():
     DB["tirage"] = []
     DB["tirage_vitesse"] = 3
     
-    # 2. Effacer les alertes bingo de cet organisateur
+    # 2. Effacer TOUTES les alertes bingo de cet organisateur
     DB["alertes_bingo"] = [a for a in DB.get("alertes_bingo", []) if a.get("code_org") != code_org]
     
-    # 3. Effacer les PDFs de cet organisateur
+    # 3. Effacer les tickets de cet organisateur
+    DB["tickets"] = [t for t in DB.get("tickets", []) if t.get("code_org") != code_org]
+    
+    # 4. Effacer les PDFs physiques de cet organisateur
     import os
     ventes_org = [v for v in DB.get("ventes", []) if v.get("code_org") == code_org]
     for v in ventes_org:
@@ -712,10 +715,14 @@ def reset_tournoi():
                 except:
                     pass
     
-    # 4. Remettre le statut des ventes
-    for v in DB.get("ventes", []):
-        if v.get("code_org") == code_org:
-            v["pdf_efface"] = True
+    # 5. Effacer les ventes de cet organisateur
+    DB["ventes"] = [v for v in DB.get("ventes", []) if v.get("code_org") != code_org]
+    
+    # 6. Effacer les coches/pointages joueurs liés à cet organisateur
+    if "coches" in DB:
+        keys_to_delete = [k for k in DB["coches"] if code_org in k]
+        for k in keys_to_delete:
+            del DB["coches"][k]
     
     save_data()
     print(f"[RESET] Tournoi remis à zéro pour {code_org}")
