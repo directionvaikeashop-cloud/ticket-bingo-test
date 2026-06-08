@@ -1567,7 +1567,7 @@ async function enregistrerVente(){
   let photo_url=null,pdf_url=null;
   if(docFile){toast("toast-b","Upload sécurisé...");const url=await uploadDoc(docFile,docType);if(docType==="photo")photo_url=url;else pdf_url=url;}
   try{
-    const r=await fetch("/api/vente",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({client,email,jeu,tournoi_id,pack:pk,qty,serie,prix,photo_url,pdf_url,code_org_destinataire:(document.getElementById("b-code-org")?document.getElementById("b-code-org").value.trim().toUpperCase():"")})});
+    const r=await fetch("/api/vente",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({client,email,jeu,tournoi_id,pack:pk,qty,serie,prix,photo_url,pdf_url,code_org_destinataire:(document.getElementById("b-code-org")?document.getElementById("b-code-org").value.trim().toUpperCase():"")})});
     const d=await r.json();
     if(d.ok){toast("toast-b","Vente enregistrée !");["b-client","b-email","b-serie","b-prix"].forEach(id=>document.getElementById(id).value="");document.getElementById("b-jeu").value="";document.getElementById("b-tournoi").value="";supprimerDoc();qty=1;document.getElementById("qv").textContent="1";document.getElementById("btv").textContent="0 XPF";loadVentes();loadStats();}
     else toast("toast-b",d.msg,false);
