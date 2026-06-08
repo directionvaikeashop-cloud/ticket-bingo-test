@@ -492,6 +492,15 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div class="tot"><span class="tot-l">Total</span><span class="tot-v" id="btv">0 XPF</span></div>
         <button class="btn btn-p" onclick="enregistrerVente()">Enregistrer la vente</button>
       </div>
+      <!-- COMMANDES EN ATTENTE ADMIN -->
+      <div class="card" style="background:linear-gradient(135deg,rgba(245,158,11,.1),rgba(251,191,36,.05));border:1px solid rgba(245,158,11,.2);margin-bottom:14px">
+        <div class="ct" style="justify-content:space-between">
+          <span>🔔 Commandes à traiter</span>
+          <button class="btn-sm" onclick="loadCommandesAdmin()">↻</button>
+        </div>
+        <div id="commandes-admin-liste"><div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Aucune commande en attente</div></div>
+      </div>
+
       <div class="card">
         <div class="ct" style="justify-content:space-between"><span>📋 Ventes</span><button class="btn-sm" onclick="loadVentes()">↻</button></div>
         <div id="b-liste"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune vente</div></div>
@@ -970,6 +979,66 @@ function buildOrgSpace(){
       <div class="ct">📂 Mes tickets reçus</div>
       <div id="docs-liste"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Chargement...</div></div>
     </div>
+    <!-- COMMANDER DES TICKETS -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.05));border:1px solid rgba(99,102,241,.3);margin-bottom:14px">
+      <div class="ct" style="margin-bottom:12px">🛒 Commander des tickets</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:12px">Choisissez votre jeu et votre pack — nous recevons votre commande immédiatement</div>
+      
+      <!-- Choix du jeu -->
+      <div class="lbl">Jeu</div>
+      <select id="cmd-jeu" style="margin-bottom:10px;font-size:13px">
+        <option value="">Choisir un jeu...</option>
+        <option value="TRIPLE ACTION 75">🎯 TRIPLE ACTION 75</option>
+        <option value="60 BOULES">🎱 60 BOULES</option>
+        <option value="40 BOULES">🎳 40 BOULES</option>
+        <option value="4 COINS">🪙 4 COINS</option>
+        <option value="500 FRANCS">💵 500 FRANCS</option>
+        <option value="1 DOLLAR">💰 1 DOLLAR</option>
+      </select>
+      
+      <!-- Choix du pack -->
+      <div class="lbl">Pack de tickets</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+        <div onclick="selPackCmd(100,800,this)" class="pack-cmd" style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:14px;font-weight:600">100 tickets</div><div style="font-size:11px;color:var(--mu)">Idéal pour débuter</div></div>
+          <div style="font-size:16px;font-weight:700;color:var(--ac)">800 XPF</div>
+        </div>
+        <div onclick="selPackCmd(250,1500,this)" class="pack-cmd" style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:14px;font-weight:600">250 tickets</div><div style="font-size:11px;color:var(--mu)">Le plus populaire</div></div>
+          <div style="font-size:16px;font-weight:700;color:var(--ac)">1 500 XPF</div>
+        </div>
+        <div onclick="selPackCmd(500,2500,this)" class="pack-cmd" style="background:rgba(99,102,241,.15);border:2px solid rgba(99,102,241,.5);border-radius:10px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;position:relative">
+          <div style="position:absolute;top:-10px;right:12px;background:#6366f1;color:#fff;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px">MEILLEURE VALEUR</div>
+          <div><div style="font-size:14px;font-weight:600">500 tickets</div><div style="font-size:11px;color:var(--mu)">Parfait pour un tournoi</div></div>
+          <div style="font-size:16px;font-weight:700;color:var(--ac)">2 500 XPF</div>
+        </div>
+        <div onclick="selPackCmd(1000,4500,this)" class="pack-cmd" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:14px;font-weight:600">1 000 tickets</div><div style="font-size:11px;color:var(--mu)">Grand tournoi</div></div>
+          <div style="font-size:16px;font-weight:700;color:#fbbf24">4 500 XPF</div>
+        </div>
+      </div>
+      
+      <div class="lbl">Numéro de série de départ</div>
+      <input id="cmd-serie" type="number" value="1" min="1" style="margin-bottom:12px"/>
+      
+      <div id="cmd-resume" style="display:none;background:rgba(99,102,241,.1);border-radius:8px;padding:10px;margin-bottom:10px;text-align:center">
+        <div style="font-size:12px;color:rgba(255,255,255,.5)">Votre commande</div>
+        <div style="font-size:16px;font-weight:700;color:#fff" id="cmd-resume-text"></div>
+      </div>
+      
+      <button onclick="passerCommande()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Passer la commande</button>
+      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center;margin-top:6px">Nous recevons votre commande immédiatement et vous préparons vos tickets</div>
+    </div>
+
+    <!-- MES COMMANDES EN COURS -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="ct" style="justify-content:space-between">
+        <span>📋 Mes commandes</span>
+        <button class="btn-sm" onclick="loadMesCommandes()">↻</button>
+      </div>
+      <div id="mes-commandes-liste"><div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Aucune commande</div></div>
+    </div>
+
     <div class="card">
       <div class="ct" style="justify-content:space-between"><span>💳 Confirmer un paiement</span></div>
       <div style="font-size:12px;color:var(--mu);margin-bottom:10px">Confirmez votre paiement pour accéder à vos PDF</div>
@@ -1228,7 +1297,7 @@ function switchOrgTab(n, el){
   document.getElementById("tab-org-"+n).classList.add("active");
   el.classList.add("active");
   if(n==="verif") loadAlertesBingo();
-  if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();loadVentesPaiement();}
+  if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();loadVentesPaiement();loadMesCommandes();}
   if(n==="revendeurs") loadRevendeurs();
   if(n==="pions") {} // déjà chargé dans buildOrgSpace
 }
@@ -1262,6 +1331,66 @@ function buildRevSpace(){
       <div class="ct">📂 Mes tickets reçus</div>
       <div id="docs-liste"><div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Chargement...</div></div>
     </div>
+    <!-- COMMANDER DES TICKETS -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.05));border:1px solid rgba(99,102,241,.3);margin-bottom:14px">
+      <div class="ct" style="margin-bottom:12px">🛒 Commander des tickets</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:12px">Choisissez votre jeu et votre pack — nous recevons votre commande immédiatement</div>
+      
+      <!-- Choix du jeu -->
+      <div class="lbl">Jeu</div>
+      <select id="cmd-jeu" style="margin-bottom:10px;font-size:13px">
+        <option value="">Choisir un jeu...</option>
+        <option value="TRIPLE ACTION 75">🎯 TRIPLE ACTION 75</option>
+        <option value="60 BOULES">🎱 60 BOULES</option>
+        <option value="40 BOULES">🎳 40 BOULES</option>
+        <option value="4 COINS">🪙 4 COINS</option>
+        <option value="500 FRANCS">💵 500 FRANCS</option>
+        <option value="1 DOLLAR">💰 1 DOLLAR</option>
+      </select>
+      
+      <!-- Choix du pack -->
+      <div class="lbl">Pack de tickets</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+        <div onclick="selPackCmd(100,800,this)" class="pack-cmd" style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:14px;font-weight:600">100 tickets</div><div style="font-size:11px;color:var(--mu)">Idéal pour débuter</div></div>
+          <div style="font-size:16px;font-weight:700;color:var(--ac)">800 XPF</div>
+        </div>
+        <div onclick="selPackCmd(250,1500,this)" class="pack-cmd" style="background:var(--s2);border:1px solid var(--bd);border-radius:10px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:14px;font-weight:600">250 tickets</div><div style="font-size:11px;color:var(--mu)">Le plus populaire</div></div>
+          <div style="font-size:16px;font-weight:700;color:var(--ac)">1 500 XPF</div>
+        </div>
+        <div onclick="selPackCmd(500,2500,this)" class="pack-cmd" style="background:rgba(99,102,241,.15);border:2px solid rgba(99,102,241,.5);border-radius:10px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;position:relative">
+          <div style="position:absolute;top:-10px;right:12px;background:#6366f1;color:#fff;font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px">MEILLEURE VALEUR</div>
+          <div><div style="font-size:14px;font-weight:600">500 tickets</div><div style="font-size:11px;color:var(--mu)">Parfait pour un tournoi</div></div>
+          <div style="font-size:16px;font-weight:700;color:var(--ac)">2 500 XPF</div>
+        </div>
+        <div onclick="selPackCmd(1000,4500,this)" class="pack-cmd" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:10px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">
+          <div><div style="font-size:14px;font-weight:600">1 000 tickets</div><div style="font-size:11px;color:var(--mu)">Grand tournoi</div></div>
+          <div style="font-size:16px;font-weight:700;color:#fbbf24">4 500 XPF</div>
+        </div>
+      </div>
+      
+      <div class="lbl">Numéro de série de départ</div>
+      <input id="cmd-serie" type="number" value="1" min="1" style="margin-bottom:12px"/>
+      
+      <div id="cmd-resume" style="display:none;background:rgba(99,102,241,.1);border-radius:8px;padding:10px;margin-bottom:10px;text-align:center">
+        <div style="font-size:12px;color:rgba(255,255,255,.5)">Votre commande</div>
+        <div style="font-size:16px;font-weight:700;color:#fff" id="cmd-resume-text"></div>
+      </div>
+      
+      <button onclick="passerCommande()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Passer la commande</button>
+      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center;margin-top:6px">Nous recevons votre commande immédiatement et vous préparons vos tickets</div>
+    </div>
+
+    <!-- MES COMMANDES EN COURS -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="ct" style="justify-content:space-between">
+        <span>📋 Mes commandes</span>
+        <button class="btn-sm" onclick="loadMesCommandes()">↻</button>
+      </div>
+      <div id="mes-commandes-liste"><div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Aucune commande</div></div>
+    </div>
+
     <div class="card">
       <div class="ct" style="justify-content:space-between"><span>💳 Confirmer un paiement</span></div>
       <div style="font-size:12px;color:var(--mu);margin-bottom:10px">Confirmez votre paiement pour accéder à vos PDF</div>
@@ -1334,7 +1463,7 @@ function switchTab(n,el){
   document.querySelectorAll(".nb").forEach(b=>b.classList.remove("active"));
   document.getElementById("tab-"+n).classList.add("active");
   el.classList.add("active");
-  if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();loadVentesPaiement();}
+  if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();loadVentesPaiement();loadMesCommandes();}
   if(n==="admin"){loadCodes();loadTournois();}
   if(n==="revendeur"){loadRevendeurs();}
   if(n==="verif"){loadAlertesBingo();}
@@ -2243,6 +2372,131 @@ if(urlParams.get('paiement') === 'success'){
   }, 1000);
 }
 
+// === COMMANDES TICKETS ===
+var packCmdSelectionne = {nb: 0, prix: 0};
+
+function selPackCmd(nb, prix, el){
+  packCmdSelectionne = {nb, prix};
+  document.querySelectorAll('.pack-cmd').forEach(function(p){
+    p.style.borderColor = 'var(--bd)';
+    p.style.background = 'var(--s2)';
+  });
+  el.style.borderColor = 'var(--ac)';
+  el.style.background = 'rgba(99,102,241,.2)';
+  updateResumeCmd();
+}
+
+function updateResumeCmd(){
+  var jeu = document.getElementById('cmd-jeu').value;
+  var resume = document.getElementById('cmd-resume');
+  var resumeText = document.getElementById('cmd-resume-text');
+  if(!resume || !resumeText) return;
+  if(jeu && packCmdSelectionne.nb > 0){
+    resume.style.display = 'block';
+    resumeText.textContent = packCmdSelectionne.nb + ' tickets ' + jeu + ' — ' + packCmdSelectionne.prix.toLocaleString('fr-FR') + ' XPF';
+  } else {
+    resume.style.display = 'none';
+  }
+}
+
+async function passerCommande(){
+  var jeu = document.getElementById('cmd-jeu').value;
+  var serie = document.getElementById('cmd-serie').value || '1';
+  if(!jeu){ alert('Choisissez un jeu'); return; }
+  if(!packCmdSelectionne.nb){ alert('Choisissez un pack'); return; }
+  try{
+    const r = await fetch('/api/commande/passer', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({jeu, pack: packCmdSelectionne.nb, prix: packCmdSelectionne.prix, serie})
+    });
+    const d = await r.json();
+    if(d.ok){
+      toast('toast-t', '✅ Commande envoyée ! Référence : ' + d.commande_id);
+      document.getElementById('cmd-jeu').value = '';
+      packCmdSelectionne = {nb: 0, prix: 0};
+      document.querySelectorAll('.pack-cmd').forEach(function(p){
+        p.style.borderColor = 'var(--bd)';
+        p.style.background = 'var(--s2)';
+      });
+      document.getElementById('cmd-resume').style.display = 'none';
+      loadMesCommandes();
+    } else {
+      alert(d.msg || 'Erreur');
+    }
+  }catch(e){ alert('Erreur de connexion'); }
+}
+
+function loadMesCommandes(){
+  fetch('/api/commande/liste', {headers: {'X-Token': TOKEN}})
+  .then(function(r){ return r.json(); })
+  .then(function(commandes){
+    var el = document.getElementById('mes-commandes-liste');
+    if(!el) return;
+    if(!commandes.length){
+      el.innerHTML = '<div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Aucune commande</div>';
+      return;
+    }
+    el.innerHTML = '';
+    commandes.forEach(function(c){
+      var div = document.createElement('div');
+      div.style.cssText = 'background:var(--s2);border-radius:8px;padding:10px;margin-bottom:8px';
+      var statut = c.statut === 'traitee' ? '✅ Traitée' : c.statut === 'annulee' ? '❌ Annulée' : '⏳ En attente';
+      var couleur = c.statut === 'traitee' ? '#34d399' : c.statut === 'annulee' ? '#f87171' : '#fbbf24';
+      div.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:4px">' +
+        '<div style="font-size:13px;font-weight:600;color:#fff">' + c.jeu + '</div>' +
+        '<div style="font-size:12px;font-weight:600;color:' + couleur + '">' + statut + '</div></div>' +
+        '<div style="font-size:11px;color:var(--mu)">' + c.pack + ' tickets — ' + (c.prix||0).toLocaleString('fr-FR') + ' XPF — Réf: ' + c.id + '</div>';
+      el.appendChild(div);
+    });
+  })
+  .catch(function(){});
+}
+
+function loadCommandesAdmin(){
+  fetch('/api/commande/liste', {headers: {'X-Token': TOKEN}})
+  .then(function(r){ return r.json(); })
+  .then(function(commandes){
+    var el = document.getElementById('commandes-admin-liste');
+    if(!el) return;
+    var enAttente = commandes.filter(function(c){ return c.statut === 'en_attente'; });
+    if(!enAttente.length){
+      el.innerHTML = '<div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">✅ Aucune commande en attente</div>';
+      return;
+    }
+    el.innerHTML = '';
+    enAttente.forEach(function(c){
+      var div = document.createElement('div');
+      div.style.cssText = 'background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:8px;padding:12px;margin-bottom:8px';
+      div.innerHTML = '<div style="font-size:13px;font-weight:600;color:#fbbf24;margin-bottom:4px">🔔 ' + c.nom_org + ' — ' + c.jeu + '</div>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:6px">' + c.pack + ' tickets — ' + (c.prix||0).toLocaleString('fr-FR') + ' XPF — Série : ' + c.serie + '</div>' +
+        '<div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:8px">Code org : ' + c.code_org + ' — Réf : ' + c.id + '</div>';
+      var btnTraiter = document.createElement('button');
+      btnTraiter.style.cssText = 'width:100%;padding:8px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid #10b981;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600';
+      btnTraiter.textContent = '✅ Marquer comme traitée';
+      (function(cid){ btnTraiter.onclick = function(){ marquerCommandeTraitee(cid); }; })(c.id);
+      div.appendChild(btnTraiter);
+      el.appendChild(div);
+    });
+  })
+  .catch(function(){});
+}
+
+async function marquerCommandeTraitee(commandeId){
+  try{
+    const r = await fetch('/api/commande/traiter', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({commande_id: commandeId})
+    });
+    const d = await r.json();
+    if(d.ok){
+      loadCommandesAdmin();
+      toast('toast-b', '✅ Commande marquée comme traitée !');
+    }
+  }catch(e){}
+}
+
 // === HISTORIQUE COMMANDES ===
 async function loadCommandes(){
   try{
@@ -2580,6 +2834,7 @@ async function validerPaiementAdmin(venteId){
     if(d.ok){
       toast('toast-b','✅ Paiement validé !');
       loadVentes();
+  loadCommandesAdmin();
     }
   }catch(e){}
 }
