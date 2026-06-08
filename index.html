@@ -3025,21 +3025,27 @@ function loadCommandesPionsAdmin(){
   .then(function(commandes){
     var el = document.getElementById('commandes-pions-admin');
     if(!el) return;
-    var enAttente = commandes.filter(function(c){ return c.statut === 'en_attente'; });
-    if(!enAttente.length){
+    var toutes = commandes.filter(function(c){ return c.statut === 'en_attente' || c.statut === 'en_attente_validation'; });
+    if(!toutes.length){
       el.innerHTML = '<div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">✅ Aucune commande pions en attente</div>';
       return;
     }
     el.innerHTML = '';
-    enAttente.forEach(function(c){
+    toutes.forEach(function(c){
       var div = document.createElement('div');
-      div.style.cssText = 'background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:10px;margin-bottom:6px';
-      div.innerHTML = '<div style="font-size:13px;font-weight:600;color:#818cf8;margin-bottom:4px">🪙 ' + c.nom_org + ' — ' + c.nb_pions + ' pions à ' + c.valeur_pion + ' XPF</div>' + '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:6px">Payé : ' + (c.montant_paye||0).toLocaleString('fr-FR') + ' XPF — ' + (c.mode_paiement ? c.mode_paiement + ' — Réf: ' + (c.ref_paiement||'') : 'En attente paiement') + '</div>';
-      var btn = document.createElement('button');
-      btn.style.cssText = 'width:100%;padding:7px;background:rgba(99,102,241,.3);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600';
-      btn.textContent = '✅ Valider et créditer les pions';
-      (function(cid){ btn.onclick = function(){ validerCommandePions(cid); }; })(c.id);
-      div.appendChild(btn);
+      var estConfirme = c.statut === 'en_attente_validation';
+      div.style.cssText = estConfirme 
+        ? 'background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.5);border-radius:8px;padding:10px;margin-bottom:6px'
+        : 'background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:8px;padding:10px;margin-bottom:6px';
+      div.innerHTML = '<div style="font-size:13px;font-weight:600;color:' + (estConfirme?'#818cf8':'rgba(255,255,255,.5)') + ';margin-bottom:4px">🪙 ' + c.nom_org + ' — ' + c.nb_pions + ' pions à ' + c.valeur_pion + ' XPF</div>' +
+        '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:6px">' + (c.montant_paye||0).toLocaleString('fr-FR') + ' XPF — ' + (estConfirme ? (c.mode_paiement||'') + ' — Réf: ' + (c.ref_paiement||'') : '⏳ En attente confirmation paiement organisateur') + '</div>';
+      if(estConfirme){
+        var btn = document.createElement('button');
+        btn.style.cssText = 'width:100%;padding:7px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600';
+        btn.textContent = '✅ Valider et créditer les pions';
+        (function(cid){ btn.onclick = function(){ validerCommandePions(cid); }; })(c.id);
+        div.appendChild(btn);
+      }
       el.appendChild(div);
     });
   })
