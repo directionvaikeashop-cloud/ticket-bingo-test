@@ -1107,22 +1107,19 @@ function buildOrgSpace(){
 
     <!-- CAGNOTTE 13% + GAIN FINAL -->
     <div class="card" style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.3);margin-bottom:14px">
-      <div class="ct" style="margin-bottom:12px">🏆 Gain final du gagnant</div>
-      <div class="lbl">Total des mises du tournoi (XPF)</div>
+      <div class="ct" style="margin-bottom:12px">🏆 Cagnotte du tournoi — 13%</div>
+      <div class="lbl">Total des mises récoltées (XPF)</div>
       <input id="cagnotte-mises" type="number" placeholder="Ex: 25000" oninput="previewGain()" style="margin-bottom:10px"/>
       
       <!-- Preview automatique -->
       <div id="gain-preview" style="display:none;background:rgba(0,0,0,.3);border-radius:8px;padding:12px;margin-bottom:10px;font-size:12px">
-        <div style="display:flex;justify-content:space-between;color:rgba(255,255,255,.5);margin-bottom:4px"><span>Total mises</span><span id="prev-total">0 XPF</span></div>
-        <div style="display:flex;justify-content:space-between;color:rgba(255,255,255,.4);margin-bottom:2px"><span>— 2% cagnotte</span><span id="prev-2pct">0 XPF</span></div>
-        <div style="display:flex;justify-content:space-between;color:rgba(255,255,255,.4);margin-bottom:2px"><span>— 5% commissions</span><span id="prev-5pct">0 XPF</span></div>
-        <div style="display:flex;justify-content:space-between;color:rgba(255,255,255,.4);margin-bottom:2px"><span>— 1% pions</span><span id="prev-1pct">0 XPF</span></div>
-        <div style="display:flex;justify-content:space-between;color:rgba(255,255,255,.4);margin-bottom:6px"><span>— 500 XPF frais tournoi</span><span>500 XPF</span></div>
+        <div style="display:flex;justify-content:space-between;color:rgba(255,255,255,.5);margin-bottom:6px"><span>Total des mises</span><span id="prev-total">0 XPF</span></div>
         <div style="height:0.5px;background:rgba(255,255,255,.1);margin-bottom:6px"></div>
-        <div style="display:flex;justify-content:space-between;font-weight:700;font-size:14px"><span style="color:#fbbf24">🏆 GAIN GAGNANT</span><span style="color:#fbbf24" id="prev-gain">0 XPF</span></div>
+        <div style="display:flex;justify-content:space-between;font-weight:700;font-size:16px"><span style="color:#fbbf24">🏆 CAGNOTTE 13%</span><span style="color:#fbbf24" id="prev-gain">0 XPF</span></div>
+        <div style="font-size:11px;color:rgba(255,255,255,.4);text-align:center;margin-top:6px">C'est ce montant que vous annoncez à vos joueurs</div>
       </div>
       
-      <button onclick="calculerCagnotte()" style="width:100%;padding:12px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700;margin-bottom:10px">🎯 Calculer et annoncer</button>
+      <button onclick="calculerCagnotte()" style="width:100%;padding:12px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:700;margin-bottom:10px">📢 Calculer et annoncer aux joueurs</button>
       <div id="cagnotte-result"></div>
     </div>
 
@@ -2322,17 +2319,10 @@ function previewGain(){
   var mises = parseFloat(document.getElementById('cagnotte-mises').value || 0);
   var preview = document.getElementById('gain-preview');
   if(!preview || mises <= 0){ if(preview) preview.style.display='none'; return; }
-  var p2 = Math.round(mises * 0.02);
-  var p5 = Math.round(mises * 0.05);
-  var p1 = Math.round(mises * 0.01);
-  var frais = 500;
-  var gain = Math.round(mises - p2 - p5 - p1 - frais);
+  var cagnotte = Math.round(mises * 0.13);
   preview.style.display = 'block';
   document.getElementById('prev-total').textContent = mises.toLocaleString('fr-FR') + ' XPF';
-  document.getElementById('prev-2pct').textContent = p2.toLocaleString('fr-FR') + ' XPF';
-  document.getElementById('prev-5pct').textContent = p5.toLocaleString('fr-FR') + ' XPF';
-  document.getElementById('prev-1pct').textContent = p1.toLocaleString('fr-FR') + ' XPF';
-  document.getElementById('prev-gain').textContent = gain.toLocaleString('fr-FR') + ' XPF';
+  document.getElementById('prev-gain').textContent = cagnotte.toLocaleString('fr-FR') + ' XPF';
 }
 
 async function calculerCagnotte(){
