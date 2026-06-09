@@ -3510,6 +3510,7 @@ async function envoyerMessageMicro(){
 
 // Vérifier les messages micro côté joueur toutes les 3 secondes
 let dernierMessageJoueur = "";
+let derniereBouleAnnoncee = 0;
 let dernierAudioTimestamp = "";
 let audioContext = null;
 
@@ -3747,6 +3748,24 @@ async function loadTirageJoueur(){
     });
     // Pointage automatique si activé
     if(pointageAutoActif) pointageAutomatique(boules);
+    
+    // Annoncer la dernière boule à voix haute si nouvelle
+    if(boules.length > 0){
+      var derniereBoule = boules[boules.length-1];
+      if(derniereBoule !== derniereBouleAnnoncee){
+        derniereBouleAnnoncee = derniereBoule;
+        var lettreBoule = getLettre(derniereBoule);
+        try{
+          var msg = new SpeechSynthesisUtterance(lettreBoule + ' ' + derniereBoule);
+          msg.lang = 'fr-FR';
+          msg.rate = 0.8;
+          msg.pitch = 1.1;
+          msg.volume = 1;
+          window.speechSynthesis.cancel();
+          window.speechSynthesis.speak(msg);
+        }catch(e){}
+      }
+    }
   }catch(e){}
 }
 
