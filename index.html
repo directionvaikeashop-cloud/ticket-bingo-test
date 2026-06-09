@@ -2883,20 +2883,18 @@ function previewGain(){
     if(btnAnnoncer) btnAnnoncer.style.display = 'none';
     return;
   }
-  var total15 = Math.round(mises * 0.15);
-  var fraisOrg = Math.round(mises * 0.02);
-  var cagnotte13 = Math.round(mises * 0.13);
+  var cagnotte80 = Math.round(mises * 0.80);
+  var partOrg = Math.round(mises * 0.20);
   preview.style.display = 'block';
   if(btnAnnoncer) btnAnnoncer.style.display = 'block';
   document.getElementById('prev-total').textContent = mises.toLocaleString('fr-FR');
-  document.getElementById('prev-gain').textContent = cagnotte13.toLocaleString('fr-FR') + ' XPF';
+  document.getElementById('prev-gain').textContent = cagnotte80.toLocaleString('fr-FR') + ' XPF';
   // Afficher le détail
   var detail = document.getElementById('prev-detail');
   if(detail){
     detail.innerHTML = '<div style="font-size:11px;color:rgba(255,255,255,.4);margin-top:6px;text-align:left">' +
-      '<div style="display:flex;justify-content:space-between"><span>Total prélevé (15%)</span><span>' + total15.toLocaleString('fr-FR') + ' XPF</span></div>' +
-      '<div style="display:flex;justify-content:space-between;color:#34d399"><span>Vos frais pions (2%)</span><span>+ ' + fraisOrg.toLocaleString('fr-FR') + ' XPF</span></div>' +
-      '<div style="display:flex;justify-content:space-between;color:#fbbf24"><span>Cagnotte joueurs (13%)</span><span>' + cagnotte13.toLocaleString('fr-FR') + ' XPF</span></div>' +
+      '<div style="display:flex;justify-content:space-between;color:#fbbf24"><span>🏆 Cagnotte joueur (80%)</span><span>' + cagnotte80.toLocaleString('fr-FR') + ' XPF</span></div>' +
+      '<div style="display:flex;justify-content:space-between;color:#34d399"><span>💰 Part organisateur (20%)</span><span>' + partOrg.toLocaleString('fr-FR') + ' XPF</span></div>' +
       '</div>';
   }
 }
