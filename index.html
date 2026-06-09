@@ -1874,6 +1874,31 @@ function ouvrirPDFJoueur(url,nom,venteId,pageDebut,pageFin,jeu,serie){
   chargerPDFJoueur(url,cleCoches,overlay,cochesExistantes,pdDebut,pdFin);
 }
 
+// === CARTE DES POSITIONS NUMEROS ===
+var carteNumeros = {}; // {numero: [{page, x, y}]}
+
+async function analyserPageNumeroPDF(page, pageNum){
+  try{
+    const textContent = await page.getTextContent();
+    const viewport = page.getViewport({scale: 1.0});
+    
+    textContent.items.forEach(function(item){
+      const texte = item.str.trim();
+      const num = parseInt(texte);
+      if(!isNaN(num) && num >= 1 && num <= 90 && texte === String(num)){
+        // Calculer position en pourcentage
+        const tx = item.transform[4];
+        const ty = item.transform[5];
+        const xPct = (tx / viewport.width) * 100;
+        const yPct = ((viewport.height - ty) / viewport.height) * 100;
+        
+        if(!carteNumeros[num]) carteNumeros[num] = [];
+        carteNumeros[num].push({page: pageNum, x: xPct, y: yPct});
+      }
+    });
+  }catch(e){}
+}
+
 async function chargerPDFJoueur(url,cleCoches,overlay,cochesExistantes,pageDebut,pageFin){
   overlayActuel=overlay;cleCochesActuel=cleCoches;pageDebutActuel=pageDebut||1;
   try{
@@ -1884,6 +1909,17 @@ async function chargerPDFJoueur(url,cleCoches,overlay,cochesExistantes,pageDebut
     pageFinActuel=Math.min(pageFin||9999,pdfDoc.numPages);
     pageNum=pageDebutActuel;
     cochesParPage=cochesExistantes||{};
+    
+    // Analyser toutes les pages pour trouver les numéros et leurs positions
+    carteNumeros = {};
+    for(var p = pageDebutActuel; p <= pageFinActuel; p++){
+      try{
+        var pg = await pdfDoc.getPage(p);
+        await analyserPageNumeroPDF(pg, p);
+      }catch(e){}
+    }
+    console.log('Carte numéros:', Object.keys(carteNumeros).length, 'numéros trouvés');
+    
     await renderPageJoueur(pageNum,cleCoches,overlay);
   }catch(e){
     console.error("PDF error:",e);
@@ -3580,37 +3616,48 @@ function togglePointageAuto(el){
 }
 
 async function pointageAutomatique(boules){
-  if(!pointageAutoActif || !cleCochesActuel) return;
+  if(!pointageAutoActif || !cleCochesActuel || !overlayActuel) return;
+  if(Object.keys(carteNumeros).length === 0) return;
   
-  // Récupérer les coches actuelles
-  const coches = JSON.parse(localStorage.getItem(cleCochesActuel)||"{}");
-  let nouveauCochage = false;
+  var cochesLayer = overlayActuel.querySelector('#coches-layer');
+  var canvas = overlayActuel.querySelector('#pdf-canvas');
+  if(!cochesLayer || !canvas) return;
   
-  // Récupérer les numéros sur les feuilles du joueur (depuis le PDF overlay)
-  // On coche tous les numéros tirés qui correspondent aux cases cochables
-  const cases = document.querySelectorAll('[data-num]');
-  
-  boules.forEach(boule => {
-    if(!dernieresBoulesCochees.includes(boule)){
-      dernieresBoulesCochees.push(boule);
-      // Cocher la case correspondante si elle existe
-      cases.forEach(c => {
-        if(parseInt(c.getAttribute('data-num')) === boule && !c.classList.contains('coche')){
-          c.click(); // Simuler le clic pour cocher
-          nouveauCochage = true;
-        }
+  boules.forEach(function(boule){
+    if(dernieresBoulesCochees.includes(boule)) return;
+    dernieresBoulesCochees.push(boule);
+    
+    // Chercher ce numéro dans la carte
+    var positions = carteNumeros[boule];
+    if(!positions || !positions.length) return;
+    
+    positions.forEach(function(pos){
+      // Vérifier si pas déjà coché
+      var pageKey = 'page_' + pos.page;
+      if(!cochesParPage[pageKey]) cochesParPage[pageKey] = [];
+      
+      var dejaCoché = cochesParPage[pageKey].find(function(c){
+        return Math.abs(c.x - pos.x) < 3 && Math.abs(c.y - pos.y) < 3;
       });
-      // Aussi mettre à jour dans localStorage
-      if(!coches[boule]){
-        coches[boule] = true;
-        nouveauCochage = true;
+      
+      if(!dejaCoché){
+        var id = Date.now() + Math.random();
+        cochesParPage[pageKey].push({x: pos.x, y: pos.y, id: id});
+        
+        // Si c'est la page actuelle → afficher la coche immédiatement
+        if(pos.page === pageNum){
+          afficherCoche(pos.x, pos.y, id, cochesLayer, canvas);
+          // Mettre à jour le compteur
+          var total = Object.values(cochesParPage).flat().length;
+          var nbCoches = overlayActuel.querySelector('#nb-coches');
+          if(nbCoches) nbCoches.textContent = total + ' cochés';
+        }
+        
+        // Sauvegarder
+        localStorage.setItem(cleCochesActuel, JSON.stringify(cochesParPage));
       }
-    }
+    });
   });
-  
-  if(nouveauCochage){
-    localStorage.setItem(cleCochesActuel, JSON.stringify(coches));
-  }
 }
 
 // === TIRAGE AUTOMATIQUE ===
