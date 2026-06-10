@@ -1373,6 +1373,88 @@ def get_signals():
         signals = [s for s in signals if s["id"] > after]
     return jsonify(signals)
 
+# === PIONS JOUEUR DIRECT ===
+@app.route("/api/pions/commande-joueur", methods=["POST"])
+def commande_pions_joueur():
+    global DB
+    DB = load_data()
+    d = request.json
+    code_joueur = d.get("code_joueur", "").upper()
+    valeur_pion = int(d.get("valeur_pion", 0))
+    montant_paye = float(d.get("montant_paye", 0))
+    commission = float(d.get("commission", 0))
+    nb_pions = int(d.get("nb_pions", 0))
+    mode_paiement = d.get("mode_paiement", "")
+    ref_paiement = d.get("ref_paiement", "")
+    
+    if not code_joueur or not valeur_pion or montant_paye < 500:
+        return jsonify({"ok": False, "msg": "Données invalides"}), 400
+    
+    if "commandes_pions_joueurs" not in DB:
+        DB["commandes_pions_joueurs"] = []
+    
+    commande = {
+        "id": secrets.token_hex(4).upper(),
+        "code_joueur": code_joueur,
+        "valeur_pion": valeur_pion,
+        "montant_paye": montant_paye,
+        "commission": commission,
+        "nb_pions": nb_pions,
+        "mode_paiement": mode_paiement,
+        "ref_paiement": ref_paiement,
+        "statut": "en_attente_validation",
+        "date": datetime.datetime.now().isoformat()
+    }
+    DB["commandes_pions_joueurs"].insert(0, commande)
+    save_data()
+    return jsonify({"ok": True, "commande_id": commande["id"]})
+
+@app.route("/api/pions/solde-joueur/<code_joueur>")
+def solde_pions_joueur(code_joueur):
+    global DB
+    DB = load_data()
+    pions = DB.get("pions_joueurs", {}).get(code_joueur.upper(), {})
+    return jsonify({
+        "pions_20": pions.get("20", 0),
+        "pions_50": pions.get("50", 0),
+        "pions_100": pions.get("100", 0)
+    })
+
+@app.route("/api/pions/valider-joueur", methods=["POST"])
+def valider_pions_joueur():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    
+    commande_id = request.json.get("commande_id", "")
+    for c in DB.get("commandes_pions_joueurs", []):
+        if c["id"] == commande_id:
+            c["statut"] = "validee"
+            code_joueur = c["code_joueur"]
+            valeur = str(c["valeur_pion"])
+            nb = c["nb_pions"]
+            if "pions_joueurs" not in DB:
+                DB["pions_joueurs"] = {}
+            if code_joueur not in DB["pions_joueurs"]:
+                DB["pions_joueurs"][code_joueur] = {}
+            DB["pions_joueurs"][code_joueur][valeur] = DB["pions_joueurs"][code_joueur].get(valeur, 0) + nb
+            break
+    save_data()
+    return jsonify({"ok": True})
+
+@app.route("/api/pions/commandes-joueurs")
+def get_commandes_joueurs():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify([])
+    return jsonify(DB.get("commandes_pions_joueurs", []))
+
 @app.route("/api/micro/audio", methods=["POST"])
 def recevoir_audio():
     global DB
