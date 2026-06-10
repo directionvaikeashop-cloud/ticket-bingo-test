@@ -4053,6 +4053,10 @@ document.addEventListener('click', initialiserVoix, {once: true});
 function startTirageAutoRefresh(){
   if(tirageInterval) clearInterval(tirageInterval);
   tirageInterval = setInterval(loadTirageJoueur, 5000);
+  // Auto-refresh soldes pions toutes les 15 secondes
+  setInterval(function(){
+    if(codeJoueurActuel) chargerSoldesPionsJoueur(codeJoueurActuel);
+  }, 15000);
 }
 function stopTirageAutoRefresh(){
   if(tirageInterval) clearInterval(tirageInterval);
