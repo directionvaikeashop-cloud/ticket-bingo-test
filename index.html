@@ -418,6 +418,12 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">Mis à jour automatiquement</div>
     </div>
 
+    <!-- JEUX DISPONIBLES -->
+    <div id="joueur-jeux-card" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:700;color:#fbbf24;margin-bottom:10px">🎮 Jeux disponibles maintenant !</div>
+      <div id="joueur-jeux-liste"></div>
+    </div>
+
     <!-- COMMANDER -->
     <div class="card" style="margin-bottom:14px">
       <div class="ct" style="margin-bottom:10px">📦 Commander des pions</div>
@@ -1057,8 +1063,12 @@ async function accesJoueurPions(){
   codeJoueurActuel = code;
   show("s-joueur-pions");
   chargerSoldesPionsJoueur(code);
-  // Auto-refresh soldes toutes les 15 secondes
-  setInterval(function(){ chargerSoldesPionsJoueur(code); }, 15000);
+  chargerJeuxDisponibles(code);
+  // Auto-refresh toutes les 10 secondes
+  setInterval(function(){ 
+    chargerSoldesPionsJoueur(code);
+    chargerJeuxDisponibles(code);
+  }, 10000);
 }
 
 async function accesJoueurDirect(){
@@ -1442,6 +1452,27 @@ function buildOrgSpace(){
       <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">🔒 Stripe sécurisé ou virement CCP/Deblock</div>
     </div>
 
+    <!-- ANNONCER UN JEU -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.1));border:1px solid rgba(16,185,129,.3);margin-bottom:14px">
+      <div class="ct" style="margin-bottom:10px">📢 Annoncer un jeu aux joueurs</div>
+      <div class="lbl">Jeu à annoncer</div>
+      <select id="annonce-jeu" style="margin-bottom:8px">
+        <option value="">Choisir un jeu...</option>
+        <option value="TRIPLE ACTION 75">🎯 TRIPLE ACTION 75</option>
+        <option value="60 BOULES">🎱 60 BOULES</option>
+        <option value="40 BOULES">🎳 40 BOULES</option>
+        <option value="4 COINS">🪙 4 COINS</option>
+        <option value="500 FRANCS">💵 500 FRANCS</option>
+        <option value="1 DOLLAR">💰 1 DOLLAR</option>
+      </select>
+      <div class="lbl">Prix du ticket (XPF)</div>
+      <input id="annonce-prix" type="number" placeholder="Ex: 100" min="1" style="margin-bottom:8px"/>
+      <div class="lbl">Description (optionnel)</div>
+      <input id="annonce-desc" placeholder="Ex: Jackpot 50 000 XPF !" style="margin-bottom:12px"/>
+      <button onclick="annoncerJeu()" style="width:100%;padding:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📢 Annoncer ce jeu !</button>
+      <button onclick="supprimerAnnonce()" style="width:100%;padding:8px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:8px;cursor:pointer;font-size:12px;margin-top:6px">🗑️ Supprimer l'annonce</button>
+    </div>
+
     <!-- RESET TOURNOI -->
     <div style="margin-bottom:14px">
       <button onclick="resetTournoi()" style="width:100%;padding:14px;background:linear-gradient(135deg,rgba(239,68,68,.3),rgba(220,38,38,.2));color:#f87171;border:1px solid rgba(239,68,68,.4);border-radius:12px;cursor:pointer;font-size:15px;font-weight:700">
@@ -1619,6 +1650,16 @@ function buildOrgSpace(){
       <div id="commandes-pions-liste"><div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Aucune commande</div></div>
     </div>
 
+    <!-- COMMANDES TICKETS AVEC PIONS -->
+    <div id="commandes-tickets-pions-card" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:14px;font-weight:700;color:#fbbf24">🎫 Tickets commandés avec pions !</div>
+        <div id="badge-tickets-pions" style="background:#f59e0b;color:#fff;font-size:12px;font-weight:700;padding:3px 8px;border-radius:20px">0</div>
+      </div>
+      <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:10px">Des joueurs veulent acheter des tickets avec leurs pions</div>
+      <div id="tickets-pions-liste"></div>
+    </div>
+
     <!-- DONNER PIONS JOUEURS -->
     <div class="card">
       <div class="ct">🎁 Donner des pions à un joueur</div>
@@ -1663,7 +1704,7 @@ function switchOrgTab(n, el){
   if(n==="verif") loadAlertesBingo();
   if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();setTimeout(function(){loadVentesPaiement();loadMesCommandes();},500);startAutoRefreshOrg();}
   if(n==="revendeurs") loadRevendeurs();
-  if(n==="pions"){loadSoldesPions();loadCommandesPions();setTimeout(function(){loadPionsPaiement();},500);}
+  if(n==="pions"){loadSoldesPions();loadCommandesPions();setTimeout(function(){loadPionsPaiement();checkCommandesTicketsPions();},500);}
 }
 
 // === ACCES REVENDEUR ===
@@ -3412,6 +3453,59 @@ async function validerCommandePions(commandeId){
   }catch(e){}
 }
 
+// === COMMANDES TICKETS PIONS ORGANISATEUR ===
+function checkCommandesTicketsPions(){
+  fetch('/api/commande/tickets-pions-org', {headers: {'X-Token': TOKEN}})
+  .then(function(r){ return r.json(); })
+  .then(function(commandes){
+    var enAttente = commandes.filter(function(c){ return c.statut === 'en_attente'; });
+    var card = document.getElementById('commandes-tickets-pions-card');
+    var badge = document.getElementById('badge-tickets-pions');
+    var liste = document.getElementById('tickets-pions-liste');
+    if(!card) return;
+    if(enAttente.length > 0){
+      card.style.display = 'block';
+      if(badge) badge.textContent = enAttente.length;
+      if(liste){
+        liste.innerHTML = '';
+        enAttente.forEach(function(c){
+          var div = document.createElement('div');
+          div.style.cssText = 'background:rgba(0,0,0,.2);border-radius:8px;padding:10px;margin-bottom:6px';
+          div.innerHTML = '<div style="display:flex;justify-content:space-between;margin-bottom:6px">' +
+            '<div><div style="font-size:13px;font-weight:600;color:#fff">🎮 Joueur : ' + c.code_joueur + '</div>' +
+            '<div style="font-size:12px;color:#fbbf24">' + c.nb_tickets + ' ticket(s) ' + c.jeu + '</div>' +
+            '<div style="font-size:11px;color:rgba(255,255,255,.5)">' + (c.total_pions||0).toLocaleString('fr-FR') + ' XPF de pions débités</div></div>' +
+            '<div style="font-size:12px;font-weight:600;color:#34d399">✅ Pions reçus</div></div>';
+          var btn = document.createElement('button');
+          btn.style.cssText = 'width:100%;padding:8px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600';
+          btn.textContent = '🎫 Valider — Donner le ticket au joueur';
+          (function(cid){ btn.onclick = function(){ validerTicketPions(cid); }; })(c.id);
+          div.appendChild(btn);
+          liste.appendChild(div);
+        });
+      }
+    } else {
+      card.style.display = 'none';
+    }
+  })
+  .catch(function(){});
+}
+
+async function validerTicketPions(commandeId){
+  try{
+    const r = await fetch('/api/commande/ticket-pions/valider', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({commande_id: commandeId})
+    });
+    const d = await r.json();
+    if(d.ok){
+      checkCommandesTicketsPions();
+      toast('toast-pions', '✅ Ticket validé — donnez le ticket au joueur !');
+    }
+  }catch(e){}
+}
+
 // === NOUVEAU SYSTEME PIONS ===
 var valeurPionSelectionne = 0;
 var valeurDonPion = 0;
@@ -3554,6 +3648,112 @@ async function donnerPionsJoueur(){
       alert(d.msg || 'Erreur');
     }
   }catch(e){ alert('Erreur'); }
+}
+
+// === ANNONCES JEUX ORGANISATEUR ===
+async function annoncerJeu(){
+  var jeu = document.getElementById('annonce-jeu').value;
+  var prix = parseInt(document.getElementById('annonce-prix').value || 0);
+  var desc = document.getElementById('annonce-desc').value.trim();
+  if(!jeu){ alert('Choisissez un jeu'); return; }
+  if(!prix){ alert('Entrez le prix du ticket'); return; }
+  try{
+    const r = await fetch('/api/annonce/jeu', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({jeu, prix, desc, code_org: CODE_ORG, nom_org: USER_NOM})
+    });
+    const d = await r.json();
+    if(d.ok){
+      toast('toast-t', '📢 Jeu annoncé aux joueurs !');
+      document.getElementById('annonce-jeu').value = '';
+      document.getElementById('annonce-prix').value = '';
+      document.getElementById('annonce-desc').value = '';
+    }
+  }catch(e){ alert('Erreur'); }
+}
+
+async function supprimerAnnonce(){
+  try{
+    await fetch('/api/annonce/jeu', {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({code_org: CODE_ORG})
+    });
+    toast('toast-t', '🗑️ Annonce supprimée');
+  }catch(e){}
+}
+
+// Charger jeux disponibles côté joueur
+var derniereAnnonceVue = '';
+function chargerJeuxDisponibles(codeJoueur){
+  fetch('/api/annonce/jeux')
+  .then(function(r){ return r.json(); })
+  .then(function(jeux){
+    var card = document.getElementById('joueur-jeux-card');
+    var liste = document.getElementById('joueur-jeux-liste');
+    if(!card || !liste) return;
+    if(!jeux.length){
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = 'block';
+    liste.innerHTML = '';
+    jeux.forEach(function(j){
+      var div = document.createElement('div');
+      div.style.cssText = 'background:rgba(0,0,0,.2);border-radius:10px;padding:12px;margin-bottom:8px';
+      div.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+        '<div><div style="font-size:15px;font-weight:700;color:#fff">' + j.jeu + '</div>' +
+        '<div style="font-size:12px;color:#fbbf24">💰 ' + (j.prix||0).toLocaleString('fr-FR') + ' XPF / ticket</div>' +
+        (j.desc ? '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">' + j.desc + '</div>' : '') +
+        '</div></div>' +
+        '<div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:8px">Organisateur : ' + (j.nom_org||'') + '</div>' +
+        '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
+        '<input id="nb-tickets-' + j.id + '" type="number" placeholder="Nb tickets" min="1" value="1" style="width:100px;font-size:13px;margin-bottom:0"/>' +
+        '<div style="font-size:12px;color:rgba(255,255,255,.5)">× ' + (j.prix||0).toLocaleString('fr-FR') + ' XPF</div>' +
+        '</div>';
+      var btn = document.createElement('button');
+      btn.style.cssText = 'width:100%;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700';
+      btn.textContent = '🎫 Commander ce jeu avec mes pions';
+      (function(jid, jjeu, jprix, jorg){ 
+        btn.onclick = function(){ 
+          var nb = parseInt(document.getElementById('nb-tickets-' + jid).value || 1);
+          commanderTicketAvecPions(jid, jjeu, jprix, nb, jorg, codeJoueur);
+        }; 
+      })(j.id, j.jeu, j.prix, j.code_org);
+      div.appendChild(btn);
+      liste.appendChild(div);
+    });
+  })
+  .catch(function(){});
+}
+
+async function commanderTicketAvecPions(jeuId, jeu, prix, nbTickets, codeOrg, codeJoueur){
+  var total = prix * nbTickets;
+  if(!confirm('Commander ' + nbTickets + ' ticket(s) ' + jeu + ' pour ' + total.toLocaleString('fr-FR') + ' XPF de pions ?')) return;
+  try{
+    const r = await fetch('/api/commande/ticket-pions', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        code_joueur: codeJoueur,
+        jeu_id: jeuId,
+        jeu: jeu,
+        prix: prix,
+        nb_tickets: nbTickets,
+        total: total,
+        code_org: codeOrg
+      })
+    });
+    const d = await r.json();
+    if(d.ok){
+      var result = document.getElementById('joueur-pion-result');
+      if(result) result.innerHTML = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399;margin-top:6px">✅ Commande envoyee a l organisateur !</div>';
+      chargerSoldesPionsJoueur(codeJoueur);
+    } else {
+      alert(d.msg || 'Erreur — vérifiez votre solde de pions');
+    }
+  }catch(e){ alert('Erreur de connexion'); }
 }
 
 // === PIONS JOUEUR DIRECT ===
