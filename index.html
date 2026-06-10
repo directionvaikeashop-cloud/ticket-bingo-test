@@ -396,107 +396,108 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     <div class="logo"><div class="logo-i">🎱</div>Ticket Bingo</div>
     <button class="btn-sm" onclick="retourAccueil()">← Retour</button>
   </div>
-  <div class="wrap">
-    <div id="joueur-ticket-zone"></div>
+  <div class="wrap" style="padding-bottom:70px">
     
-    <!-- PIONS JOUEUR -->
-    <div class="card" style="margin:0 0 14px 0;background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1));border:1px solid rgba(99,102,241,.3)">
-      <div class="ct" style="margin-bottom:10px">🪙 Commander des pions</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:12px">Commandez vos pions directement — nous les créditons après vérification</div>
+    <!-- ONGLET JOUER -->
+    <div id="tab-j-jouer" class="tab active">
+      <div id="joueur-ticket-zone"></div>
       
-      <!-- Solde joueur -->
-      <div style="display:flex;gap:8px;margin-bottom:12px">
-        <div style="flex:1;background:var(--s2);border-radius:8px;padding:8px;text-align:center">
-          <div style="font-size:10px;color:rgba(255,255,255,.4)">🪙 20 XPF</div>
-          <div id="joueur-solde-20" style="font-size:18px;font-weight:800;color:#818cf8">0</div>
-        </div>
-        <div style="flex:1;background:var(--s2);border-radius:8px;padding:8px;text-align:center">
-          <div style="font-size:10px;color:rgba(255,255,255,.4)">🪙 50 XPF</div>
-          <div id="joueur-solde-50" style="font-size:18px;font-weight:800;color:#818cf8">0</div>
-        </div>
-        <div style="flex:1;background:var(--s2);border-radius:8px;padding:8px;text-align:center">
-          <div style="font-size:10px;color:rgba(255,255,255,.4)">🪙 100 XPF</div>
-          <div id="joueur-solde-100" style="font-size:18px;font-weight:800;color:#818cf8">0</div>
+      <!-- Notification micro organisateur -->
+      <div id="micro-notif-joueur" style="display:none;background:linear-gradient(135deg,#6366f1,#7c3aed);padding:12px 16px;margin:10px 0;border-radius:12px;text-align:center">
+        <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:4px">🎤 Message de l'organisateur</div>
+        <div id="micro-message-joueur" style="font-size:15px;font-weight:700;color:#fff"></div>
+      </div>
+
+      <!-- Pointage automatique -->
+      <div class="card" style="margin-top:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:600;color:#fff">🤖 Pointage automatique</div>
+            <div style="font-size:11px;color:var(--mu);margin-top:2px">Coche les numéros automatiquement</div>
+          </div>
+          <div onclick="togglePointageAuto(this)" id="toggle-pointage" style="width:48px;height:26px;background:rgba(255,255,255,.1);border-radius:13px;cursor:pointer;position:relative;transition:all .3s">
+            <div id="toggle-ball" style="width:22px;height:22px;background:#6b7280;border-radius:50%;position:absolute;top:2px;left:2px;transition:all .3s"></div>
+          </div>
         </div>
       </div>
 
-      <!-- Packs pions -->
-      <div class="lbl">Valeur du pion</div>
-      <div style="display:flex;gap:8px;margin-bottom:12px">
-        <div onclick="selValeurPionJoueur(20,this)" class="pion-val-j" style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;cursor:pointer;text-align:center">
-          <div style="font-size:16px;font-weight:700;color:#fff">🪙 20</div>
-          <div style="font-size:10px;color:var(--mu)">XPF</div>
+      <div class="card" style="margin-top:10px">
+        <div class="ct" style="justify-content:space-between">
+          <span>🎰 Boules tirées en direct</span>
+          <button class="btn-sm" onclick="loadTirageJoueur()">↻</button>
         </div>
-        <div onclick="selValeurPionJoueur(50,this)" class="pion-val-j" style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;cursor:pointer;text-align:center">
-          <div style="font-size:16px;font-weight:700;color:#fff">🪙 50</div>
-          <div style="font-size:10px;color:var(--mu)">XPF</div>
-        </div>
-        <div onclick="selValeurPionJoueur(100,this)" class="pion-val-j" style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;cursor:pointer;text-align:center">
-          <div style="font-size:16px;font-weight:700;color:#fff">🪙 100</div>
-          <div style="font-size:10px;color:var(--mu)">XPF</div>
-        </div>
-      </div>
-
-      <div class="lbl">Montant à commander (XPF)</div>
-      <input id="joueur-pion-montant" type="number" placeholder="Ex: 1000" min="500" step="500" oninput="calcPionsJoueur()" style="margin-bottom:8px"/>
-      
-      <div id="joueur-pion-calcul" style="display:none;background:rgba(99,102,241,.1);border-radius:8px;padding:10px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:4px">
-          <span>Montant payé</span><span id="joueur-pion-prix">0 XPF</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:#f87171;margin-bottom:4px">
-          <span>Commission (20%)</span><span id="joueur-pion-commission">0 XPF</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#818cf8">
-          <span>Pions reçus</span><span id="joueur-pion-nb">0 pions</span>
-        </div>
-      </div>
-
-      <div class="lbl">Mode de paiement</div>
-      <select id="joueur-pion-mode" style="margin-bottom:8px">
-        <option value="">Choisir le mode de paiement...</option>
-        <option value="CCP">CCP Papeete</option>
-        <option value="Deblock">Deblock</option>
-        <option value="Especes Papeete">Espèces — Boutique Papeete</option>
-        <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
-        <option value="Carte">Paiement par carte</option>
-      </select>
-      <input id="joueur-pion-ref" placeholder="Référence ou numéro de transaction" style="margin-bottom:12px;font-size:13px"/>
-      
-      <button onclick="commanderPionsJoueur()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Commander mes pions</button>
-      <div id="joueur-pion-result" style="margin-top:8px"></div>
-    </div>
-
-    <!-- Notification micro organisateur -->
-    <div id="micro-notif-joueur" style="display:none;background:linear-gradient(135deg,#6366f1,#7c3aed);padding:12px 16px;margin:10px 16px;border-radius:12px;text-align:center">
-      <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:4px">🎤 Message de l'organisateur</div>
-      <div id="micro-message-joueur" style="font-size:15px;font-weight:700;color:#fff"></div>
-    </div>
-
-    <!-- Pointage automatique -->
-    <div class="card" style="margin-top:14px;margin-left:16px;margin-right:16px">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-size:13px;font-weight:600;color:#fff">🤖 Pointage automatique</div>
-          <div style="font-size:11px;color:var(--mu);margin-top:2px">Coche les numéros automatiquement</div>
-        </div>
-        <div onclick="togglePointageAuto(this)" id="toggle-pointage" style="width:48px;height:26px;background:rgba(255,255,255,.1);border-radius:13px;cursor:pointer;position:relative;transition:all .3s">
-          <div id="toggle-ball" style="width:22px;height:22px;background:#6b7280;border-radius:50%;position:absolute;top:2px;left:2px;transition:all .3s"></div>
+        <div style="font-size:11px;color:var(--ac2);text-align:center;margin-bottom:8px">🔄 Mise à jour auto toutes les 5 secondes</div>
+        <div id="tirage-joueur-display-direct">
+          <div style="text-align:center;padding:16px;font-size:13px;color:var(--mu)">En attente du tirage...</div>
         </div>
       </div>
     </div>
 
-    <div class="card" style="margin-top:10px;margin-left:16px;margin-right:16px">
-      <div class="ct" style="justify-content:space-between">
-        <span>🎰 Boules tirées en direct</span>
-        <button class="btn-sm" onclick="loadTirageJoueur()">↻</button>
+    <!-- ONGLET PIONS -->
+    <div id="tab-j-pions" class="tab">
+      <div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1));border:1px solid rgba(99,102,241,.3);margin-bottom:14px">
+        <div class="ct" style="margin-bottom:12px">🪙 Mes pions disponibles</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <div style="flex:1;background:var(--s2);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:rgba(255,255,255,.4)">🪙 20 XPF</div>
+            <div id="joueur-solde-20" style="font-size:22px;font-weight:800;color:#818cf8">0</div>
+          </div>
+          <div style="flex:1;background:var(--s2);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:rgba(255,255,255,.4)">🪙 50 XPF</div>
+            <div id="joueur-solde-50" style="font-size:22px;font-weight:800;color:#818cf8">0</div>
+          </div>
+          <div style="flex:1;background:var(--s2);border-radius:8px;padding:10px;text-align:center">
+            <div style="font-size:10px;color:rgba(255,255,255,.4)">🪙 100 XPF</div>
+            <div id="joueur-solde-100" style="font-size:22px;font-weight:800;color:#818cf8">0</div>
+          </div>
+        </div>
+        <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">Commission 20% incluse dans chaque commande</div>
       </div>
-      <div style="font-size:11px;color:var(--ac2);text-align:center;margin-bottom:8px">🔄 Mise à jour auto toutes les 5 secondes</div>
-      <div id="tirage-joueur-display-direct">
-        <div style="text-align:center;padding:16px;font-size:13px;color:var(--mu)">En attente du tirage...</div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="ct" style="margin-bottom:10px">📦 Commander des pions</div>
+        <div class="lbl">Valeur du pion</div>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <div onclick="selValeurPionJoueur(20,this)" class="pion-val-j" style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;cursor:pointer;text-align:center">
+            <div style="font-size:16px;font-weight:700;color:#fff">🪙 20</div>
+            <div style="font-size:10px;color:var(--mu)">XPF</div>
+          </div>
+          <div onclick="selValeurPionJoueur(50,this)" class="pion-val-j" style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;cursor:pointer;text-align:center">
+            <div style="font-size:16px;font-weight:700;color:#fff">🪙 50</div>
+            <div style="font-size:10px;color:var(--mu)">XPF</div>
+          </div>
+          <div onclick="selValeurPionJoueur(100,this)" class="pion-val-j" style="flex:1;background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;cursor:pointer;text-align:center">
+            <div style="font-size:16px;font-weight:700;color:#fff">🪙 100</div>
+            <div style="font-size:10px;color:var(--mu)">XPF</div>
+          </div>
+        </div>
+        <div class="lbl">Montant à commander (XPF)</div>
+        <input id="joueur-pion-montant" type="number" placeholder="Ex: 1000" min="500" step="500" oninput="calcPionsJoueur()" style="margin-bottom:8px"/>
+        <div id="joueur-pion-calcul" style="display:none;background:rgba(99,102,241,.1);border-radius:8px;padding:10px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:4px"><span>Montant payé</span><span id="joueur-pion-prix">0 XPF</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:#f87171;margin-bottom:4px"><span>Commission (20%)</span><span id="joueur-pion-commission">0 XPF</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#818cf8"><span>Pions reçus</span><span id="joueur-pion-nb">0 pions</span></div>
+        </div>
+        <div class="lbl">Mode de paiement</div>
+        <select id="joueur-pion-mode" style="margin-bottom:8px">
+          <option value="">Choisir le mode de paiement...</option>
+          <option value="CCP">CCP Papeete</option>
+          <option value="Deblock">Deblock</option>
+          <option value="Especes Papeete">Espèces — Boutique Papeete</option>
+          <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
+          <option value="Carte">Paiement par carte</option>
+        </select>
+        <input id="joueur-pion-ref" placeholder="Référence ou numéro de transaction" style="margin-bottom:12px;font-size:13px"/>
+        <button onclick="commanderPionsJoueur()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Commander mes pions</button>
+        <div id="joueur-pion-result" style="margin-top:8px"></div>
       </div>
     </div>
+
   </div>
+  <nav class="nav">
+    <button class="nb active" onclick="switchJoueurTab('jouer',this)"><span class="ni">🎮</span>Jouer</button>
+    <button class="nb" onclick="switchJoueurTab('pions',this)"><span class="ni">🪙</span>Mes Pions</button>
+  </nav>
 </div>
 
 <!-- APP -->
@@ -1565,6 +1566,14 @@ function buildOrgSpace(){
   loadAlertesBingo();
   loadCommandes();
   loadPaiementsStripe();
+}
+
+function switchJoueurTab(n, el){
+  document.querySelectorAll('#s-joueur .tab').forEach(function(t){ t.classList.remove('active'); });
+  document.querySelectorAll('#s-joueur .nb').forEach(function(b){ b.classList.remove('active'); });
+  document.getElementById('tab-j-'+n).classList.add('active');
+  el.classList.add('active');
+  if(n==='pions') chargerSoldesPionsJoueur(codeJoueurActuel);
 }
 
 function switchOrgTab(n, el){
