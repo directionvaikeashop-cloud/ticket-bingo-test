@@ -1016,7 +1016,7 @@ async function accesJoueurDirect(){
               ${t.page_debut&&t.page_fin?`<div style="font-size:12px;color:var(--gd);margin-bottom:6px">📄 Feuilles ${t.page_debut} à ${t.page_fin}</div>`:''}
               <button onclick="ouvrirPDFJoueur('${t.pdf_url}','${t.acheteur}','ticket_${t.id}','${t.page_debut||1}','${t.page_fin||9999}','${t.jeu}','${t.serie}')" style="width:100%;padding:12px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600">🎯 Jouer maintenant !</button>
             </div>`:""}
-          ${!t.pdf_url?`<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun document joint à ce ticket</div>`:""}
+          ${!t.pdf_url?`<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">🎱 Bienvenue ! Consultez l'onglet 🪙 Mes Pions pour commander vos pions.</div>`:""}
         </div>`;
     } else {
       alert("Code invalide ou introuvable");
