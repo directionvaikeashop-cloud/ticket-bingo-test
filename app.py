@@ -1374,6 +1374,139 @@ def get_signals():
     return jsonify(signals)
 
 # === PIONS JOUEUR DIRECT ===
+# === ANNONCES JEUX ===
+@app.route("/api/annonce/jeu", methods=["POST", "DELETE"])
+def gerer_annonce_jeu():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    
+    if "annonces_jeux" not in DB:
+        DB["annonces_jeux"] = []
+    
+    if request.method == "DELETE":
+        code_org = request.json.get("code_org", "")
+        DB["annonces_jeux"] = [a for a in DB["annonces_jeux"] if a.get("code_org") != code_org]
+        save_data()
+        return jsonify({"ok": True})
+    
+    d = request.json
+    # Supprimer l'ancienne annonce de cet organisateur
+    DB["annonces_jeux"] = [a for a in DB["annonces_jeux"] if a.get("code_org") != s["code"]]
+    
+    annonce = {
+        "id": secrets.token_hex(4).upper(),
+        "code_org": s["code"],
+        "nom_org": s.get("nom", s["code"]),
+        "jeu": d.get("jeu", ""),
+        "prix": int(d.get("prix", 0)),
+        "desc": d.get("desc", ""),
+        "date": datetime.datetime.now().isoformat()
+    }
+    DB["annonces_jeux"].insert(0, annonce)
+    save_data()
+    return jsonify({"ok": True})
+
+@app.route("/api/annonce/jeux")
+def get_annonces_jeux():
+    global DB
+    DB = load_data()
+    return jsonify(DB.get("annonces_jeux", []))
+
+@app.route("/api/commande/ticket-pions", methods=["POST"])
+def commander_ticket_pions():
+    global DB
+    DB = load_data()
+    d = request.json
+    code_joueur = d.get("code_joueur", "").upper()
+    jeu = d.get("jeu", "")
+    prix = int(d.get("prix", 0))
+    nb_tickets = int(d.get("nb_tickets", 1))
+    total = int(d.get("total", 0))
+    code_org = d.get("code_org", "")
+    
+    # Vérifier solde pions du joueur
+    pions_joueur = DB.get("pions_joueurs", {}).get(code_joueur, {})
+    
+    # Trouver les pions disponibles (priorité aux pions de plus grande valeur)
+    solde_total = 0
+    for valeur, nb in pions_joueur.items():
+        solde_total += int(valeur) * nb
+    
+    if solde_total < total:
+        return jsonify({"ok": False, "msg": f"Solde insuffisant — vous avez {solde_total} XPF de pions, il faut {total} XPF"}), 400
+    
+    # Débiter les pions (priorité aux pions de plus petite valeur)
+    reste = total
+    for valeur in ["20", "50", "100"]:
+        nb_dispo = pions_joueur.get(valeur, 0)
+        if nb_dispo > 0 and reste > 0:
+            val_int = int(valeur)
+            nb_utilise = min(nb_dispo, reste // val_int)
+            if nb_utilise > 0:
+                pions_joueur[valeur] = nb_dispo - nb_utilise
+                reste -= nb_utilise * val_int
+    
+    if reste > 0:
+        return jsonify({"ok": False, "msg": "Solde insuffisant en pions"}), 400
+    
+    DB["pions_joueurs"][code_joueur] = pions_joueur
+    
+    # Créditer les pions à l'organisateur
+    if "pions_org" not in DB:
+        DB["pions_org"] = {}
+    if code_org not in DB["pions_org"]:
+        DB["pions_org"][code_org] = {}
+    
+    # Enregistrer la commande ticket
+    if "commandes_tickets_pions" not in DB:
+        DB["commandes_tickets_pions"] = []
+    
+    commande = {
+        "id": secrets.token_hex(4).upper(),
+        "code_joueur": code_joueur,
+        "code_org": code_org,
+        "jeu": jeu,
+        "prix": prix,
+        "nb_tickets": nb_tickets,
+        "total_pions": total,
+        "statut": "en_attente",
+        "date": datetime.datetime.now().isoformat()
+    }
+    DB["commandes_tickets_pions"].insert(0, commande)
+    save_data()
+    return jsonify({"ok": True, "commande_id": commande["id"]})
+
+@app.route("/api/commande/tickets-pions-org")
+def get_commandes_tickets_pions():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify([])
+    commandes = DB.get("commandes_tickets_pions", [])
+    return jsonify([c for c in commandes if c.get("code_org") == s["code"]])
+
+@app.route("/api/commande/ticket-pions/valider", methods=["POST"])
+def valider_ticket_pions():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    commande_id = request.json.get("commande_id", "")
+    for c in DB.get("commandes_tickets_pions", []):
+        if c["id"] == commande_id:
+            c["statut"] = "validee"
+            break
+    save_data()
+    return jsonify({"ok": True})
+
 @app.route("/api/pions/commande-joueur", methods=["POST"])
 def commande_pions_joueur():
     global DB
