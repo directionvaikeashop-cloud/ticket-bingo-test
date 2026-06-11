@@ -1627,9 +1627,11 @@ if HAS_WEBSOCKET:
         try:
             while True:
                 # Garder la connexion ouverte
-                data = ws.receive(timeout=60)
+                # None = simple timeout d'attente, PAS une deconnexion -> on continue
+                # (une vraie deconnexion leve une exception, geree par le except)
+                data = ws.receive(timeout=25)
                 if data is None:
-                    break
+                    continue
         except:
             pass
         finally:
