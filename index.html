@@ -466,6 +466,38 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       <button onclick="commanderPionsJoueur()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Commander mes pions</button>
       <div id="joueur-pion-result" style="margin-top:8px"></div>
     </div>
+
+    <!-- BONUS INFO -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.4);margin-bottom:14px">
+      <div class="ct" style="margin-bottom:10px">🎁 Vos bonus disponibles</div>
+      <div style="display:flex;flex-direction:column;gap:8px;font-size:12px;color:rgba(255,255,255,.7)">
+        <div style="display:flex;align-items:center;gap:8px"><span>🎁</span><span><b style="color:#fbbf24">Bienvenue</b> — 1ere commande : +5 pions offerts !</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span>💰</span><span><b style="color:#fbbf24">Volume</b> — 2000 XPF +5% · 5000 XPF +10% · 10000 XPF +15%</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span>🔄</span><span><b style="color:#fbbf24">Fidelite</b> — Toutes les 5 commandes : +10 pions !</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span>👥</span><span><b style="color:#fbbf24">Parrainage</b> — +10 pions pour vous, +5 pour votre ami !</span></div>
+      </div>
+    </div>
+
+    <!-- PARRAINAGE -->
+    <div class="card" style="margin-bottom:14px">
+      <div class="ct" style="margin-bottom:10px">👥 Mon code parrainage</div>
+      <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:10px">Partagez votre code et gagnez 10 pions par ami parreine !</div>
+      <div style="background:var(--s2);border-radius:8px;padding:12px;text-align:center;margin-bottom:10px">
+        <div style="font-size:11px;color:var(--mu);margin-bottom:6px">Votre code parrainage</div>
+        <div id="code-parrain-display" style="font-family:monospace;font-size:24px;font-weight:800;color:#fbbf24;letter-spacing:4px">---</div>
+        <div id="parrainage-stats" style="font-size:11px;color:var(--mu);margin-top:6px"></div>
+      </div>
+      <button onclick="copierCodeParrain()" style="width:100%;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-bottom:10px">📋 Copier mon code</button>
+      <div style="border-top:0.5px solid var(--bd);padding-top:10px">
+        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:8px">Vous avez un code parrainage ?</div>
+        <div style="display:flex;gap:8px">
+          <input id="input-code-parrain" placeholder="Ex: PAR4A2B3C" style="flex:1;text-transform:uppercase;font-size:13px;margin-bottom:0"/>
+          <button onclick="utiliserParrainage()" style="padding:10px 14px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:600">OK</button>
+        </div>
+        <div id="parrainage-result" style="margin-top:6px"></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -1096,6 +1128,7 @@ async function accesJoueurPions(){
   show("s-joueur-pions");
   chargerSoldesPionsJoueur(code);
   chargerJeuxDisponibles(code);
+  chargerCodeParrain(code);
   // Auto-refresh toutes les 10 secondes
   setInterval(function(){ 
     chargerSoldesPionsJoueur(code);
@@ -3981,6 +4014,54 @@ function afficherNotificationJoueur(code, message){
   box.appendChild(btn);
   overlay.appendChild(box);
   document.body.appendChild(overlay);
+}
+
+// === PARRAINAGE ET BONUS ===
+var codeParrainActuel = "";
+
+async function chargerCodeParrain(code){
+  try{
+    const r = await fetch('/api/parrainage/code/'+code);
+    const d = await r.json();
+    if(d.ok){
+      codeParrainActuel = d.code_parrain;
+      var el = document.getElementById('code-parrain-display');
+      if(el) el.textContent = d.code_parrain;
+      var stats = document.getElementById('parrainage-stats');
+      if(stats) stats.textContent = d.nb_filleuls + ' ami(s) parrainé(s) — ' + d.bonus_total + ' pions gagnés';
+    }
+  }catch(e){}
+}
+
+function copierCodeParrain(){
+  if(!codeParrainActuel) return;
+  navigator.clipboard.writeText(codeParrainActuel).then(function(){
+    var btn = document.querySelector('[onclick="copierCodeParrain()"]');
+    if(btn){ btn.textContent = '✅ Copié !'; setTimeout(function(){ btn.textContent = '📋 Copier mon code'; }, 2000); }
+  }).catch(function(){
+    alert('Votre code : ' + codeParrainActuel);
+  });
+}
+
+async function utiliserParrainage(){
+  var code = document.getElementById('input-code-parrain').value.trim().toUpperCase();
+  var result = document.getElementById('parrainage-result');
+  if(!code){ result.innerHTML = '<div style="color:#f87171;font-size:12px">Entrez un code parrainage</div>'; return; }
+  if(!codeJoueurActuel){ result.innerHTML = '<div style="color:#f87171;font-size:12px">Connectez-vous d abord</div>'; return; }
+  try{
+    const r = await fetch('/api/parrainage/utiliser', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({code_joueur: codeJoueurActuel, code_parrain: code})
+    });
+    const d = await r.json();
+    if(d.ok){
+      result.innerHTML = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:8px;color:#34d399;font-size:12px;margin-top:6px">'+d.msg+'</div>';
+      chargerSoldesPionsJoueur(codeJoueurActuel);
+    } else {
+      result.innerHTML = '<div style="color:#f87171;font-size:12px;margin-top:6px">'+d.msg+'</div>';
+    }
+  }catch(e){ result.innerHTML = '<div style="color:#f87171;font-size:12px">Erreur connexion</div>'; }
 }
 
 // === COORDONNÉES BANCAIRES ===
