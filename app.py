@@ -2,6 +2,11 @@ import hashlib, datetime, os, secrets, string, json, base64
 import urllib.request, urllib.parse
 from flask import Flask, request, jsonify, send_from_directory, Response, send_file
 try:
+    from flask_sock import Sock
+    HAS_WEBSOCKET = True
+except:
+    HAS_WEBSOCKET = False
+try:
     import stripe
     STRIPE_SECRET_KEY = os.environ.get("STRIPE_SECRET_KEY", "")
     STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
@@ -21,6 +26,8 @@ from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
 app = Flask(__name__, static_folder=".")
+if HAS_WEBSOCKET:
+    sock = Sock(app)
 
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "directionvaikeashop@gmail.com")
@@ -1581,6 +1588,53 @@ def get_commandes_joueurs():
     if not s or not s.get("admin"):
         return jsonify([])
     return jsonify(DB.get("commandes_pions_joueurs", []))
+
+# === WEBSOCKET MICRO ===
+# Connectés WebSocket : {code_org: [ws_connections]}
+ws_micro_org = {}  # organisateur -> list of ws
+ws_micro_joueurs = {}  # liste des joueurs connectés
+
+if HAS_WEBSOCKET:
+    @sock.route("/ws/micro/org/<code_org>")
+    def ws_organisateur(ws, code_org):
+        """WebSocket organisateur — envoie l'audio"""
+        if code_org not in ws_micro_org:
+            ws_micro_org[code_org] = []
+        try:
+            while True:
+                data = ws.receive()
+                if data is None:
+                    break
+                # Diffuser à tous les joueurs connectés sur ce code_org
+                joueurs = ws_micro_joueurs.get(code_org, [])
+                deconnectes = []
+                for j_ws in joueurs:
+                    try:
+                        j_ws.send(data)
+                    except:
+                        deconnectes.append(j_ws)
+                for d in deconnectes:
+                    joueurs.remove(d)
+        except:
+            pass
+
+    @sock.route("/ws/micro/joueur/<code_org>")
+    def ws_joueur(ws, code_org):
+        """WebSocket joueur — reçoit l'audio"""
+        if code_org not in ws_micro_joueurs:
+            ws_micro_joueurs[code_org] = []
+        ws_micro_joueurs[code_org].append(ws)
+        try:
+            while True:
+                # Garder la connexion ouverte
+                data = ws.receive(timeout=60)
+                if data is None:
+                    break
+        except:
+            pass
+        finally:
+            if ws in ws_micro_joueurs.get(code_org, []):
+                ws_micro_joueurs[code_org].remove(ws)
 
 @app.route("/api/micro/audio", methods=["POST"])
 def recevoir_audio():
