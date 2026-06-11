@@ -1374,6 +1374,31 @@ def get_signals():
         signals = [s for s in signals if s["id"] > after]
     return jsonify(signals)
 
+# === GESTION JEUX PERSONNALISES ===
+@app.route("/api/jeux/ajouter", methods=["POST"])
+def ajouter_jeu():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    nom = request.json.get("nom", "").strip().upper()
+    if not nom:
+        return jsonify({"ok": False, "msg": "Nom invalide"}), 400
+    if "jeux_custom" not in DB:
+        DB["jeux_custom"] = []
+    if nom not in DB["jeux_custom"]:
+        DB["jeux_custom"].append(nom)
+    save_data()
+    return jsonify({"ok": True})
+
+@app.route("/api/jeux/liste")
+def liste_jeux():
+    global DB
+    DB = load_data()
+    return jsonify(DB.get("jeux_custom", []))
+
 # === PIONS JOUEUR DIRECT ===
 # === ANNONCES JEUX ===
 @app.route("/api/annonce/jeu", methods=["POST", "DELETE"])
