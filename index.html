@@ -1308,8 +1308,19 @@ function buildOrgSpace(){
         <div style="font-size:16px;font-weight:700;color:#fff" id="cmd-resume-text"></div>
       </div>
       
+      <div class="lbl">Mode de paiement</div>
+      <select id="cmd-mode-paiement" style="margin-bottom:8px">
+        <option value="">Choisir le mode de paiement...</option>
+        <option value="Carte">💳 Paiement par carte (Stripe) — Automatique</option>
+        <option value="CCP">CCP Papeete</option>
+        <option value="Deblock">Deblock</option>
+        <option value="Especes Papeete">Espèces — Boutique Papeete</option>
+        <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
+      </select>
+      <input id="cmd-ref-paiement" placeholder="Référence (si virement/espèces)" style="margin-bottom:12px;font-size:13px"/>
+      
       <button onclick="passerCommande()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Passer la commande</button>
-      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center;margin-top:6px">Nous recevons votre commande immédiatement et vous préparons vos tickets</div>
+      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center;margin-top:6px">Paiement carte → PDF automatique ! Autres modes → traitement manuel</div>
     </div>
 
     <!-- MES COMMANDES EN COURS -->
@@ -1785,8 +1796,19 @@ function buildRevSpace(){
         <div style="font-size:16px;font-weight:700;color:#fff" id="cmd-resume-text"></div>
       </div>
       
+      <div class="lbl">Mode de paiement</div>
+      <select id="cmd-mode-paiement" style="margin-bottom:8px">
+        <option value="">Choisir le mode de paiement...</option>
+        <option value="Carte">💳 Paiement par carte (Stripe) — Automatique</option>
+        <option value="CCP">CCP Papeete</option>
+        <option value="Deblock">Deblock</option>
+        <option value="Especes Papeete">Espèces — Boutique Papeete</option>
+        <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
+      </select>
+      <input id="cmd-ref-paiement" placeholder="Référence (si virement/espèces)" style="margin-bottom:12px;font-size:13px"/>
+      
       <button onclick="passerCommande()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Passer la commande</button>
-      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center;margin-top:6px">Nous recevons votre commande immédiatement et vous préparons vos tickets</div>
+      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center;margin-top:6px">Paiement carte → PDF automatique ! Autres modes → traitement manuel</div>
     </div>
 
     <!-- MES COMMANDES EN COURS -->
@@ -2912,13 +2934,43 @@ function updateResumeCmd(){
 async function passerCommande(){
   var jeu = document.getElementById('cmd-jeu').value;
   var serie = document.getElementById('cmd-serie').value || '1';
+  var mode = document.getElementById('cmd-mode-paiement') ? document.getElementById('cmd-mode-paiement').value : '';
+  var ref = document.getElementById('cmd-ref-paiement') ? document.getElementById('cmd-ref-paiement').value.trim() : '';
   if(!jeu){ alert('Choisissez un jeu'); return; }
   if(!packCmdSelectionne.nb){ alert('Choisissez un pack'); return; }
+  if(!mode){ alert('Choisissez votre mode de paiement'); return; }
+  
+  // Si paiement par carte → Stripe automatique
+  if(mode === 'Carte'){
+    try{
+      const r = await fetch('/api/paiement/tickets', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+        body: JSON.stringify({
+          jeu: jeu,
+          pack: packCmdSelectionne.nb,
+          prix: packCmdSelectionne.prix,
+          serie: serie,
+          code_org: CODE_ORG
+        })
+      });
+      const d = await r.json();
+      if(d.ok && d.url){
+        window.open(d.url, '_blank');
+        toast('toast-t', '💳 Page de paiement ouverte — PDF généré automatiquement après paiement !');
+        return;
+      } else {
+        alert(d.msg || 'Erreur paiement carte');
+        return;
+      }
+    }catch(e){ alert('Erreur connexion Stripe'); return; }
+  }
+  
   try{
     const r = await fetch('/api/commande/passer', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
-      body: JSON.stringify({jeu, pack: packCmdSelectionne.nb, prix: packCmdSelectionne.prix, serie})
+      body: JSON.stringify({jeu, pack: packCmdSelectionne.nb, prix: packCmdSelectionne.prix, serie, mode_paiement: mode, ref_paiement: ref})
     });
     const d = await r.json();
     if(d.ok){
