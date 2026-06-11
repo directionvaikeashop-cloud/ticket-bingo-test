@@ -985,31 +985,25 @@ def reset_tournoi():
     # 2. Effacer TOUTES les alertes bingo
     DB["alertes_bingo"] = []
     
-    # 3. Effacer les tickets de cet organisateur
+    # 3. Effacer les tickets vendus aux joueurs pour ce tournoi
     DB["tickets"] = [t for t in DB.get("tickets", []) if t.get("code_org") != code_org]
     
-    # 4. Effacer les PDFs physiques de cet organisateur
-    import os
-    ventes_org = [v for v in DB.get("ventes", []) if v.get("code_org") == code_org]
-    for v in ventes_org:
-        pdf_url = v.get("pdf_url", "")
-        if pdf_url and "/api/pdf/" in pdf_url:
-            pdf_id = pdf_url.split("/api/pdf/")[-1]
-            pdf_path = f"/data/pdfs/{pdf_id}.pdf"
-            if os.path.exists(pdf_path):
-                try:
-                    os.remove(pdf_path)
-                except:
-                    pass
+    # 4. Effacer les coches/pointages joueurs
+    DB["coches"] = {}
     
-    # 5. Effacer les ventes de cet organisateur
-    DB["ventes"] = [v for v in DB.get("ventes", []) if v.get("code_org") != code_org]
+    # 5. Les ventes (PDFs achetés par l'organisateur) RESTENT INTACTES
+    # On efface uniquement les tickets joueurs, pas les achats de l'organisateur
     
-    # 6. Effacer les coches/pointages joueurs liés à cet organisateur
-    if "coches" in DB:
-        keys_to_delete = [k for k in DB["coches"] if code_org in k]
-        for k in keys_to_delete:
-            del DB["coches"][k]
+    # 6. Effacer les commandes tickets pions de ce tournoi
+    DB["commandes_tickets_pions"] = [c for c in DB.get("commandes_tickets_pions", []) if c.get("code_org") != code_org]
+    
+    # 7. Supprimer l'annonce du jeu en cours
+    DB["annonces_jeux"] = [a for a in DB.get("annonces_jeux", []) if a.get("code_org") != code_org]
+    
+    # 8. Remettre le micro à zéro
+    DB["micro_status"] = {"actif": False, "message": ""}
+    
+    # NE PAS EFFACER : codes joueurs, codes organisateurs, soldes pions, ventes/PDFs organisateur
     
     save_data()
     print(f"[RESET] Tournoi remis à zéro pour {code_org}")
