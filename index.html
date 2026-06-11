@@ -2146,49 +2146,51 @@ var carteNumeros = {}; // {numero: [{page, x, y}]}
 async function analyserPageNumeroPDF(page, pageNum){
   try{
     const textContent = await page.getTextContent();
-    const SCALE_RENDU = 2.0;
-    const viewport = page.getViewport({scale: SCALE_RENDU});
-
-    // Passe 1 : collecter tous les candidats numeros
-    var candidats = [];
+    // Viewport natif (scale 1.0) pour coordonnées PDF pures
+    const viewportNatif = page.getViewport({scale: 1.0});
+    const W = viewportNatif.width;
+    const H = viewportNatif.height;
+    
+    // Grouper les items par position Y proche (même ligne)
+    var lignes = {};
+    
     textContent.items.forEach(function(item){
-      const texte = item.str.trim();
-      const num = parseInt(texte, 10);
+      var texte = item.str.trim();
+      if(!texte) return;
+      
+      // Position en coordonnées PDF natives
+      var tx = item.transform[4];
+      var ty = item.transform[5];
+      var w = Math.abs(item.width) || 10;
+      var h = Math.abs(item.height) || 10;
+      
+      // Centre du numéro
+      var cx = tx + w / 2;
+      // En PDF, Y=0 est en bas — convertir en % depuis le haut
+      var cy = H - ty - h / 2;
+      
+      var xPct = (cx / W) * 100;
+      var yPct = (cy / H) * 100;
+      
+      // Essayer de parser comme numéro
+      var num = parseInt(texte);
       if(!isNaN(num) && num >= 1 && num <= 90 && texte === String(num)){
-        const transform = pdfjsLib.Util.transform(viewport.transform, item.transform);
-        // Taille reelle de police en pixels viewport (gere aussi la rotation)
-        const fontH = Math.hypot(transform[2], transform[3]);
-        candidats.push({
-          num: num,
-          tx: transform[4],
-          ty: transform[5], // = ligne de BASE du texte
-          w: (item.width || 10) * SCALE_RENDU,
-          fontH: fontH
-        });
+        if(xPct > 2 && xPct < 98 && yPct > 2 && yPct < 98){
+          if(!carteNumeros[num]) carteNumeros[num] = [];
+          var dejaLa = carteNumeros[num].some(function(p){
+            return p.page === pageNum && Math.abs(p.x - xPct) < 3 && Math.abs(p.y - yPct) < 3;
+          });
+          if(!dejaLa){
+            carteNumeros[num].push({page: pageNum, x: xPct, y: yPct});
+          }
+        }
       }
     });
-    if(!candidats.length) return;
-
-    // Passe 2 : ne garder que la taille de police DOMINANTE (= numeros des grilles)
-    // Elimine les faux positifs : "75" du titre, telephone, numero de serie...
-    var compteTailles = {};
-    candidats.forEach(function(c){
-      var clef = Math.round(c.fontH);
-      compteTailles[clef] = (compteTailles[clef] || 0) + 1;
-    });
-    var tailleDominante = parseInt(Object.keys(compteTailles).sort(function(a,b){
-      return compteTailles[b] - compteTailles[a];
-    })[0], 10);
-
-    candidats.forEach(function(c){
-      if(Math.abs(c.fontH - tailleDominante) > tailleDominante * 0.2) return;
-      const xPct = ((c.tx + c.w / 2) / viewport.width) * 100;
-      // Centre du chiffre AU-DESSUS de la ligne de base
-      // REGLAGE : coche trop basse -> augmenter (0.60, 0.65) / trop haute -> diminuer (0.45, 0.40)
-      const yPct = ((c.ty - c.fontH * 0.55) / viewport.height) * 100;
-      if(!carteNumeros[c.num]) carteNumeros[c.num] = [];
-      carteNumeros[c.num].push({page: pageNum, x: xPct, y: yPct});
-    });
+    
+    var nbTrouves = Object.keys(carteNumeros).filter(function(n){ 
+      return carteNumeros[n].some(function(p){ return p.page === pageNum; });
+    }).length;
+    console.log('Page ' + pageNum + ': ' + nbTrouves + ' numéros trouvés sur ' + W.toFixed(0) + 'x' + H.toFixed(0));
   }catch(e){ console.error('analyserPage error:', e); }
 }
 
@@ -2549,9 +2551,18 @@ function tirerBoule(){
         osc.stop(ctx.currentTime + 0.5);
       } catch(e){}
       
-      // Voix qui annonce la boule via la file (sans cancel, anti-coupures)
+      // Voix qui annonce la boule - annuler la file avant
       setTimeout(function(){
-        try{ annoncerVocal(lettre + ' ' + boule); }catch(e){}
+        try{
+          window.speechSynthesis.cancel();
+          setTimeout(function(){
+            const msg = new SpeechSynthesisUtterance(lettre + ' ' + boule);
+            msg.lang = 'fr-FR';
+            msg.rate = 0.8;
+            msg.pitch = 1.1;
+            window.speechSynthesis.speak(msg);
+          }, 50);
+        }catch(e){}
       }, 300);
     }
   }, 60);
@@ -2567,9 +2578,6 @@ function resetTirage(){
   document.querySelectorAll('[id="nb-tires"]').forEach(function(el){ el.textContent = '0'; });
   document.querySelectorAll('[id="nb-restants"]').forEach(function(el){ el.textContent = '75'; });
   document.querySelectorAll('[id="historique-boules"]').forEach(function(el){ el.innerHTML = ''; });
-  // IMPORTANT : vider aussi le tirage sur le SERVEUR,
-  // sinon les joueurs continuent de voir les anciennes boules indefiniment
-  fetch('/api/tirage', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({boules: [], vitesse: vitesseTirage||3})}).catch(function(){});
 }
 
 // === BINGO ===
@@ -2863,24 +2871,6 @@ async function loadPaiementsStripe(){
 
 // Vérifier retour Stripe
 const urlParams = new URLSearchParams(window.location.search);
-if(urlParams.get('paiement') === 'pions_ok'){
-  setTimeout(() => {
-    const msg = document.createElement('div');
-    msg.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:16px 32px;border-radius:12px;font-size:15px;font-weight:600;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,.3);text-align:center;max-width:90%';
-    msg.innerHTML = '✅ Paiement réussi !<br><span style="font-size:13px;font-weight:400">Vos pions seront crédités dans quelques secondes 🪙</span>';
-    document.body.appendChild(msg);
-    setTimeout(() => msg.remove(), 8000);
-  }, 1000);
-}
-if(urlParams.get('paiement') === 'pions_annule'){
-  setTimeout(() => {
-    const msg = document.createElement('div');
-    msg.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#fff;padding:16px 32px;border-radius:12px;font-size:15px;font-weight:600;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,.3)';
-    msg.textContent = '⚠️ Paiement annulé — aucun pion commandé';
-    document.body.appendChild(msg);
-    setTimeout(() => msg.remove(), 6000);
-  }, 1000);
-}
 if(urlParams.get('paiement') === 'success'){
   setTimeout(() => {
     const msg = document.createElement('div');
@@ -3615,34 +3605,13 @@ function calcPions(){
 async function commanderPions(){
   if(!valeurPionSelectionne){ alert('Choisissez la valeur du pion'); return; }
   var montant = parseFloat(document.getElementById('pion-montant').value || 0);
-  if(montant < 500){ alert('Montant minimum : 500 XPF'); return; }
+  if(montant <= 0){ alert('Entrez un montant'); return; }
   var mode = document.getElementById('pion-mode-paiement') ? document.getElementById('pion-mode-paiement').value : '';
   var ref = document.getElementById('pion-ref-paiement') ? document.getElementById('pion-ref-paiement').value.trim() : '';
   if(!mode){ alert('Choisissez votre mode de paiement'); return; }
   var commission = Math.round(montant * 0.20);
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionSelectionne);
-
-  // PAIEMENT PAR CARTE : page Stripe + credit automatique
-  if(mode === 'Carte'){
-    try{
-      const rs = await fetch('/api/pions/stripe-checkout', {
-        method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
-        body: JSON.stringify({profil: 'organisateur', valeur_pion: valeurPionSelectionne, montant: montant})
-      });
-      const ds = await rs.json();
-      if(ds.ok && ds.url){
-        toast('toast-pions', '💳 Redirection vers le paiement sécurisé...');
-        window.location.href = ds.url;
-      } else {
-        alert(ds.msg || 'Paiement par carte indisponible — choisissez un autre mode');
-      }
-    }catch(e){
-      alert('Paiement par carte indisponible — choisissez un autre mode');
-    }
-    return;
-  }
-
   try{
     const r = await fetch('/api/pions/commande', {
       method: 'POST',
@@ -3876,7 +3845,7 @@ function calcPionsJoueur(){
 async function commanderPionsJoueur(){
   if(!valeurPionJoueur){ alert('Choisissez la valeur du pion'); return; }
   var montant = parseFloat(document.getElementById('joueur-pion-montant').value || 0);
-  if(montant < 500){ alert('Montant minimum : 500 XPF'); return; }
+  if(montant <= 0){ alert('Entrez un montant'); return; }
   var mode = document.getElementById('joueur-pion-mode').value;
   var ref = document.getElementById('joueur-pion-ref').value.trim();
   if(!mode){ alert('Choisissez votre mode de paiement'); return; }
@@ -3884,29 +3853,7 @@ async function commanderPionsJoueur(){
   var commission = Math.round(montant * 0.20);
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionJoueur);
-
-  // PAIEMENT PAR CARTE : ouvrir la page de paiement securisee Stripe
-  // Les pions seront credites AUTOMATIQUEMENT apres le paiement
-  if(mode === 'Carte'){
-    try{
-      const rs = await fetch('/api/pions/stripe-checkout', {
-        method: 'POST', headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({profil: 'joueur', code: codeJoueurActuel, valeur_pion: valeurPionJoueur, montant: montant})
-      });
-      const ds = await rs.json();
-      if(ds.ok && ds.url){
-        document.getElementById('joueur-pion-result').innerHTML =
-          '<div style="background:rgba(99,102,241,.2);border:1px solid #6366f1;border-radius:8px;padding:10px;text-align:center;color:#818cf8;margin-top:6px">💳 Redirection vers le paiement sécurisé...</div>';
-        window.location.href = ds.url;
-      } else {
-        alert(ds.msg || 'Paiement par carte indisponible — choisissez un autre mode');
-      }
-    }catch(e){
-      alert('Paiement par carte indisponible — choisissez un autre mode');
-    }
-    return;
-  }
-
+  
   try{
     const r = await fetch('/api/pions/commande-joueur', {
       method: 'POST',
@@ -4117,32 +4064,20 @@ async function toggleMicro(){
       microWs = new WebSocket(wsUrl);
       
       microWs.onopen = function(){
-        // Detection du format supporte (WebM sur Android/PC, MP4 sur iPhone)
-        var mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus'
-                     : (MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '');
-
-        microActif = true; // AVANT le demarrage du cycle
-
-        // Cycle d'enregistrement par segments COMPLETS de 1,5 s
-        // (avec start(250), seuls les premiers octets contenaient l'en-tete WebM,
-        //  les chunks suivants etaient illisibles seuls -> c'est ca qui coupait)
-        function cycleEnregistrement(){
-          if(!microActif) return;
-          var rec = new MediaRecorder(microStream, mimeType ? {mimeType: mimeType, audioBitsPerSecond: 32000} : {audioBitsPerSecond: 32000});
-          mediaRecorder = rec;
-          rec.ondataavailable = function(e){
-            if(e.data.size > 0 && microWs && microWs.readyState === WebSocket.OPEN){
-              microWs.send(e.data);
-            }
-          };
-          rec.start();
-          setTimeout(function(){
-            try{ if(rec.state !== 'inactive') rec.stop(); }catch(err){}
-            if(microActif) cycleEnregistrement();
-          }, 1500);
-        }
-        cycleEnregistrement();
-
+        // Démarrer MediaRecorder en streaming continu
+        var mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus') ? 'audio/webm;codecs=opus' : 'audio/webm';
+        mediaRecorder = new MediaRecorder(microStream, {mimeType: mimeType, audioBitsPerSecond: 32000});
+        
+        mediaRecorder.ondataavailable = function(e){
+          if(e.data.size > 0 && microWs && microWs.readyState === WebSocket.OPEN){
+            microWs.send(e.data);
+          }
+        };
+        
+        // Envoyer des chunks toutes les 250ms — streaming fluide sans coupure
+        mediaRecorder.start(250);
+        
+        microActif = true;
         btn.style.background = 'rgba(239,68,68,.5)';
         btn.style.borderColor = '#ef4444';
         btn.style.boxShadow = '0 0 20px rgba(239,68,68,.5)';
@@ -4219,7 +4154,6 @@ async function envoyerMessageMicro(){
 // Vérifier les messages micro côté joueur toutes les 3 secondes
 let dernierMessageJoueur = "";
 let derniereBouleAnnoncee = 0;
-var boulesAnnoncees = null; // null = premier chargement (pas de recitation de l'historique)
 let dernierAudioTimestamp = "";
 let audioContext = null;
 
@@ -4259,100 +4193,40 @@ var sourceBuffer = null;
 var audioQueue = [];
 var audioProcessing = false;
 
-var joueurMicroPing = null;
-var codeOrgMicroActuel = null;
-var wakeLockMicro = null;
-
-// Garder l'ecran allume pendant le direct (sinon le telephone se met en veille et le son s'arrete)
-async function demanderWakeLock(){
-  try{
-    if('wakeLock' in navigator){
-      wakeLockMicro = await navigator.wakeLock.request('screen');
-    }
-  }catch(e){}
-}
-
 function connecterMicroJoueur(codeOrg){
   if(!codeOrg) return;
-  // Eviter les doubles connexions
-  if(joueurMicroWs && joueurMicroWs.readyState === WebSocket.OPEN && codeOrgMicroActuel === codeOrg) return;
-  codeOrgMicroActuel = codeOrg;
   try{
     const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/micro/joueur/' + codeOrg;
     joueurMicroWs = new WebSocket(wsUrl);
-
+    
     joueurMicroWs.binaryType = 'arraybuffer';
-
-    joueurMicroWs.onopen = function(){
-      // Ping toutes les 20 s pour que le serveur et Railway gardent le tuyau ouvert
-      if(joueurMicroPing) clearInterval(joueurMicroPing);
-      joueurMicroPing = setInterval(function(){
-        try{
-          if(joueurMicroWs && joueurMicroWs.readyState === WebSocket.OPEN) joueurMicroWs.send('ping');
-        }catch(e){}
-      }, 20000);
-      demanderWakeLock();
-    };
-
+    
     joueurMicroWs.onmessage = function(e){
       if(e.data instanceof ArrayBuffer){
         jouerAudioBuffer(e.data);
       }
     };
-
+    
     joueurMicroWs.onclose = function(){
-      if(joueurMicroPing){ clearInterval(joueurMicroPing); joueurMicroPing = null; }
       // Reconnecter après 3 secondes
       setTimeout(function(){ connecterMicroJoueur(codeOrg); }, 3000);
     };
-
+    
     joueurMicroWs.onerror = function(){};
   }catch(e){}
 }
 
-// Au retour sur l'app (telephone deverrouille, retour d'une autre appli) :
-// reconnexion IMMEDIATE du micro + ecran maintenu allume
-document.addEventListener('visibilitychange', function(){
-  if(document.visibilityState === 'visible' && codeOrgMicroActuel){
-    if(!joueurMicroWs || joueurMicroWs.readyState !== WebSocket.OPEN){
-      connecterMicroJoueur(codeOrgMicroActuel);
-    }
-    demanderWakeLock();
-  }
-});
-
-var fileAudioMicro = [];
-var audioMicroEnCours = false;
-
 function jouerAudioBuffer(arrayBuffer){
-  fileAudioMicro.push(arrayBuffer);
-  // Si du retard s'accumule, on saute au plus recent (latence maitrisee)
-  if(fileAudioMicro.length > 3) fileAudioMicro = fileAudioMicro.slice(-2);
-  traiterFileAudioMicro();
-}
-
-function traiterFileAudioMicro(){
-  if(audioMicroEnCours || !fileAudioMicro.length) return;
-  audioMicroEnCours = true;
-  var buf = fileAudioMicro.shift();
   try{
-    var bytes = new Uint8Array(buf);
-    // En-tete EBML (0x1A45DFA3) = WebM, sinon MP4 (iPhone)
-    var estWebm = bytes[0] === 0x1A && bytes[1] === 0x45 && bytes[2] === 0xDF && bytes[3] === 0xA3;
-    var blob = new Blob([buf], {type: estWebm ? 'audio/webm' : 'audio/mp4'});
+    var blob = new Blob([arrayBuffer], {type: 'audio/webm'});
     var url = URL.createObjectURL(blob);
     var audio = new Audio(url);
-    var fini = function(){
+    audio.play().then(function(){ 
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
+    }).catch(function(){
       URL.revokeObjectURL(url);
-      audioMicroEnCours = false;
-      traiterFileAudioMicro();
-    };
-    audio.onended = fini;
-    audio.onerror = fini;
-    audio.play().catch(fini);
-  }catch(e){
-    audioMicroEnCours = false;
-  }
+    });
+  }catch(e){}
 }
 
 async function jouerAudioMicro(b64){
@@ -4451,7 +4325,7 @@ function verifierBingoAutomatique(){
       var pageKey = 'page_' + pos.page;
       var cochesPage = cochesParPage[pageKey] || [];
       return cochesPage.some(function(c){
-        return Math.abs(c.x - pos.x) < 5 && Math.abs(c.y - pos.y) < 5;
+        return Math.abs(c.x - pos.x) < 8 && Math.abs(c.y - pos.y) < 8;
       });
     });
     if(estCoche) numerosCoches.push(parseInt(num));
@@ -4600,44 +4474,6 @@ function initialiserVoix(){
 document.addEventListener('touchstart', initialiserVoix, {once: true});
 document.addEventListener('click', initialiserVoix, {once: true});
 
-// === FILE D'ANNONCE VOCALE (anti-coupures, anti-boules muettes) ===
-var fileAnnonces = [];
-var annonceEnCours = false;
-var voixFr = null;
-
-function chargerVoixFr(){
-  try{
-    var voix = window.speechSynthesis.getVoices();
-    voixFr = voix.find(function(v){ return v.lang && v.lang.indexOf('fr') === 0; }) || null;
-  }catch(e){}
-}
-if('speechSynthesis' in window){
-  chargerVoixFr();
-  window.speechSynthesis.onvoiceschanged = chargerVoixFr;
-  // Anti-blocage Chrome : le moteur se met parfois en pause tout seul
-  setInterval(function(){ try{ if(window.speechSynthesis.paused) window.speechSynthesis.resume(); }catch(e){} }, 3000);
-}
-
-function annoncerVocal(texte){
-  fileAnnonces.push(texte);
-  traiterFileAnnonces();
-}
-
-function traiterFileAnnonces(){
-  if(annonceEnCours || !fileAnnonces.length || !('speechSynthesis' in window)) return;
-  annonceEnCours = true;
-  var msg = new SpeechSynthesisUtterance(fileAnnonces.shift());
-  msg.lang = 'fr-FR';
-  if(voixFr) msg.voice = voixFr;
-  msg.rate = 0.8; msg.pitch = 1.1; msg.volume = 1;
-  var suivant = function(){ annonceEnCours = false; setTimeout(traiterFileAnnonces, 250); };
-  msg.onend = suivant;
-  msg.onerror = suivant;
-  // Filet de securite si onend ne se declenche jamais (bug Android connu)
-  setTimeout(function(){ if(annonceEnCours){ annonceEnCours = false; traiterFileAnnonces(); } }, 8000);
-  window.speechSynthesis.speak(msg);
-}
-
 function startTirageAutoRefresh(){
   if(tirageInterval) clearInterval(tirageInterval);
   tirageInterval = setInterval(loadTirageJoueur, 5000);
@@ -4662,9 +4498,6 @@ async function loadTirageJoueur(){
     const el = els[0];
     if(!boules.length){
       els.forEach(e => e.innerHTML = '<div style="text-align:center;padding:16px;font-size:13px;color:var(--mu)">Aucune boule tirée pour le moment</div>');
-      // Tirage remis a zero -> nouvelle partie : reinitialiser annonces et pointage auto
-      boulesAnnoncees = [];
-      dernieresBoulesCochees = [];
       return;
     }
     // Dernière boule tirée en grand
@@ -4694,20 +4527,25 @@ async function loadTirageJoueur(){
     // Pointage automatique si activé
     if(pointageAutoActif) pointageAutomatique(boules);
     
-    // Annoncer TOUTES les nouvelles boules depuis le dernier passage
-    if(boulesAnnoncees === null){
-      boulesAnnoncees = boules.slice(); // arrivee en cours de partie : pas de recitation
-    } else if(boules.length < boulesAnnoncees.length){
-      // Le tirage a ete remis a zero puis relance entre deux actualisations -> nouvelle partie
-      boulesAnnoncees = boules.slice();
-      dernieresBoulesCochees = [];
-    } else {
-      boules.forEach(function(b){
-        if(boulesAnnoncees.indexOf(b) === -1){
-          boulesAnnoncees.push(b);
-          annoncerVocal(getLettre(b) + ' ' + b);
-        }
-      });
+    // Annoncer la dernière boule à voix haute si nouvelle
+    if(boules.length > 0){
+      var derniereBoule = boules[boules.length-1];
+      if(derniereBoule !== derniereBouleAnnoncee){
+        derniereBouleAnnoncee = derniereBoule;
+        var lettreBoule = getLettre(derniereBoule);
+        try{
+          // Annuler TOUT ce qui est en file et lire uniquement la dernière boule
+          window.speechSynthesis.cancel();
+          setTimeout(function(){
+            var msg = new SpeechSynthesisUtterance(lettreBoule + ' ' + derniereBoule);
+            msg.lang = 'fr-FR';
+            msg.rate = 0.8;
+            msg.pitch = 1.1;
+            msg.volume = 1;
+            window.speechSynthesis.speak(msg);
+          }, 100);
+        }catch(e){}
+      }
     }
   }catch(e){}
 }
