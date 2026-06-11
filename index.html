@@ -3612,6 +3612,31 @@ async function commanderPions(){
   var commission = Math.round(montant * 0.20);
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionSelectionne);
+  
+  // Si paiement par carte → ouvrir Stripe
+  if(mode === 'Carte'){
+    try{
+      const r = await fetch('/api/paiement/pions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+        body: JSON.stringify({
+          code: CODE_ORG,
+          valeur_pion: valeurPionSelectionne,
+          montant: montant,
+          nb_pions: nbPions,
+          type: 'organisateur'
+        })
+      });
+      const d = await r.json();
+      if(d.ok && d.url){
+        window.open(d.url, '_blank');
+        return;
+      } else {
+        alert(d.msg || 'Erreur paiement carte');
+        return;
+      }
+    }catch(e){ alert('Erreur connexion Stripe'); return; }
+  }
   try{
     const r = await fetch('/api/pions/commande', {
       method: 'POST',
@@ -3853,6 +3878,31 @@ async function commanderPionsJoueur(){
   var commission = Math.round(montant * 0.20);
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionJoueur);
+  
+  // Si paiement par carte → ouvrir Stripe
+  if(mode === 'Carte'){
+    try{
+      const r = await fetch('/api/paiement/pions', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          code: codeJoueurActuel,
+          valeur_pion: valeurPionJoueur,
+          montant: montant,
+          nb_pions: nbPions,
+          type: 'joueur'
+        })
+      });
+      const d = await r.json();
+      if(d.ok && d.url){
+        window.open(d.url, '_blank');
+        return;
+      } else {
+        alert(d.msg || 'Erreur paiement carte');
+        return;
+      }
+    }catch(e){ alert('Erreur connexion Stripe'); return; }
+  }
   
   try{
     const r = await fetch('/api/pions/commande-joueur', {
