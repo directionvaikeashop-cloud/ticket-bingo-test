@@ -2028,8 +2028,10 @@ def stripe_webhook():
                         from generate_60_boules import generate_pdf as gen_pdf
                         gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
                     elif "40" in jeu_lower and "boule" in jeu_lower:
+                        print(f"[STRIPE] Génération 40 BOULES: {pack} tickets -> {output_path}")
                         from generate_40_boules import generate_pdf as gen_pdf
                         gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
+                        print(f"[STRIPE] PDF 40 BOULES généré OK!")
                     elif "4" in jeu_lower and "coin" in jeu_lower:
                         from generate_4_coins import generate_pdf as gen_pdf
                         gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
@@ -2067,7 +2069,9 @@ def stripe_webhook():
                     print(f"[STRIPE TICKETS] PDF généré automatiquement : {pack} tickets {jeu} pour {code_org}")
                     
                 except Exception as e:
+                    import traceback
                     print(f"[STRIPE TICKETS ERR] Génération PDF échouée: {e}")
+                    print(f"[STRIPE TICKETS TRACE] {traceback.format_exc()}")
                     # En cas d'erreur, créer quand même la commande pour traitement manuel
                     if "commandes_tickets" not in DB:
                         DB["commandes_tickets"] = []
