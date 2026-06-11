@@ -354,16 +354,20 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div style="margin-bottom:12px">
           <div style="font-size:12px;color:#818cf8;font-weight:600;margin-bottom:6px">🏦 Virement bancaire</div>
           <div style="font-size:11px;color:rgba(255,255,255,.6);line-height:1.8">
-            <div><strong style="color:rgba(255,255,255,.8)">Banque de Tahiti</strong></div>
-            <div>Titulaire : MIALHE MAEVA-CARINE</div>
-            <div>IBAN : FR76 1223 9000 0141 2566 0100 071</div>
-            <div>BIC : CEPAPFTPXXX</div>
-          </div>
-          <div style="font-size:11px;color:rgba(255,255,255,.6);line-height:1.8;margin-top:8px">
-            <div><strong style="color:rgba(255,255,255,.8)">CCP Papeete</strong></div>
-            <div>Titulaire : MIALHE MAEVA-CARINE</div>
+            <div><strong style="color:#fbbf24">💰 CCP Papeete</strong></div>
+            <div>Titulaire : Mlle. MIALHE MAEVA-CARINE</div>
+            <div>Banque : 14168 — Guichet : 00001</div>
+            <div>N° compte : 10002580501 — Clé : 50</div>
             <div>IBAN : FR76 14168 00001 10002580501 50</div>
             <div>BIC : OFTPPFT1XXX</div>
+          </div>
+          <div style="font-size:11px;color:rgba(255,255,255,.6);line-height:1.8;margin-top:8px">
+            <div><strong style="color:#818cf8">🏦 Deblock</strong></div>
+            <div>Titulaire : Maeva MIALHE</div>
+            <div>Banque : 17748 — Guichet : 01984</div>
+            <div>N° compte : YV2AJQKDHA5 — Clé : 61</div>
+            <div>IBAN : FR85 1774 8019 84YV 2AJQ KDHA 561</div>
+            <div>BIC : DBLKFR22XXX</div>
           </div>
         </div>
 
@@ -1079,6 +1083,16 @@ async function accesJoueurPions(){
   const code = document.getElementById("joueur-code").value.trim().toUpperCase();
   if(!code){alert("Entrez votre code ticket");return;}
   codeJoueurActuel = code;
+  
+  // Vérifier si notification en attente
+  try{
+    const rn = await fetch('/api/notification/joueur/'+code);
+    const dn = await rn.json();
+    if(dn.ok && dn.message){
+      afficherNotificationJoueur(code, dn.message);
+    }
+  }catch(e){}
+  
   show("s-joueur-pions");
   chargerSoldesPionsJoueur(code);
   chargerJeuxDisponibles(code);
@@ -2850,11 +2864,11 @@ function afficherVirement(montant){
     "<div style='font-size:20px;font-weight:800;color:#fbbf24;text-align:center;margin-bottom:16px'>" + m + " XPF</div>",
     "<div style='background:rgba(99,102,241,.1);border-radius:10px;padding:14px;margin-bottom:10px'>",
     "<div style='font-size:12px;font-weight:600;color:#818cf8;margin-bottom:8px'>Option 1 — CCP Papeete</div>",
-    "<div style='font-size:12px;color:rgba(255,255,255,.7);line-height:2'>IBAN : FR76 14168 00001 10002580501 50<br>BIC : OFTPPFT1XXX<br>Bénéficiaire : EI TUKEA IMPORT<br>Référence : " + ref + "</div>",
+    "<div style='font-size:12px;color:rgba(255,255,255,.7);line-height:2'>Titulaire : Mlle. MIALHE MAEVA-CARINE<br>IBAN : FR76 14168 00001 10002580501 50<br>BIC : OFTPPFT1XXX<br>Référence : " + ref + "</div>",
     "</div>",
     "<div style='background:rgba(99,102,241,.1);border-radius:10px;padding:14px;margin-bottom:16px'>",
     "<div style='font-size:12px;font-weight:600;color:#818cf8;margin-bottom:8px'>Option 2 — Deblock</div>",
-    "<div style='font-size:12px;color:rgba(255,255,255,.7);line-height:2'>Compte : EI TUKEA IMPORT<br>Référence : " + ref + "</div>",
+    "<div style='font-size:12px;color:rgba(255,255,255,.7);line-height:2'>Titulaire : Maeva MIALHE<br>IBAN : FR85 1774 8019 84YV 2AJQ KDHA 561<br>BIC : DBLKFR22XXX<br>Référence : " + ref + "</div>",
     "</div>",
     "<div style='font-size:11px;color:rgba(255,255,255,.4);text-align:center;margin-bottom:16px'>Envoyez votre preuve — Activation sous 24h</div>",
     "<div style='display:flex;gap:8px'>",
@@ -3945,6 +3959,28 @@ async function commanderTicketAvecPions(jeuId, jeu, prix, nbTickets, codeOrg, co
       alert(d.msg || 'Erreur — vérifiez votre solde de pions');
     }
   }catch(e){ alert('Erreur de connexion'); }
+}
+
+// === NOTIFICATION JOUEUR ===
+function afficherNotificationJoueur(code, message){
+  var overlay = document.createElement('div');
+  overlay.id = 'notif-overlay-joueur';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.85);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  var box = document.createElement('div');
+  box.style.cssText = 'background:#111218;border:2px solid #f59e0b;border-radius:16px;padding:24px;max-width:400px;width:100%';
+  box.innerHTML = '<div style="font-size:20px;text-align:center;margin-bottom:12px">⚠️</div>' +
+    '<div style="font-size:15px;font-weight:700;color:#fbbf24;margin-bottom:12px;text-align:center">Message important</div>' +
+    '<div style="font-size:13px;color:rgba(255,255,255,.8);line-height:1.6;margin-bottom:20px">' + message + '</div>';
+  var btn = document.createElement('button');
+  btn.style.cssText = 'width:100%;padding:12px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700';
+  btn.textContent = "✅ J'ai compris";
+  btn.onclick = function(){
+    overlay.remove();
+    fetch('/api/notification/joueur/lue/'+code, {method:'POST'}).catch(function(){});
+  };
+  box.appendChild(btn);
+  overlay.appendChild(box);
+  document.body.appendChild(overlay);
 }
 
 // === COORDONNÉES BANCAIRES ===
