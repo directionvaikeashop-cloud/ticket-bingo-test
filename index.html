@@ -1268,15 +1268,18 @@ function buildOrgSpace(){
       
       <!-- Choix du jeu -->
       <div class="lbl">Jeu</div>
-      <select id="cmd-jeu" style="margin-bottom:10px;font-size:13px">
-        <option value="">Choisir un jeu...</option>
-        <option value="TRIPLE ACTION 75">🎯 TRIPLE ACTION 75</option>
-        <option value="60 BOULES">🎱 60 BOULES</option>
-        <option value="40 BOULES">🎳 40 BOULES</option>
-        <option value="4 COINS">🪙 4 COINS</option>
-        <option value="500 FRANCS">💵 500 FRANCS</option>
-        <option value="1 DOLLAR">💰 1 DOLLAR</option>
-      </select>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <select id="cmd-jeu" style="flex:1;font-size:13px;margin-bottom:0" onchange="loadJeuxSelect()">
+          <option value="">Choisir un jeu...</option>
+          <option value="TRIPLE ACTION 75">🎯 TRIPLE ACTION 75</option>
+          <option value="60 BOULES">🎱 60 BOULES</option>
+          <option value="40 BOULES">🎳 40 BOULES</option>
+          <option value="4 COINS">🪙 4 COINS</option>
+          <option value="500 FRANCS">💵 500 FRANCS</option>
+          <option value="1 DOLLAR">💰 1 DOLLAR</option>
+        </select>
+        <button onclick="ajouterNouveauJeu()" style="padding:10px 12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:18px;font-weight:700;white-space:nowrap">+</button>
+      </div>
       
       <!-- Choix du pack -->
       <div class="lbl">Pack de tickets</div>
@@ -1756,15 +1759,18 @@ function buildRevSpace(){
       
       <!-- Choix du jeu -->
       <div class="lbl">Jeu</div>
-      <select id="cmd-jeu" style="margin-bottom:10px;font-size:13px">
-        <option value="">Choisir un jeu...</option>
-        <option value="TRIPLE ACTION 75">🎯 TRIPLE ACTION 75</option>
-        <option value="60 BOULES">🎱 60 BOULES</option>
-        <option value="40 BOULES">🎳 40 BOULES</option>
-        <option value="4 COINS">🪙 4 COINS</option>
-        <option value="500 FRANCS">💵 500 FRANCS</option>
-        <option value="1 DOLLAR">💰 1 DOLLAR</option>
-      </select>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <select id="cmd-jeu" style="flex:1;font-size:13px;margin-bottom:0" onchange="loadJeuxSelect()">
+          <option value="">Choisir un jeu...</option>
+          <option value="TRIPLE ACTION 75">🎯 TRIPLE ACTION 75</option>
+          <option value="60 BOULES">🎱 60 BOULES</option>
+          <option value="40 BOULES">🎳 40 BOULES</option>
+          <option value="4 COINS">🪙 4 COINS</option>
+          <option value="500 FRANCS">💵 500 FRANCS</option>
+          <option value="1 DOLLAR">💰 1 DOLLAR</option>
+        </select>
+        <button onclick="ajouterNouveauJeu()" style="padding:10px 12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:18px;font-weight:700;white-space:nowrap">+</button>
+      </div>
       
       <!-- Choix du pack -->
       <div class="lbl">Pack de tickets</div>
@@ -3995,6 +4001,54 @@ function chargerSoldesPionsJoueur(code){
     if(document.getElementById('joueur-solde-20')) document.getElementById('joueur-solde-20').textContent = d.pions_20 || 0;
     if(document.getElementById('joueur-solde-50')) document.getElementById('joueur-solde-50').textContent = d.pions_50 || 0;
     if(document.getElementById('joueur-solde-100')) document.getElementById('joueur-solde-100').textContent = d.pions_100 || 0;
+  })
+  .catch(function(){});
+}
+
+// === GESTION JEUX ===
+async function ajouterNouveauJeu(){
+  var nom = prompt('Nom du nouveau jeu (ex: OHANA 75, BIN 9...) :');
+  if(!nom || !nom.trim()) return;
+  nom = nom.trim().toUpperCase();
+  
+  try{
+    const r = await fetch('/api/jeux/ajouter', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({nom: nom})
+    });
+    const d = await r.json();
+    if(d.ok){
+      // Ajouter dans tous les selects de jeux
+      document.querySelectorAll('#cmd-jeu').forEach(function(sel){
+        var opt = document.createElement('option');
+        opt.value = nom;
+        opt.textContent = '🎮 ' + nom;
+        sel.appendChild(opt);
+        sel.value = nom;
+      });
+      toast('toast-b', '✅ Jeu ' + nom + ' ajouté !');
+    }
+  }catch(e){ alert('Erreur'); }
+}
+
+function loadJeuxSelect(){
+  // Charger les jeux personnalisés depuis le serveur
+  fetch('/api/jeux/liste', {headers: {'X-Token': TOKEN}})
+  .then(function(r){ return r.json(); })
+  .then(function(jeux){
+    document.querySelectorAll('#cmd-jeu').forEach(function(sel){
+      // Garder les options par défaut et ajouter les personnalisés
+      var valeursExistantes = Array.from(sel.options).map(function(o){ return o.value; });
+      jeux.forEach(function(j){
+        if(!valeursExistantes.includes(j)){
+          var opt = document.createElement('option');
+          opt.value = j;
+          opt.textContent = '🎮 ' + j;
+          sel.appendChild(opt);
+        }
+      });
+    });
   })
   .catch(function(){});
 }
