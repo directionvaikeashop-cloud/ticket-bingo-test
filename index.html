@@ -554,7 +554,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#818cf8"><span>Pions reçus</span><span id="joueur-pion-nb">0 pions</span></div>
         </div>
         <div class="lbl">Mode de paiement</div>
-        <select id="joueur-pion-mode" style="margin-bottom:8px">
+        <select id="joueur-pion-mode" onchange="afficherInfoBancaire('joueur-pion-mode','joueur-pion-info-bancaire')" style="margin-bottom:8px">
           <option value="">Choisir le mode de paiement...</option>
           <option value="CCP">CCP Papeete</option>
           <option value="Deblock">Deblock</option>
@@ -562,6 +562,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
           <option value="Carte">Paiement par carte</option>
         </select>
+        <div id="joueur-pion-info-bancaire" style="display:none"></div>
         <input id="joueur-pion-ref" placeholder="Référence ou numéro de transaction" style="margin-bottom:12px;font-size:13px"/>
         <button onclick="commanderPionsJoueur()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Commander mes pions</button>
         <div id="joueur-pion-result" style="margin-top:8px"></div>
@@ -1329,7 +1330,7 @@ function buildOrgSpace(){
       </div>
       
       <div class="lbl">Mode de paiement</div>
-      <select id="cmd-mode-paiement" style="margin-bottom:8px">
+      <select id="cmd-mode-paiement" onchange="afficherInfoBancaire('cmd-mode-paiement','cmd-info-bancaire')" style="margin-bottom:8px">
         <option value="">Choisir le mode de paiement...</option>
         <option value="Carte">💳 Paiement par carte (Stripe) — Automatique</option>
         <option value="CCP">CCP Papeete</option>
@@ -1337,6 +1338,7 @@ function buildOrgSpace(){
         <option value="Especes Papeete">Espèces — Boutique Papeete</option>
         <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
       </select>
+      <div id="cmd-info-bancaire" style="display:none"></div>
       <input id="cmd-ref-paiement" placeholder="Référence (si virement/espèces)" style="margin-bottom:12px;font-size:13px"/>
       
       <button onclick="passerCommande()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Passer la commande</button>
@@ -1661,7 +1663,7 @@ function buildOrgSpace(){
         </div>
       </div>
       <div class="lbl">Mode de paiement</div>
-      <select id="pion-mode-paiement" style="margin-bottom:8px">
+      <select id="pion-mode-paiement" onchange="afficherInfoBancaire('pion-mode-paiement','org-pion-info-bancaire')" style="margin-bottom:8px">
         <option value="">Choisir le mode de paiement...</option>
         <option value="CCP">CCP Papeete</option>
         <option value="Deblock">Deblock</option>
@@ -1669,6 +1671,7 @@ function buildOrgSpace(){
         <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
         <option value="Carte">Paiement par carte</option>
       </select>
+      <div id="org-pion-info-bancaire" style="display:none"></div>
       <input id="pion-ref-paiement" placeholder="Référence ou numéro de transaction" style="margin-bottom:12px;font-size:13px"/>
       <button onclick="commanderPions()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Commander et confirmer le paiement</button>
       <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center;margin-top:6px">Votre commande sera traitée après vérification du paiement</div>
@@ -1820,7 +1823,7 @@ function buildRevSpace(){
       </div>
       
       <div class="lbl">Mode de paiement</div>
-      <select id="cmd-mode-paiement" style="margin-bottom:8px">
+      <select id="cmd-mode-paiement" onchange="afficherInfoBancaire('cmd-mode-paiement','cmd-info-bancaire')" style="margin-bottom:8px">
         <option value="">Choisir le mode de paiement...</option>
         <option value="Carte">💳 Paiement par carte (Stripe) — Automatique</option>
         <option value="CCP">CCP Papeete</option>
@@ -1828,6 +1831,7 @@ function buildRevSpace(){
         <option value="Especes Papeete">Espèces — Boutique Papeete</option>
         <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
       </select>
+      <div id="cmd-info-bancaire" style="display:none"></div>
       <input id="cmd-ref-paiement" placeholder="Référence (si virement/espèces)" style="margin-bottom:12px;font-size:13px"/>
       
       <button onclick="passerCommande()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Passer la commande</button>
@@ -3943,6 +3947,66 @@ async function commanderTicketAvecPions(jeuId, jeu, prix, nbTickets, codeOrg, co
   }catch(e){ alert('Erreur de connexion'); }
 }
 
+// === COORDONNÉES BANCAIRES ===
+var INFO_BANCAIRE = {
+  "CCP": {
+    titre: "💰 Virement CCP Papeete",
+    couleur: "#f59e0b",
+    infos: [
+      {label: "Titulaire", valeur: "Mlle. MIALHE MAEVA-CARINE"},
+      {label: "Banque", valeur: "14168"},
+      {label: "Code guichet", valeur: "00001"},
+      {label: "N° de compte", valeur: "10002580501"},
+      {label: "Clé", valeur: "50"},
+      {label: "IBAN", valeur: "FR76 14168 00001 10002580501 50"},
+      {label: "BIC", valeur: "OFTPPFT1XXX"},
+      {label: "Domiciliation", valeur: "CCP PAPEETE — Tél: (689) 40 432 432"}
+    ]
+  },
+  "Deblock": {
+    titre: "🏦 Virement Deblock",
+    couleur: "#6366f1",
+    infos: [
+      {label: "Titulaire", valeur: "Maeva MIALHE"},
+      {label: "Banque", valeur: "17748"},
+      {label: "Guichet", valeur: "01984"},
+      {label: "N° de compte", valeur: "YV2AJQKDHA5"},
+      {label: "Clé RIB", valeur: "61"},
+      {label: "IBAN", valeur: "FR85 1774 8019 84YV 2AJQ KDHA 561"},
+      {label: "BIC", valeur: "DBLKFR22XXX"},
+      {label: "Domiciliation", valeur: "Deblock — Spaces Shake Building, Lille"}
+    ]
+  }
+};
+
+function afficherInfoBancaire(selectId, targetId){
+  var sel = document.getElementById(selectId);
+  var target = document.getElementById(targetId);
+  if(!sel || !target) return;
+  
+  var mode = sel.value;
+  var info = INFO_BANCAIRE[mode];
+  
+  if(info){
+    var bg = mode === 'CCP' ? 'rgba(245,158,11,.12)' : 'rgba(99,102,241,.12)';
+    var bd = mode === 'CCP' ? 'rgba(245,158,11,.4)' : 'rgba(99,102,241,.4)';
+    var h = '<div style="background:'+bg+';border:1px solid '+bd+';border-radius:10px;padding:12px;margin-top:8px">';
+    h += '<div style="font-size:13px;font-weight:700;color:'+info.couleur+';margin-bottom:8px">'+info.titre+'</div>';
+    h += '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:8px">Effectuez votre virement puis indiquez la référence ci-dessous</div>';
+    info.infos.forEach(function(i){
+      h += '<div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:12px">';
+      h += '<span style="color:rgba(255,255,255,.5)">'+i.label+'</span>';
+      h += '<span style="color:#fff;font-weight:600">'+i.valeur+'</span>';
+      h += '</div>';
+    });
+    h += '</div>';
+    target.innerHTML = h;
+    target.style.display = 'block';
+  } else {
+    target.innerHTML = '';
+    target.style.display = 'none';
+  }
+}
 // === PIONS JOUEUR DIRECT ===
 var valeurPionJoueur = 20; // 20 XPF par défaut
 var codeJoueurActuel = "";
