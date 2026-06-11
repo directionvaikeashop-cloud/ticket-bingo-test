@@ -711,7 +711,7 @@ def commander_pions():
     montant_paye = float(d.get("montant_paye", 0))
     commission = float(d.get("commission", 0))
     nb_pions = int(d.get("nb_pions", 0))
-    if not valeur_pion or montant_paye < 500 or nb_pions <= 0:
+    if not valeur_pion or montant_paye <= 0 or nb_pions <= 0:
         return jsonify({"ok": False, "msg": "Données invalides"}), 400
     if "commandes_pions" not in DB:
         DB["commandes_pions"] = []
@@ -1521,7 +1521,7 @@ def commande_pions_joueur():
     mode_paiement = d.get("mode_paiement", "")
     ref_paiement = d.get("ref_paiement", "")
     
-    if not code_joueur or not valeur_pion or montant_paye < 500:
+    if not code_joueur or not valeur_pion or montant_paye <= 0:
         return jsonify({"ok": False, "msg": "Données invalides"}), 400
     
     if "commandes_pions_joueurs" not in DB:
@@ -1627,11 +1627,9 @@ if HAS_WEBSOCKET:
         try:
             while True:
                 # Garder la connexion ouverte
-                # None = simple timeout d'attente, PAS une deconnexion -> on continue
-                # (une vraie deconnexion leve une exception, geree par le except)
-                data = ws.receive(timeout=25)
+                data = ws.receive(timeout=60)
                 if data is None:
-                    continue
+                    break
         except:
             pass
         finally:
@@ -1921,66 +1919,6 @@ def creer_session_paiement():
         print(f"[STRIPE ERR] {e}")
         return jsonify({"ok": False, "msg": str(e)}), 500
 
-@app.route("/api/pions/stripe-checkout", methods=["POST"])
-def stripe_checkout_pions():
-    """Cree une session de paiement Stripe pour un achat de pions (joueur ou organisateur)"""
-    if not stripe or not STRIPE_SECRET_KEY:
-        return jsonify({"ok": False, "msg": "Paiement par carte non configuré — choisissez un autre mode"}), 503
-    global DB
-    DB = load_data()
-    d = request.json
-    profil = d.get("profil", "joueur")  # joueur ou organisateur
-    valeur_pion = int(d.get("valeur_pion", 0))
-    montant = int(d.get("montant", 0))
-
-    if profil == "organisateur":
-        token = request.headers.get("X-Token", "")
-        s = verif_session(token)
-        if not s:
-            return jsonify({"ok": False, "msg": "Session expirée"}), 403
-        code = s["code"]
-    else:
-        code = d.get("code", "").upper().strip()
-
-    if not code or valeur_pion not in [20, 50, 100] or montant < 500:
-        return jsonify({"ok": False, "msg": "Données invalides"}), 400
-
-    # Calcul COTE SERVEUR (anti-triche) : commission 20%, pions sur la valeur restante
-    commission = round(montant * 0.20)
-    nb_pions = int((montant - commission) // valeur_pion)
-    if nb_pions <= 0:
-        return jsonify({"ok": False, "msg": "Montant trop faible pour cette valeur de pion"}), 400
-
-    try:
-        session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=[{
-                "price_data": {
-                    "currency": "xpf",
-                    "product_data": {
-                        "name": f"{nb_pions} pions à {valeur_pion} XPF",
-                        "description": f"Ticket Bingo — Pions ({code})"
-                    },
-                    "unit_amount": montant,
-                },
-                "quantity": 1,
-            }],
-            mode="payment",
-            success_url="https://ticket-bingo-production.up.railway.app?paiement=pions_ok",
-            cancel_url="https://ticket-bingo-production.up.railway.app?paiement=pions_annule",
-            metadata={
-                "type": "pions_joueur" if profil == "joueur" else "pions_org",
-                "code": code,
-                "valeur_pion": str(valeur_pion),
-                "nb_pions": str(nb_pions),
-                "commission": str(commission)
-            }
-        )
-        return jsonify({"ok": True, "url": session.url})
-    except Exception as e:
-        print(f"[STRIPE PIONS ERR] {e}")
-        return jsonify({"ok": False, "msg": "Erreur de paiement — choisissez un autre mode"}), 500
-
 @app.route("/api/paiement/webhook", methods=["POST"])
 def stripe_webhook():
     """Reçoit les notifications Stripe après paiement"""
@@ -2055,61 +1993,6 @@ def stripe_webhook():
                 })
                 print(f"[STRIPE] {nb_pions} pions crédités à {code_org}")
         
-        # Pions JOUEUR payes par carte : crediter automatiquement
-        if type_p == "pions_joueur":
-            code_joueur = metadata.get("code", "")
-            valeur = metadata.get("valeur_pion", "0")
-            nb_pions = int(metadata.get("nb_pions", 0))
-            if code_joueur and nb_pions > 0:
-                if "pions_joueurs" not in DB:
-                    DB["pions_joueurs"] = {}
-                if code_joueur not in DB["pions_joueurs"]:
-                    DB["pions_joueurs"][code_joueur] = {}
-                DB["pions_joueurs"][code_joueur][valeur] = DB["pions_joueurs"][code_joueur].get(valeur, 0) + nb_pions
-                if "commandes_pions_joueurs" not in DB:
-                    DB["commandes_pions_joueurs"] = []
-                DB["commandes_pions_joueurs"].insert(0, {
-                    "id": secrets.token_hex(4).upper(),
-                    "code_joueur": code_joueur,
-                    "valeur_pion": int(valeur),
-                    "montant_paye": montant,
-                    "commission": int(metadata.get("commission", 0)),
-                    "nb_pions": nb_pions,
-                    "mode_paiement": "Carte (Stripe)",
-                    "ref_paiement": session["id"][:24],
-                    "statut": "validee",
-                    "date": datetime.datetime.now().isoformat()
-                })
-                print(f"[STRIPE] {nb_pions} pions credites au joueur {code_joueur}")
-
-        # Pions ORGANISATEUR payes par carte : crediter automatiquement
-        if type_p == "pions_org":
-            code_o = metadata.get("code", "")
-            valeur = metadata.get("valeur_pion", "0")
-            nb_pions = int(metadata.get("nb_pions", 0))
-            if code_o and nb_pions > 0:
-                if "pions_org" not in DB:
-                    DB["pions_org"] = {}
-                if code_o not in DB["pions_org"]:
-                    DB["pions_org"][code_o] = {}
-                DB["pions_org"][code_o][valeur] = DB["pions_org"][code_o].get(valeur, 0) + nb_pions
-                if "commandes_pions" not in DB:
-                    DB["commandes_pions"] = []
-                DB["commandes_pions"].insert(0, {
-                    "id": secrets.token_hex(4).upper(),
-                    "code_org": code_o,
-                    "nom_org": code_o,
-                    "valeur_pion": int(valeur),
-                    "montant_paye": montant,
-                    "commission": int(metadata.get("commission", 0)),
-                    "nb_pions": nb_pions,
-                    "mode_paiement": "Carte (Stripe)",
-                    "ref_paiement": session["id"][:24],
-                    "statut": "validee",
-                    "date": datetime.datetime.now().isoformat()
-                })
-                print(f"[STRIPE] {nb_pions} pions credites a l'organisateur {code_o}")
-
         # Si c'est un achat PDF, enregistrer la commande
         if type_p == "pdf" and code_org:
             nb_tickets = int(metadata.get("nb_tickets", 0))
