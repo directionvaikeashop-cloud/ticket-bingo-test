@@ -1993,32 +1993,85 @@ def stripe_webhook():
                 })
                 print(f"[STRIPE] {nb_pions} pions crédités à {code_org}")
         
-        # Si c'est un achat de tickets (nouveau circuit automatique)
+        # Si c'est un achat de tickets (circuit automatique Stripe)
         if type_p == "tickets" and code_org:
             jeu = metadata.get("jeu", "")
             pack = int(metadata.get("pack", 0))
             prix_xpf = int(metadata.get("prix_xpf", 0))
-            serie = metadata.get("serie", "1")
+            serie = int(metadata.get("serie", "1"))
             
             if jeu and pack > 0:
-                # Créer une commande ticket automatiquement traitée
-                if "commandes_tickets" not in DB:
-                    DB["commandes_tickets"] = []
-                
-                commande_id = gen_code(8)
-                DB["commandes_tickets"].insert(0, {
-                    "id": commande_id,
-                    "code_org": code_org,
-                    "nom_org": DB["codes"].get(code_org, {}).get("nom", code_org),
-                    "jeu": jeu,
-                    "pack": pack,
-                    "prix": prix_xpf,
-                    "serie": serie,
-                    "statut": "payee_stripe",
-                    "mode_paiement": "Carte Stripe",
-                    "date": datetime.datetime.now().isoformat()
-                })
-                print(f"[STRIPE TICKETS] Commande {pack} tickets {jeu} pour {code_org}")
+                try:
+                    # Générer le PDF automatiquement
+                    pdf_id = secrets.token_hex(8)
+                    os.makedirs("/data/pdfs", exist_ok=True)
+                    output_path = f"/data/pdfs/{pdf_id}.pdf"
+                    pdf_url = f"/api/pdf/{pdf_id}"
+                    
+                    # Choisir le bon générateur selon le jeu
+                    jeu_lower = jeu.lower().replace(" ", "_")
+                    if "triple" in jeu_lower or "ta75" in jeu_lower:
+                        from generate_triple_action_75 import generate_pdf as gen_pdf
+                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
+                    elif "60" in jeu_lower and "boule" in jeu_lower:
+                        from generate_60_boules import generate_pdf as gen_pdf
+                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
+                    elif "40" in jeu_lower and "boule" in jeu_lower:
+                        from generate_40_boules import generate_pdf as gen_pdf
+                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
+                    elif "4" in jeu_lower and "coin" in jeu_lower:
+                        from generate_4_coins import generate_pdf as gen_pdf
+                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
+                    elif "500" in jeu_lower and "franc" in jeu_lower:
+                        from generate_500_francs import generate_pdf as gen_pdf
+                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
+                    elif "dollar" in jeu_lower or "1_dollar" in jeu_lower:
+                        from generate_1_dollar import generate_pdf as gen_pdf
+                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
+                    else:
+                        raise Exception(f"Jeu non reconnu: {jeu}")
+                    
+                    # Créer la vente automatiquement avec PDF
+                    if "ventes" not in DB:
+                        DB["ventes"] = []
+                    
+                    vente_id = secrets.token_hex(4).upper()
+                    DB["ventes"].insert(0, {
+                        "id": vente_id,
+                        "client": DB["codes"].get(code_org, {}).get("nom", code_org),
+                        "email": DB["codes"].get(code_org, {}).get("email", ""),
+                        "jeu": jeu,
+                        "pack": pack,
+                        "serie": str(serie),
+                        "prix": prix_xpf,
+                        "total": prix_xpf,
+                        "pdf_url": pdf_url,
+                        "code_org": code_org,
+                        "paiement_statut": "valide",
+                        "mode_paiement": "Carte Stripe",
+                        "date": datetime.datetime.now().isoformat(),
+                        "stripe_auto": True
+                    })
+                    
+                    print(f"[STRIPE TICKETS] PDF généré automatiquement : {pack} tickets {jeu} pour {code_org}")
+                    
+                except Exception as e:
+                    print(f"[STRIPE TICKETS ERR] Génération PDF échouée: {e}")
+                    # En cas d'erreur, créer quand même la commande pour traitement manuel
+                    if "commandes_tickets" not in DB:
+                        DB["commandes_tickets"] = []
+                    DB["commandes_tickets"].insert(0, {
+                        "id": gen_code(8),
+                        "code_org": code_org,
+                        "nom_org": DB["codes"].get(code_org, {}).get("nom", code_org),
+                        "jeu": jeu,
+                        "pack": pack,
+                        "prix": prix_xpf,
+                        "serie": str(serie),
+                        "statut": "payee_stripe_erreur_pdf",
+                        "mode_paiement": "Carte Stripe",
+                        "date": datetime.datetime.now().isoformat()
+                    })
 
         # Si c'est un achat PDF, enregistrer la commande
         if type_p == "pdf" and code_org:
