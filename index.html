@@ -446,7 +446,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       <input id="joueur-pion-montant" type="number" placeholder="Ex: 1000" min="500" step="500" oninput="calcPionsJoueur()" style="margin-bottom:8px"/>
       <div id="joueur-pion-calcul" style="display:none;background:rgba(99,102,241,.1);border-radius:8px;padding:10px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:4px"><span>Montant payé</span><span id="joueur-pion-prix">0 XPF</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:#f87171;margin-bottom:4px"><span>Commission (20%)</span><span id="joueur-pion-commission">0 XPF</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#f87171;margin-bottom:4px"><span>Commission (2%)</span><span id="joueur-pion-commission">0 XPF</span></div>
         <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#818cf8"><span>Pions reçus</span><span id="joueur-pion-nb">0 pions</span></div>
       </div>
       <div class="lbl">Mode de paiement</div>
@@ -526,7 +526,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
             <div id="joueur-solde-100" style="font-size:22px;font-weight:800;color:#818cf8">0</div>
           </div>
         </div>
-        <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">Commission 20% incluse dans chaque commande</div>
+        <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">Commission 2% incluse dans chaque commande</div>
       </div>
 
       <div class="card" style="margin-bottom:14px">
@@ -550,7 +550,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <input id="joueur-pion-montant" type="number" placeholder="Ex: 1000" min="500" step="500" oninput="calcPionsJoueur()" style="margin-bottom:8px"/>
         <div id="joueur-pion-calcul" style="display:none;background:rgba(99,102,241,.1);border-radius:8px;padding:10px;margin-bottom:10px">
           <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:4px"><span>Montant payé</span><span id="joueur-pion-prix">0 XPF</span></div>
-          <div style="display:flex;justify-content:space-between;font-size:12px;color:#f87171;margin-bottom:4px"><span>Commission (20%)</span><span id="joueur-pion-commission">0 XPF</span></div>
+          <div style="display:flex;justify-content:space-between;font-size:12px;color:#f87171;margin-bottom:4px"><span>Commission (2%)</span><span id="joueur-pion-commission">0 XPF</span></div>
           <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#818cf8"><span>Pions reçus</span><span id="joueur-pion-nb">0 pions</span></div>
         </div>
         <div class="lbl">Mode de paiement</div>
@@ -807,7 +807,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       <input id="joueur-pion-montant" type="number" placeholder="Ex: 1000" min="500" step="500" oninput="calcPionsJoueur()" style="margin-bottom:8px"/>
       <div id="joueur-pion-calcul" style="display:none;background:rgba(99,102,241,.1);border-radius:8px;padding:10px;margin-bottom:10px">
         <div style="display:flex;justify-content:space-between;font-size:12px;color:rgba(255,255,255,.5);margin-bottom:4px"><span>Montant payé</span><span id="joueur-pion-prix">0 XPF</span></div>
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:#f87171;margin-bottom:4px"><span>Commission (20%)</span><span id="joueur-pion-commission">0 XPF</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px;color:#f87171;margin-bottom:4px"><span>Commission (2%)</span><span id="joueur-pion-commission">0 XPF</span></div>
         <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#818cf8"><span>Pions reçus</span><span id="joueur-pion-nb">0 pions</span></div>
       </div>
       <div class="lbl">Mode de paiement</div>
@@ -1609,7 +1609,7 @@ function buildOrgSpace(){
           <div id="solde-pions-100" style="font-size:22px;font-weight:800;color:#818cf8">0</div>
         </div>
       </div>
-      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">Commission 20% incluse dans chaque commande</div>
+      <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">Commission 2% incluse dans chaque commande</div>
     </div>
 
     <!-- COMMANDER PIONS -->
@@ -3932,7 +3932,7 @@ async function commanderPionsJoueur(){
   var ref = document.getElementById('joueur-pion-ref').value.trim();
   if(!mode){ alert('Choisissez votre mode de paiement'); return; }
   
-  var commission = Math.round(montant * 0.20);
+  var commission = Math.round(montant * 0.02);
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionJoueur);
   
