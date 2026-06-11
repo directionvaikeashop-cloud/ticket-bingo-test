@@ -2013,10 +2013,23 @@ def stripe_webhook():
         # Si c'est un achat de pions, créditer automatiquement
         if type_p == "pions" and code_org:
             nb_pions = int(metadata.get("nb_pions", 0))
+            valeur_pion = str(metadata.get("valeur_pion", "20"))
+            type_acheteur = metadata.get("type_acheteur", "organisateur")
             if nb_pions > 0:
-                if "pions" not in DB:
-                    DB["pions"] = {}
-                DB["pions"][code_org] = DB["pions"].get(code_org, 0) + nb_pions
+                if type_acheteur == "joueur":
+                    # Créditer dans pions_joueurs
+                    if "pions_joueurs" not in DB:
+                        DB["pions_joueurs"] = {}
+                    if code_org not in DB["pions_joueurs"]:
+                        DB["pions_joueurs"][code_org] = {}
+                    DB["pions_joueurs"][code_org][valeur_pion] = DB["pions_joueurs"][code_org].get(valeur_pion, 0) + nb_pions
+                else:
+                    # Créditer dans pions organisateur
+                    if "pions" not in DB:
+                        DB["pions"] = {}
+                    if code_org not in DB["pions"]:
+                        DB["pions"][code_org] = 0
+                    DB["pions"][code_org] = DB["pions"].get(code_org, 0) + nb_pions
                 if "transactions_pions" not in DB:
                     DB["transactions_pions"] = []
                 DB["transactions_pions"].append({
@@ -2326,6 +2339,8 @@ def payer_pions():
                 "type": "pions",
                 "code_org": code_org,
                 "nb_pions": str(nb_pions),
+                "valeur_pion": str(valeur_pion),
+                "type_acheteur": type_acheteur,
                 "prix": str(prix)
             }
         )
