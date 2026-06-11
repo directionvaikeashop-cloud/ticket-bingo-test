@@ -330,7 +330,7 @@ def get_stats():
     DB = load_data()
     today = datetime.date.today().isoformat()
     vj = [v for v in DB["ventes"] if v["date"][:10] == today]
-    return jsonify({"ventes_jour": len(vj), "tickets_jour": sum(v["total_feuilles"] for v in vj), "total_jour": sum(v["total"] for v in vj)})
+    return jsonify({"ventes_jour": len(vj), "tickets_jour": sum(v.get("total_feuilles", v.get("pack", 0)) for v in vj), "total_jour": sum(v.get("total", 0) for v in vj)})
 
 @app.route("/api/ticket", methods=["POST"])
 def enregistrer_ticket():
