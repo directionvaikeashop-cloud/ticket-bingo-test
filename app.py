@@ -1568,6 +1568,25 @@ def commande_pions_joueur():
     save_data()
     return jsonify({"ok": True, "commande_id": commande["id"]})
 
+@app.route("/api/notification/joueur/<code_joueur>")
+def get_notification_joueur(code_joueur):
+    global DB
+    DB = load_data()
+    notifs = DB.get("notifications_joueurs", {})
+    notif = notifs.get(code_joueur.upper())
+    if notif and not notif.get("lu"):
+        return jsonify({"ok": True, "message": notif["message"]})
+    return jsonify({"ok": False})
+
+@app.route("/api/notification/joueur/lue/<code_joueur>", methods=["POST"])
+def marquer_notification_lue(code_joueur):
+    global DB
+    DB = load_data()
+    if "notifications_joueurs" in DB and code_joueur.upper() in DB["notifications_joueurs"]:
+        DB["notifications_joueurs"][code_joueur.upper()]["lu"] = True
+        save_data()
+    return jsonify({"ok": True})
+
 @app.route("/api/pions/solde-joueur/<code_joueur>")
 def solde_pions_joueur(code_joueur):
     global DB
