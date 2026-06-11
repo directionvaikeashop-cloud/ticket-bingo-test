@@ -1637,7 +1637,7 @@ function buildOrgSpace(){
           <span>Montant payé</span><span id="pion-prix">0 XPF</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:12px;color:#f87171;margin-bottom:4px">
-          <span>Commission (20%)</span><span id="pion-commission">0 XPF</span>
+          <span>Commission (2%)</span><span id="pion-commission">0 XPF</span>
         </div>
         <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#818cf8">
           <span>Pions reçus</span><span id="pion-nb-recus">0 pions</span>
@@ -3650,7 +3650,7 @@ function calcPions(){
     if(calcDiv) calcDiv.style.display = 'none';
     return;
   }
-  var commission = Math.round(montant * 0.20);
+  var commission = Math.round(montant * 0.02);
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionSelectionne);
   calcDiv.style.display = 'block';
@@ -3666,7 +3666,7 @@ async function commanderPions(){
   var mode = document.getElementById('pion-mode-paiement') ? document.getElementById('pion-mode-paiement').value : '';
   var ref = document.getElementById('pion-ref-paiement') ? document.getElementById('pion-ref-paiement').value.trim() : '';
   if(!mode){ alert('Choisissez votre mode de paiement'); return; }
-  var commission = Math.round(montant * 0.20);
+  var commission = Math.round(montant * 0.02);
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionSelectionne);
   
