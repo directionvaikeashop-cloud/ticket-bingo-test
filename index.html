@@ -2863,6 +2863,24 @@ async function loadPaiementsStripe(){
 
 // Vérifier retour Stripe
 const urlParams = new URLSearchParams(window.location.search);
+if(urlParams.get('paiement') === 'pions_ok'){
+  setTimeout(() => {
+    const msg = document.createElement('div');
+    msg.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:16px 32px;border-radius:12px;font-size:15px;font-weight:600;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,.3);text-align:center;max-width:90%';
+    msg.innerHTML = '✅ Paiement réussi !<br><span style="font-size:13px;font-weight:400">Vos pions seront crédités dans quelques secondes 🪙</span>';
+    document.body.appendChild(msg);
+    setTimeout(() => msg.remove(), 8000);
+  }, 1000);
+}
+if(urlParams.get('paiement') === 'pions_annule'){
+  setTimeout(() => {
+    const msg = document.createElement('div');
+    msg.style.cssText = 'position:fixed;top:20px;left:50%;transform:translateX(-50%);background:#f59e0b;color:#fff;padding:16px 32px;border-radius:12px;font-size:15px;font-weight:600;z-index:99999;box-shadow:0 4px 20px rgba(0,0,0,.3)';
+    msg.textContent = '⚠️ Paiement annulé — aucun pion commandé';
+    document.body.appendChild(msg);
+    setTimeout(() => msg.remove(), 6000);
+  }, 1000);
+}
 if(urlParams.get('paiement') === 'success'){
   setTimeout(() => {
     const msg = document.createElement('div');
@@ -3604,6 +3622,27 @@ async function commanderPions(){
   var commission = Math.round(montant * 0.20);
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionSelectionne);
+
+  // PAIEMENT PAR CARTE : page Stripe + credit automatique
+  if(mode === 'Carte'){
+    try{
+      const rs = await fetch('/api/pions/stripe-checkout', {
+        method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+        body: JSON.stringify({profil: 'organisateur', valeur_pion: valeurPionSelectionne, montant: montant})
+      });
+      const ds = await rs.json();
+      if(ds.ok && ds.url){
+        toast('toast-pions', '💳 Redirection vers le paiement sécurisé...');
+        window.location.href = ds.url;
+      } else {
+        alert(ds.msg || 'Paiement par carte indisponible — choisissez un autre mode');
+      }
+    }catch(e){
+      alert('Paiement par carte indisponible — choisissez un autre mode');
+    }
+    return;
+  }
+
   try{
     const r = await fetch('/api/pions/commande', {
       method: 'POST',
@@ -3845,7 +3884,29 @@ async function commanderPionsJoueur(){
   var commission = Math.round(montant * 0.20);
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionJoueur);
-  
+
+  // PAIEMENT PAR CARTE : ouvrir la page de paiement securisee Stripe
+  // Les pions seront credites AUTOMATIQUEMENT apres le paiement
+  if(mode === 'Carte'){
+    try{
+      const rs = await fetch('/api/pions/stripe-checkout', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({profil: 'joueur', code: codeJoueurActuel, valeur_pion: valeurPionJoueur, montant: montant})
+      });
+      const ds = await rs.json();
+      if(ds.ok && ds.url){
+        document.getElementById('joueur-pion-result').innerHTML =
+          '<div style="background:rgba(99,102,241,.2);border:1px solid #6366f1;border-radius:8px;padding:10px;text-align:center;color:#818cf8;margin-top:6px">💳 Redirection vers le paiement sécurisé...</div>';
+        window.location.href = ds.url;
+      } else {
+        alert(ds.msg || 'Paiement par carte indisponible — choisissez un autre mode');
+      }
+    }catch(e){
+      alert('Paiement par carte indisponible — choisissez un autre mode');
+    }
+    return;
+  }
+
   try{
     const r = await fetch('/api/pions/commande-joueur', {
       method: 'POST',
