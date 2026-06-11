@@ -2229,7 +2229,7 @@ def payer_tickets_stripe():
                 "prix_xpf": str(prix),
                 "serie": serie
             },
-            customer_email=s.get("email", "")
+            customer_email=s.get("email") or None
         )
         return jsonify({"ok": True, "url": session.url})
     except Exception as e:
