@@ -2012,6 +2012,38 @@ def stripe_webhook():
         
         save_data()
         print(f"[STRIPE] Paiement reçu: {type_p} — {montant} XPF — {code_org}")
+        
+        # Envoyer notification email à l'admin
+        try:
+            if SENDGRID_API_KEY:
+                import urllib.request
+                import json as json_lib
+                email_body = f"""
+🎉 Nouveau paiement Stripe reçu !
+
+Type : {type_p}
+Code : {code_org}
+Montant : {montant} XPF
+Date : {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+Ce paiement a été automatiquement crédité.
+"""
+                data = json_lib.dumps({
+                    "personalizations": [{"to": [{"email": "directionvaikeashop@gmail.com"}]}],
+                    "from": {"email": FROM_EMAIL, "name": FROM_NAME},
+                    "subject": f"💳 Paiement Stripe reçu — {montant} XPF",
+                    "content": [{"type": "text/plain", "value": email_body}]
+                }).encode()
+                req = urllib.request.Request(
+                    "https://api.sendgrid.com/v3/mail/send",
+                    data=data,
+                    headers={"Authorization": f"Bearer {SENDGRID_API_KEY}", "Content-Type": "application/json"},
+                    method="POST"
+                )
+                urllib.request.urlopen(req, timeout=10)
+                print(f"[EMAIL] Notification admin envoyée pour paiement {montant} XPF")
+        except Exception as e:
+            print(f"[EMAIL ERR] {e}")
     
     return jsonify({"ok": True})
 
