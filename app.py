@@ -1438,7 +1438,7 @@ def commander_ticket_pions():
         solde_total += int(valeur) * nb
     
     if solde_total < total:
-        return jsonify({"ok": False, "msg": f"Solde insuffisant — vous avez {solde_total} XPF de pions, il faut {total} XPF"}), 400
+        return jsonify({"ok": False, "msg": f"Pions insuffisants — vous avez {solde_total} XPF de pions, ce jeu coûte {total} XPF. Commandez plus de pions !"}), 400
     
     # Débiter les pions (priorité aux pions de plus petite valeur)
     reste = total
@@ -2069,19 +2069,29 @@ def payer_abonnement():
 # === PAIEMENT PIONS VIA STRIPE ===
 @app.route("/api/paiement/pions", methods=["POST"])
 def payer_pions():
-    """Crée une session Stripe pour achat de pions par l'organisateur"""
+    """Crée une session Stripe pour achat de pions par l'organisateur ou le joueur"""
     if not stripe or not STRIPE_SECRET_KEY:
         return jsonify({"ok": False, "msg": "Paiement en ligne non configuré"}), 503
     
     d = request.json
     token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s:
+    s = verif_session(token) if token else None
+    
+    # Accepter organisateur (avec token) ou joueur (avec code direct)
+    code = d.get("code", "")
+    type_acheteur = d.get("type", "organisateur")
+    
+    if not s and not code:
         return jsonify({"ok": False, "msg": "Accès refusé"}), 403
     
+    if s:
+        code = s["code"]
+    
     nb_pions = int(d.get("nb_pions", 0))
-    prix = int(d.get("prix", 0))
-    code_org = s["code"]
+    montant = int(d.get("montant", 0))
+    valeur_pion = int(d.get("valeur_pion", 20))
+    prix = montant  # prix = montant payé
+    code_org = code
     
     if nb_pions <= 0 or prix <= 0:
         return jsonify({"ok": False, "msg": "Montant invalide"}), 400
