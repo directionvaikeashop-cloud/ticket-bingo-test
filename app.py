@@ -63,11 +63,49 @@ def load_data():
 def save_data():
     try:
         os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-        with open(DATA_FILE, "w") as f:
+        # Vérifier que DB est valide
+        test = json.dumps(DB, ensure_ascii=False, default=str)
+        if len(test) < 100:
+            print("[SAVE SKIP] Données trop courtes — annulé")
+            return
+        # Backup avant sauvegarde
+        backup_file = DATA_FILE + '.backup'
+        if os.path.exists(DATA_FILE):
+            try:
+                import shutil
+                shutil.copy2(DATA_FILE, backup_file)
+            except:
+                pass
+        # Sauvegarde atomique via fichier temporaire
+        tmp_file = DATA_FILE + '.tmp'
+        with open(tmp_file, "w") as f:
             json.dump(DB, f, ensure_ascii=False, default=str)
+        os.replace(tmp_file, DATA_FILE)
         print(f"[SAVE OK] {DATA_FILE}")
     except Exception as e:
         print(f"[SAVE ERR] {e}")
+
+def load_data():
+    global DB
+    try:
+        with open(DATA_FILE, "r") as f:
+            data = json.load(f)
+        if len(str(data)) < 100:
+            raise ValueError("Données trop courtes")
+        return data
+    except Exception as e:
+        print(f"[LOAD ERR] {e}")
+        # Essayer le backup
+        backup_file = DATA_FILE + '.backup'
+        if os.path.exists(backup_file):
+            try:
+                with open(backup_file, "r") as f:
+                    data = json.load(f)
+                print("[LOAD BACKUP] Backup restauré automatiquement !")
+                return data
+            except:
+                pass
+        return DB
 
 DB = load_data()
 
