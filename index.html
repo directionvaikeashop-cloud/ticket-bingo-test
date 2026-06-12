@@ -4877,27 +4877,38 @@ async function envoyerCodeJoueur(){
 }
 
 // === JEUX DES GENERATEURS (listes automatiques) ===
+var JEUX_GENERATEURS = [];
+
+function remplirSelectsJeux(){
+  if(!JEUX_GENERATEURS.length) return;
+  document.querySelectorAll('.sel-jeu-generateur').forEach(function(sel){
+    // Ne remplir que les menus encore vides (placeholder seul)
+    if(sel.options.length > 1) return;
+    var valeurActuelle = sel.value;
+    sel.innerHTML = '<option value="">Choisir un jeu...</option>';
+    JEUX_GENERATEURS.forEach(function(j){
+      var opt = document.createElement('option');
+      opt.value = j.nom;
+      opt.textContent = (j.emoji ? j.emoji + ' ' : '') + j.nom;
+      sel.appendChild(opt);
+    });
+    if(valeurActuelle) sel.value = valeurActuelle;
+  });
+}
+
 function chargerJeuxGenerateurs(){
   fetch('/api/jeux-generateurs')
   .then(function(r){ return r.json(); })
   .then(function(jeux){
     if(!Array.isArray(jeux)) return;
-    document.querySelectorAll('.sel-jeu-generateur').forEach(function(sel){
-      var valeurActuelle = sel.value;
-      // Garder uniquement le placeholder puis reconstruire
-      sel.innerHTML = '<option value="">Choisir un jeu...</option>';
-      jeux.forEach(function(j){
-        var opt = document.createElement('option');
-        opt.value = j.nom;
-        opt.textContent = (j.emoji ? j.emoji + ' ' : '') + j.nom;
-        sel.appendChild(opt);
-      });
-      if(valeurActuelle) sel.value = valeurActuelle;
-    });
+    JEUX_GENERATEURS = jeux;
+    remplirSelectsJeux();
   })
   .catch(function(){});
 }
 chargerJeuxGenerateurs();
+// Rattraper les menus crees apres le chargement (ecrans construits dynamiquement)
+setInterval(remplirSelectsJeux, 2000);
 
 // === MESSAGE AUX JOUEURS ===
 async function publierMessageJoueurs(){
