@@ -1849,6 +1849,49 @@ def stripe_crediter():
         print(f"[STRIPE CREDIT ERR] {e}")
         return jsonify({"ok": False, "msg": str(e)}), 500
 
+@app.route("/api/admin/crediter-masse", methods=["POST"])
+def crediter_masse():
+    """ADMIN — Credite plusieurs codes d'un coup (dedommagement, transferts en serie)"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    d = request.json
+    codes = [c.strip().upper() for c in (d.get("codes") or "").replace(",", "\n").split("\n") if c.strip()]
+    valeur = str(int(d.get("valeur_pion", 0)))
+    nb = int(d.get("nb_pions", 0))
+    profil = d.get("profil", "joueur")  # joueur ou organisateur
+    if not codes or valeur not in ["20", "50", "100"] or nb == 0:
+        return jsonify({"ok": False, "msg": "Données invalides"}), 400
+    if len(codes) > 200:
+        return jsonify({"ok": False, "msg": "Maximum 200 codes à la fois"}), 400
+    cible = "pions_org" if profil == "organisateur" else "pions_joueurs"
+    if cible not in DB:
+        DB[cible] = {}
+    resultats = []
+    for code in codes:
+        if code not in DB[cible]:
+            DB[cible][code] = {}
+        DB[cible][code][valeur] = max(0, DB[cible][code].get(valeur, 0) + nb)
+        resultats.append({"code": code, "solde": DB[cible][code]})
+    # Tracabilite du geste
+    if "credits_masse" not in DB:
+        DB["credits_masse"] = []
+    DB["credits_masse"].insert(0, {
+        "id": secrets.token_hex(4).upper(),
+        "codes": codes,
+        "valeur_pion": int(valeur),
+        "nb_pions": nb,
+        "profil": profil,
+        "motif": d.get("motif", ""),
+        "par": s["code"],
+        "date": datetime.datetime.now().isoformat()
+    })
+    save_data()
+    return jsonify({"ok": True, "nb_codes": len(codes), "resultats": resultats})
+
 @app.route("/api/pions/recrediter-joueur", methods=["POST"])
 def recrediter_pions_joueur():
     """ADMIN — Recredite directement des pions a un joueur (recuperation apres incident)"""
