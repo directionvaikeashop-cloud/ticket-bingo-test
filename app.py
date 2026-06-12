@@ -70,9 +70,22 @@ def load_data():
                     data = json.load(f)
                 if chemin.endswith(".bak"):
                     print("[LOAD] Fichier principal illisible — copie de secours utilisée")
-                for k in ["tickets_acheteurs", "acces_docs", "alertes_bingo", "tirage"]:
-                    if k not in data:
-                        data[k] = [] if k in ["alertes_bingo", "tirage"] else {}
+                # AUTO-REPARATION : recreer toute case manquante (listes et dictionnaires)
+                cles_listes = ["alertes_bingo", "tirage", "tournois", "ventes", "tickets",
+                               "commandes_pions", "commandes_pions_joueurs", "commandes_tickets",
+                               "commandes_tickets_pions", "annonces_jeux", "paiements_stripe"]
+                cles_dicts = ["tickets_acheteurs", "acces_docs", "sessions", "pions_joueurs",
+                              "pions_org", "coches", "parrainages"]
+                for k in cles_listes:
+                    if k not in data or not isinstance(data[k], list):
+                        data[k] = data.get(k) if isinstance(data.get(k), list) else []
+                for k in cles_dicts:
+                    if k not in data or not isinstance(data[k], dict):
+                        data[k] = data.get(k) if isinstance(data.get(k), dict) else {}
+                if "codes" not in data or not isinstance(data["codes"], dict):
+                    data["codes"] = {}
+                if "ADMIN2024" not in data["codes"]:
+                    data["codes"]["ADMIN2024"] = {"duree": 36500, "nom": "Administrateur", "actif": True, "admin": True}
                 if not data.get("jeux"):
                     data["jeux"] = ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"]
                 return data
