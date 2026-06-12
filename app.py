@@ -1873,6 +1873,35 @@ def stripe_crediter():
         print(f"[STRIPE CREDIT ERR] {e}")
         return jsonify({"ok": False, "msg": str(e)}), 500
 
+@app.route("/api/message-admin")
+def lire_message_admin():
+    """Tous — Message d'information publie par l'administration"""
+    global DB
+    DB = load_data()
+    msg = DB.get("message_admin", {})
+    if not msg.get("actif"):
+        return jsonify({"actif": False})
+    return jsonify({"actif": True, "texte": msg.get("texte", ""), "date": msg.get("date", "")})
+
+@app.route("/api/admin/message", methods=["POST"])
+def publier_message_admin():
+    """ADMIN — Publier ou retirer le message d'information"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    d = request.json
+    texte = (d.get("texte") or "").strip()
+    if texte:
+        DB["message_admin"] = {"actif": True, "texte": texte[:600],
+                               "date": datetime.datetime.now().strftime("%d/%m %H:%M")}
+    else:
+        DB["message_admin"] = {"actif": False}
+    save_data()
+    return jsonify({"ok": True, "actif": bool(texte)})
+
 @app.route("/guide")
 def guide_organisateur():
     """Page publique : guide de l'organisateur (partageable sur Facebook)"""
