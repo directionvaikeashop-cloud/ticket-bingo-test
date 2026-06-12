@@ -687,6 +687,28 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div id="maintenance-result" style="margin-top:8px"></div>
       </div>
 
+      <!-- CREDIT EN MASSE / DEDOMMAGEMENT -->
+      <div style="background:linear-gradient(135deg,rgba(236,72,153,.12),rgba(219,39,119,.08));border:1px solid rgba(236,72,153,.4);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:700;color:#f472b6;margin-bottom:8px">🎁 Crédit en masse (dédommagement)</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:10px">Crédite plusieurs codes d'un coup. Un code par ligne.</div>
+        <textarea id="masse-codes" rows="5" placeholder="Q6ZJF5&#10;GOUJ35&#10;WQ7HEA&#10;..." style="width:100%;padding:9px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:#fff;font-size:13px;text-transform:uppercase;font-family:monospace;margin-bottom:8px"></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <select id="masse-profil" style="flex:1;min-width:120px;padding:9px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:#fff;font-size:13px">
+            <option value="joueur">Codes joueurs</option>
+            <option value="organisateur">Codes organisateurs</option>
+          </select>
+          <select id="masse-valeur" style="padding:9px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:#fff;font-size:13px">
+            <option value="20">Pion 20 XPF</option>
+            <option value="50">Pion 50 XPF</option>
+            <option value="100">Pion 100 XPF</option>
+          </select>
+          <input id="masse-nb" type="number" placeholder="Nb" value="100" style="width:80px;padding:9px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:#fff;font-size:13px">
+        </div>
+        <input id="masse-motif" placeholder="Motif (ex: Dédommagement incident 12/06)" style="width:100%;padding:9px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:#fff;font-size:13px;margin-bottom:8px">
+        <button onclick="crediterEnMasse()" style="width:100%;padding:10px;background:#db2777;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">🎁 Créditer tous les codes</button>
+        <div id="masse-result" style="margin-top:8px"></div>
+      </div>
+
       <!-- RAPPROCHEMENT STRIPE -->
       <div style="background:linear-gradient(135deg,rgba(139,92,246,.12),rgba(124,58,237,.08));border:1px solid rgba(139,92,246,.4);border-radius:12px;padding:14px;margin-bottom:14px">
         <div style="font-size:14px;font-weight:700;color:#a78bfa;margin-bottom:8px">💳 Paiements Stripe — Rapprochement</div>
@@ -4750,6 +4772,44 @@ document.addEventListener('change', function(e){
   if(e.target && e.target.id === 'joueur-pion-mode') calcPionsJoueur();
   if(e.target && e.target.id === 'pion-mode-paiement') calcPions();
 });
+
+// === CREDIT EN MASSE ===
+async function crediterEnMasse(){
+  var codes = document.getElementById('masse-codes').value.trim();
+  var profil = document.getElementById('masse-profil').value;
+  var valeur = parseInt(document.getElementById('masse-valeur').value);
+  var nb = parseInt(document.getElementById('masse-nb').value);
+  var motif = document.getElementById('masse-motif').value.trim();
+  var res = document.getElementById('masse-result');
+  if(!codes || !nb){
+    res.innerHTML = '<div style="color:#f87171;font-size:12px">Codes et nombre de pions obligatoires</div>';
+    return;
+  }
+  var nbCodes = codes.split('\n').filter(function(l){ return l.trim(); }).length;
+  if(!confirm('Créditer ' + nb + ' pions à ' + valeur + ' XPF sur ' + nbCodes + ' code(s) ' + profil + ' ?\nValeur totale : ' + (nb * valeur * nbCodes).toLocaleString('fr-FR') + ' XPF')) return;
+  res.innerHTML = '<div style="color:#f472b6;font-size:12px">Crédit en cours...</div>';
+  try{
+    const r = await fetch('/api/admin/crediter-masse', {
+      method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({codes: codes, profil: profil, valeur_pion: valeur, nb_pions: nb, motif: motif})
+    });
+    const d = await r.json();
+    if(d.ok){
+      var html = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:8px;color:#34d399;font-size:12px;margin-bottom:6px">✅ ' + d.nb_codes + ' code(s) crédité(s) de ' + nb + ' pions à ' + valeur + ' XPF</div>';
+      html += '<div style="font-size:11px;color:rgba(255,255,255,.6);line-height:1.8;max-height:150px;overflow:auto">';
+      (d.resultats || []).forEach(function(x){
+        var s = x.solde || {};
+        html += x.code + ' → ' + (s['20']||0) + 'x20 / ' + (s['50']||0) + 'x50 / ' + (s['100']||0) + 'x100<br>';
+      });
+      html += '</div>';
+      res.innerHTML = html;
+    } else {
+      res.innerHTML = '<div style="color:#f87171;font-size:12px">' + (d.msg || 'Erreur') + '</div>';
+    }
+  }catch(e){
+    res.innerHTML = '<div style="color:#f87171;font-size:12px">Erreur réseau</div>';
+  }
+}
 
 // === RAPPROCHEMENT STRIPE ===
 async function chargerPaiementsStripe(){
