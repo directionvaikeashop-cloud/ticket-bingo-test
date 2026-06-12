@@ -3589,7 +3589,7 @@ function previewGain(){
     return;
   }
   var cagnotte80 = Math.round(mises * 0.80);
-  var partOrg = Math.round(mises * 0.20);
+  var partOrg = Math.round(mises * 0.02);
   preview.style.display = 'block';
   if(btnAnnoncer) btnAnnoncer.style.display = 'block';
   document.getElementById('prev-total').textContent = mises.toLocaleString('fr-FR');
@@ -4253,7 +4253,7 @@ function calcPionsJoueur(){
     if(calcDiv) calcDiv.style.display = 'none';
     return;
   }
-  var commission = Math.round(montant * 0.20);
+  var commission = Math.round(montant * 0.02);
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionJoueur);
   calcDiv.style.display = 'block';
