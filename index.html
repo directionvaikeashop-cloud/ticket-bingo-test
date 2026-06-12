@@ -689,6 +689,15 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div id="maintenance-result" style="margin-top:8px"></div>
       </div>
 
+      <!-- MESSAGE AUX ORGANISATEURS -->
+      <div style="background:linear-gradient(135deg,rgba(14,165,233,.12),rgba(2,132,199,.08));border:1px solid rgba(14,165,233,.4);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:700;color:#38bdf8;margin-bottom:8px">📢 Message aux organisateurs</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:10px">S'affiche en bandeau chez TOUS les organisateurs à leur connexion. Vider et publier pour le retirer.</div>
+        <textarea id="msg-admin-texte" rows="3" maxlength="600" placeholder="Ex: Nouveau tournoi inter-îles le 20/06 — commandez vos jeux avant le 18 !" style="width:100%;padding:9px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:#fff;font-size:13px;margin-bottom:8px"></textarea>
+        <button onclick="publierMessageAdmin()" style="width:100%;padding:10px;background:#0284c7;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">📢 Publier le message</button>
+        <div id="msg-admin-result" style="margin-top:8px"></div>
+      </div>
+
       <!-- RECREATION TICKETS EN MASSE -->
       <div style="background:linear-gradient(135deg,rgba(34,197,94,.12),rgba(22,163,74,.08));border:1px solid rgba(34,197,94,.4);border-radius:12px;padding:14px;margin-bottom:14px">
         <div style="font-size:14px;font-weight:700;color:#4ade80;margin-bottom:8px">🚀 Recréer les tickets en masse</div>
@@ -1560,6 +1569,12 @@ function buildOrgSpace(){
       <input id="annonce-desc" placeholder="Ex: Jackpot 50 000 XPF !" style="margin-bottom:12px"/>
       <button onclick="annoncerJeu()" style="width:100%;padding:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📢 Annoncer ce jeu !</button>
       <button onclick="supprimerAnnonce()" style="width:100%;padding:8px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:8px;cursor:pointer;font-size:12px;margin-top:6px">🗑️ Supprimer l'annonce</button>
+    </div>
+
+    <!-- BANDEAU MESSAGE ADMINISTRATION -->
+    <div id="bandeau-msg-admin" style="display:none;background:linear-gradient(135deg,rgba(14,165,233,.18),rgba(2,132,199,.1));border:1.5px solid #0ea5e9;border-radius:12px;padding:12px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:700;color:#38bdf8;margin-bottom:4px">📢 Message de l'administration <span id="msg-admin-date" style="font-weight:400;color:rgba(255,255,255,.4)"></span></div>
+      <div id="msg-admin-contenu" style="font-size:13px;color:#fff;line-height:1.6"></div>
     </div>
 
     <!-- GUIDE DE L'ORGANISATEUR -->
@@ -4809,6 +4824,48 @@ document.addEventListener('change', function(e){
   if(e.target && e.target.id === 'joueur-pion-mode') calcPionsJoueur();
   if(e.target && e.target.id === 'pion-mode-paiement') calcPions();
 });
+
+// === MESSAGE DE L'ADMINISTRATION ===
+async function publierMessageAdmin(){
+  var texte = document.getElementById('msg-admin-texte').value.trim();
+  var res = document.getElementById('msg-admin-result');
+  try{
+    const r = await fetch('/api/admin/message', {
+      method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({texte: texte})
+    });
+    const d = await r.json();
+    if(d.ok){
+      res.innerHTML = d.actif
+        ? '<div style="color:#38bdf8;font-size:12px">✅ Message publié — visible chez tous les organisateurs</div>'
+        : '<div style="color:rgba(255,255,255,.6);font-size:12px">🗑️ Message retiré</div>';
+    } else {
+      res.innerHTML = '<div style="color:#f87171;font-size:12px">Erreur</div>';
+    }
+  }catch(e){
+    res.innerHTML = '<div style="color:#f87171;font-size:12px">Erreur réseau</div>';
+  }
+}
+
+function chargerMessageAdmin(){
+  fetch('/api/message-admin')
+  .then(function(r){ return r.json(); })
+  .then(function(d){
+    var bandeau = document.getElementById('bandeau-msg-admin');
+    if(!bandeau) return;
+    if(d.actif && d.texte){
+      document.getElementById('msg-admin-contenu').textContent = d.texte;
+      document.getElementById('msg-admin-date').textContent = d.date ? '— ' + d.date : '';
+      bandeau.style.display = 'block';
+    } else {
+      bandeau.style.display = 'none';
+    }
+  })
+  .catch(function(){});
+}
+// Verifier le message a intervalle regulier (l'organisateur le voit sans rafraichir)
+setInterval(chargerMessageAdmin, 60000);
+chargerMessageAdmin();
 
 // === MES JOUEURS & DISTRIBUTION ===
 var pdfsOrgDisponibles = [];
