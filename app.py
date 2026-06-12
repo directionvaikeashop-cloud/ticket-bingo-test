@@ -1109,8 +1109,10 @@ def reset_tournoi():
     # 2. Effacer TOUTES les alertes bingo
     DB["alertes_bingo"] = []
     
-    # 3. Effacer les tickets vendus aux joueurs pour ce tournoi
-    DB["tickets"] = [t for t in DB.get("tickets", []) if t.get("code_org") != code_org]
+    # 3. NE PLUS JAMAIS EFFACER LES TICKETS (corrige 12/06/2026)
+    # Les codes joueurs sont PERMANENTS : le ticket porte le code de connexion de la
+    # joueuse et ses pions y sont attaches. Pour le tournoi suivant, l'organisateur
+    # REASSIGNE simplement jeu/pages/PDF via "Mes joueurs" — il n'efface rien.
     
     # 4. Effacer les coches/pointages joueurs
     DB["coches"] = {}
