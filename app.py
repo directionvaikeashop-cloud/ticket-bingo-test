@@ -47,6 +47,7 @@ _enregistrer_jeu("40 BOULES", "🎳", "generate_40_boules")
 _enregistrer_jeu("4 COINS", "🪙", "generate_4_coins")
 _enregistrer_jeu("500 FRANCS", "💵", "generate_500_francs")
 _enregistrer_jeu("1 DOLLAR", "💰", "generate_1_dollar")
+_enregistrer_jeu("OHANA 75 10 BOULES", "🌺", "generate_ohana_75")
 # --- Ajouter les futurs jeux ici, une ligne chacun : ---
 # _enregistrer_jeu("OHANA 90", "🌺", "generate_ohana_90")
 # _enregistrer_jeu("QUINES 90", "🎲", "generate_quines_90")
