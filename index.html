@@ -250,6 +250,11 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     </div>
   </div>
   <div class="wrap">
+    <!-- BANDEAU MESSAGE ADMINISTRATION (organisateur) -->
+    <div id="bandeau-msg-admin" style="display:none;background:linear-gradient(135deg,rgba(14,165,233,.18),rgba(2,132,199,.1));border:1.5px solid #0ea5e9;border-radius:12px;padding:12px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#38bdf8;margin-bottom:4px">📢 Message de l'administration <span id="msg-admin-date" style="font-weight:400;color:rgba(255,255,255,.4)"></span></div>
+      <div id="msg-admin-contenu" style="font-size:13px;color:#fff;line-height:1.6"></div>
+    </div>
     <div id="tab-org-tickets" class="tab active"></div>
     <div id="tab-org-jouer" class="tab"></div>
     <div id="tab-org-verif" class="tab"></div>
@@ -4850,14 +4855,12 @@ function chargerMessageAdmin(){
   fetch('/api/message-admin')
   .then(function(r){ return r.json(); })
   .then(function(d){
-    var bandeau = document.getElementById('bandeau-msg-admin');
-    if(!bandeau) return;
+    var bandeaux = document.querySelectorAll('[id="bandeau-msg-admin"]');
+    if(!bandeaux.length) return;
+    bandeaux.forEach(function(b){ b.style.display = (d.actif && d.texte) ? 'block' : 'none'; });
     if(d.actif && d.texte){
-      document.getElementById('msg-admin-contenu').textContent = d.texte;
-      document.getElementById('msg-admin-date').textContent = d.date ? '— ' + d.date : '';
-      bandeau.style.display = 'block';
-    } else {
-      bandeau.style.display = 'none';
+      document.querySelectorAll('[id="msg-admin-contenu"]').forEach(function(el){ el.textContent = d.texte; });
+      document.querySelectorAll('[id="msg-admin-date"]').forEach(function(el){ el.textContent = d.date ? '— ' + d.date : ''; });
     }
   })
   .catch(function(){});
