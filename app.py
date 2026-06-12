@@ -1873,6 +1873,88 @@ def stripe_crediter():
         print(f"[STRIPE CREDIT ERR] {e}")
         return jsonify({"ok": False, "msg": str(e)}), 500
 
+@app.route("/guide")
+def guide_organisateur():
+    """Page publique : guide de l'organisateur (partageable sur Facebook)"""
+    return """<!DOCTYPE html>
+<html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guide de l'Organisateur — Ticket Bingo</title>
+<meta property="og:title" content="Ticket Bingo — Guide de l'Organisateur">
+<meta property="og:description" content="Tout ce qu'il faut savoir pour gerer vos joueuses et animer vos tournois de bingo en Polynesie.">
+<style>
+:root{--bg:#0b0c12;--s:#111218;--s2:#1a1c26;--bd:rgba(255,255,255,.1);--ac:#6366f1;--ac2:#818cf8;--mu:rgba(255,255,255,.55)}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:#fff;font-family:-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.7;padding:20px 16px 60px}
+.wrap{max-width:680px;margin:0 auto}
+h1{font-size:30px;text-align:center;margin:18px 0 2px}
+.sub{font-size:17px;font-weight:700;color:var(--ac2);text-align:center;margin-bottom:4px}
+.tag{font-size:13px;color:var(--mu);text-align:center;margin-bottom:18px}
+.regle{background:rgba(220,38,38,.15);border:2px solid #dc2626;border-radius:14px;padding:14px;text-align:center;font-weight:800;color:#fca5a5;font-size:15px;margin-bottom:18px;line-height:1.5}
+.card{background:var(--s);border:1px solid var(--bd);border-radius:14px;padding:16px;margin-bottom:14px}
+h2{font-size:17px;color:var(--ac2);margin-bottom:8px}
+p{font-size:14px;color:rgba(255,255,255,.85);margin-bottom:8px}
+li{font-size:14px;color:rgba(255,255,255,.85);margin:6px 0 6px 18px}
+b{color:#fff}
+.astuce{background:rgba(251,191,36,.12);border-left:3px solid #fbbf24;border-radius:8px;padding:10px;font-size:13px;color:#fcd34d;font-style:italic;margin:8px 0}
+.check{background:var(--s2);border-radius:10px;padding:10px 12px;margin:6px 0;font-size:14px;display:flex;gap:10px;align-items:center}
+.num{background:var(--ac);color:#fff;font-weight:800;border-radius:8px;min-width:26px;height:26px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.pied{text-align:center;color:var(--mu);font-size:13px;margin-top:24px;font-style:italic}
+.cta{display:block;text-align:center;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;text-decoration:none;font-weight:800;padding:13px;border-radius:12px;margin-top:18px;font-size:15px}
+</style></head><body><div class="wrap">
+<h1>🎱 TICKET BINGO</h1>
+<div class="sub">Guide de l'Organisateur</div>
+<div class="tag">Tout ce qu'il faut savoir pour gérer vos joueuses et animer vos tournois</div>
+
+<div class="regle">⚠️ À RETENIR : LE SEUL LIEN ENTRE L'ADMINISTRATEUR ET VOS JOUEUSES, C'EST L'ACHAT DES PIONS.<br>Tout le reste — tickets, distribution, tournois, cagnotte — c'est VOUS, l'organisateur.</div>
+
+<div class="card"><h2>1. 🏪 S'approvisionner</h2>
+<p>Avant vos tournois, constituez votre stock depuis votre espace :</p>
+<li><b>Vos jeux PDF</b> : commandez vos carnets (OHANA, TRIPLE ACTION, 1 DOLLAR...). Après validation de votre paiement, ils apparaissent dans « Mes tickets reçus ».</li>
+<li><b>Votre stock de pions</b> : valeurs 20, 50 ou 100 XPF. Le nombre de pions reçus s'affiche avant de valider. Carte = crédit immédiat ; autres modes = après validation.</li></div>
+
+<div class="card"><h2>2. 👥 Gérer vos joueuses — « Mes joueurs »</h2>
+<p>Votre tableau de bord : chaque joueuse avec son <b>code personnel</b>, son jeu, ses pages, son PDF et son <b>solde de pions</b> en temps réel.</p>
+<div class="astuce">⭐ RÈGLE D'OR : le code d'une joueuse est PERMANENT. Même code à vie, ses pions y restent attachés. Ne créez jamais deux codes pour la même personne.</div>
+<p><b>Nouvelle joueuse ?</b> « Vendre un ticket », champ « Code joueur existant » <b>vide</b> → nouveau code créé.</p>
+<p><b>Joueuse qui a déjà un code ?</b> Mettez son code dans ce champ → elle garde tout.</p></div>
+
+<div class="card"><h2>3. 📢 Annoncer le jeu — les joueuses commandent et paient</h2>
+<p>« Annoncer ce jeu » : jeu, prix du ticket, description (« Jackpot 50 000 XPF ! »). L'annonce s'affiche chez toutes vos joueuses.</p>
+<p>Chaque joueuse choisit son <b>nombre de tickets</b> et <b>paie avec ses pions</b>. Vous validez sa commande, ses pions sont débités automatiquement. <b>La vente est faite.</b></p>
+<p><b>Plus de pions ?</b> Elle recharge par <b>carte</b> dans l'application (instantané) ou par virement (en indiquant <b>son code</b> dans le libellé). Vous pouvez aussi lui en <b>donner</b> depuis votre stock.</p></div>
+
+<div class="card"><h2>4. 🎫 Distribuer les tickets aux joueuses qui ont payé</h2>
+<p>Dans « Mes joueurs » → bouton <b>« Assigner / Modifier »</b> :</p>
+<li>1. Le <b>nom</b> de la joueuse</li>
+<li>2. Le <b>jeu</b> et sa <b>série</b></li>
+<li>3. Ses <b>pages</b> (début/fin) selon le nombre de tickets achetés</li>
+<li>4. Le <b>PDF</b> choisi dans vos jeux reçus</li>
+<li>5. <b>Enregistrer</b> — c'est tout !</li>
+<p>La joueuse entre son code → elle voit SON ticket, et le pointage automatique coche SES numéros.</p>
+<div class="astuce">💡 ASTUCE : tenez un registre des pages distribuées (Brenda 1-3, Vaiana 4-6...) pour ne jamais donner deux fois les mêmes feuilles.</div></div>
+
+<div class="card"><h2>5. 🎙️ Animer le tournoi en direct</h2>
+<li><b>Tirage des boules</b> : affichées et <b>annoncées vocalement</b> chez chaque joueuse</li>
+<li><b>Micro en direct</b> : parlez en continu — ambiance, annonces en reo, encouragements</li>
+<li><b>Pointage automatique</b> : les tickets se cochent tout seuls</li>
+<li><b>Alertes BINGO</b> : l'alerte arrive avec le ticket de la joueuse — vous vérifiez et validez</li>
+<div class="astuce">💡 Demandez aux joueuses de toucher leur écran en arrivant (débloque le son) et de garder l'application affichée.</div>
+<p><b>La cagnotte</b> : 80 % des mises pour la gagnante, 20 % pour vous, l'organisateur.</p></div>
+
+<div class="card"><h2>6. 🔄 Après le tournoi</h2>
+<p>Rien d'obligatoire ! Repartez de l'étape 3 : annoncez, encaissez, redistribuez. Le « Reset tournoi » efface tirage et alertes si besoin — <b>les codes et les pions de vos joueuses ne sont jamais touchés</b>.</p></div>
+
+<div class="card"><h2>✅ Check-list avant chaque tournoi</h2>
+<div class="check"><span class="num">1</span>Mon jeu PDF est commandé et reçu</div>
+<div class="check"><span class="num">2</span>Le jeu est annoncé avec le prix du ticket</div>
+<div class="check"><span class="num">3</span>Les commandes des joueuses sont validées (payées en pions)</div>
+<div class="check"><span class="num">4</span>Chaque joueuse payée a son ticket assigné (jeu + série + pages + PDF)</div>
+<div class="check"><span class="num">5</span>Jour J : tirage lancé, micro activé... que le meilleur ticket gagne ! 🎉</div></div>
+
+<a class="cta" href="https://ticket-bingo-production.up.railway.app">🎱 Ouvrir Ticket Bingo</a>
+<div class="pied">Ticket Bingo — L'application des tournois de bingo en Polynésie 🌺<br>Support : 89 22 23 05</div>
+</div></body></html>"""
+
 @app.route("/api/organisateur/mes-joueurs")
 def mes_joueurs():
     """ORGANISATEUR — Ses joueurs avec codes, tickets et soldes de pions"""
