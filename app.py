@@ -22,6 +22,35 @@ from generate_40_boules import generate_pdf as generate_40b_pdf
 from generate_4_coins import generate_pdf as generate_4coins_pdf
 from generate_500_francs import generate_pdf as generate_500f_pdf
 from generate_1_dollar import generate_pdf as generate_1dollar_pdf
+
+# ============================================================
+# REGISTRE CENTRAL DES GENERATEURS DE JEUX
+# Pour installer un NOUVEAU jeu : 1) ajouter le fichier generate_xxx.py au depot
+# 2) ajouter UNE ligne ci-dessous. Le jeu apparait AUTOMATIQUEMENT dans toutes
+# les listes (boutique, vente de tickets, annonces) cote admin et organisateur.
+# ============================================================
+GENERATEURS_JEUX = {}
+
+def _enregistrer_jeu(nom, emoji, module_nom):
+    """Enregistre un jeu si son module generateur est present (tolerant aux absents)"""
+    try:
+        import importlib
+        mod = importlib.import_module(module_nom)
+        GENERATEURS_JEUX[nom] = {"emoji": emoji, "generer": mod.generate_pdf}
+        print(f"[JEU INSTALLE] {emoji} {nom}")
+    except Exception as e:
+        print(f"[JEU ABSENT] {nom} ({module_nom}) : {e}")
+
+_enregistrer_jeu("TRIPLE ACTION 75", "🎯", "generate_triple_action_75")
+_enregistrer_jeu("60 BOULES", "🎱", "generate_60_boules")
+_enregistrer_jeu("40 BOULES", "🎳", "generate_40_boules")
+_enregistrer_jeu("4 COINS", "🪙", "generate_4_coins")
+_enregistrer_jeu("500 FRANCS", "💵", "generate_500_francs")
+_enregistrer_jeu("1 DOLLAR", "💰", "generate_1_dollar")
+# --- Ajouter les futurs jeux ici, une ligne chacun : ---
+# _enregistrer_jeu("OHANA 90", "🌺", "generate_ohana_90")
+# _enregistrer_jeu("QUINES 90", "🎲", "generate_quines_90")
+# _enregistrer_jeu("RUBIS 90", "💎", "generate_rubis_90")
 from sendgrid import SendGridAPIClient
 from sendgrid.helpers.mail import Mail
 
@@ -219,7 +248,17 @@ def login():
 def get_jeux():
     global DB
     DB = load_data()
-    return jsonify(DB["jeux"])
+    # Fusion automatique : jeux declares manuellement + jeux dont le generateur est installe
+    fusion = list(DB["jeux"])
+    for nom in GENERATEURS_JEUX:
+        if nom not in fusion:
+            fusion.append(nom)
+    return jsonify(fusion)
+
+@app.route("/api/jeux-generateurs")
+def get_jeux_generateurs():
+    """Liste des jeux dont le generateur est installe (pour la boutique a generation automatique)"""
+    return jsonify([{"nom": nom, "emoji": infos["emoji"]} for nom, infos in GENERATEURS_JEUX.items()])
 
 @app.route("/api/jeux", methods=["POST"])
 def add_jeu():
