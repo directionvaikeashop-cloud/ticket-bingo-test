@@ -687,6 +687,14 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div id="maintenance-result" style="margin-top:8px"></div>
       </div>
 
+      <!-- RAPPROCHEMENT STRIPE -->
+      <div style="background:linear-gradient(135deg,rgba(139,92,246,.12),rgba(124,58,237,.08));border:1px solid rgba(139,92,246,.4);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:700;color:#a78bfa;margin-bottom:8px">💳 Paiements Stripe — Rapprochement</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:10px">Tous les paiements de pions reçus par carte, directement depuis Stripe. Cliquez « Créditer » après vérification — impossible de créditer deux fois.</div>
+        <button onclick="chargerPaiementsStripe()" style="width:100%;padding:10px;background:#7c3aed;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">🔁 Charger les paiements Stripe</button>
+        <div id="stripe-rappro-liste" style="margin-top:10px"></div>
+      </div>
+
       <!-- DONNEES & SAUVEGARDE -->
       <div style="background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(37,99,235,.08));border:1px solid rgba(59,130,246,.4);border-radius:12px;padding:14px;margin-bottom:14px">
         <div style="font-size:14px;font-weight:700;color:#60a5fa;margin-bottom:8px">🧰 Données & sauvegarde</div>
@@ -4729,6 +4737,62 @@ async function basculerMaintenance(){
 
 verifierMaintenance();
 setInterval(verifierMaintenance, 30000);
+
+// === RAPPROCHEMENT STRIPE ===
+async function chargerPaiementsStripe(){
+  var liste = document.getElementById('stripe-rappro-liste');
+  liste.innerHTML = '<div style="color:#a78bfa;font-size:12px;text-align:center">Interrogation de Stripe...</div>';
+  try{
+    const r = await fetch('/api/admin/stripe-paiements-pions', {headers: {'X-Token': TOKEN}});
+    const d = await r.json();
+    if(!d.ok){ liste.innerHTML = '<div style="color:#f87171;font-size:12px">' + (d.msg || 'Erreur') + '</div>'; return; }
+    if(!d.paiements.length){ liste.innerHTML = '<div style="color:rgba(255,255,255,.5);font-size:12px;text-align:center">Aucun paiement de pions trouvé sur Stripe</div>'; return; }
+    var html = '';
+    var totalAttente = 0;
+    d.paiements.forEach(function(p){
+      var s = p.solde_actuel || {};
+      var soldeTxt = (s['20']||0) + '×20 / ' + (s['50']||0) + '×50 / ' + (s['100']||0) + '×100';
+      html += '<div style="background:var(--s2);border:1px solid ' + (p.deja_traite ? 'rgba(16,185,129,.3)' : 'rgba(139,92,246,.4)') + ';border-radius:8px;padding:10px;margin-bottom:8px">';
+      html += '<div style="font-size:13px;color:#fff;font-weight:600">' + p.date + ' — <span style="color:#a78bfa">' + p.code + '</span> — ' + Number(p.montant).toLocaleString('fr-FR') + ' XPF</div>';
+      html += '<div style="font-size:12px;color:rgba(255,255,255,.6);margin:4px 0">' + p.nb_pions + ' pions à ' + p.valeur_pion + ' XPF — Solde actuel du code : ' + soldeTxt + '</div>';
+      if(p.deja_traite){
+        html += '<div style="font-size:12px;color:#34d399">✅ Déjà crédité</div>';
+      } else {
+        totalAttente++;
+        html += '<button onclick="crediterPaiementStripe(\'' + p.session_id + '\', this)" style="width:100%;padding:8px;background:#7c3aed;color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:12px;font-weight:700;margin-top:4px">💰 Créditer ' + p.nb_pions + ' pions à ' + p.code + '</button>';
+      }
+      html += '</div>';
+    });
+    liste.innerHTML = '<div style="font-size:12px;color:rgba(255,255,255,.7);margin-bottom:8px">' + d.paiements.length + ' paiement(s) trouvé(s) — <b style="color:#fbbf24">' + totalAttente + ' en attente de crédit</b></div>' + html;
+  }catch(e){
+    liste.innerHTML = '<div style="color:#f87171;font-size:12px">Erreur réseau</div>';
+  }
+}
+
+async function crediterPaiementStripe(sessionId, btn){
+  if(!confirm('Créditer ce paiement ? (Vérifiez que cette joueuse n\'a pas déjà été créditée manuellement sous son nom)')) return;
+  btn.disabled = true;
+  btn.textContent = 'Crédit en cours...';
+  try{
+    const r = await fetch('/api/admin/stripe-crediter', {
+      method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({session_id: sessionId})
+    });
+    const d = await r.json();
+    if(d.ok){
+      var s = d.solde || {};
+      btn.outerHTML = '<div style="font-size:12px;color:#34d399">✅ ' + d.nb_pions + ' pions à ' + d.valeur + ' XPF crédités — Nouveau solde : ' + (s['20']||0) + '×20 / ' + (s['50']||0) + '×50 / ' + (s['100']||0) + '×100</div>';
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Réessayer';
+      alert(d.msg || 'Erreur');
+    }
+  }catch(e){
+    btn.disabled = false;
+    btn.textContent = 'Réessayer';
+    alert('Erreur réseau');
+  }
+}
 
 // === INSTRUCTIONS DE PAIEMENT (affichees apres une commande CCP/Deblock) ===
 function afficherInstructionsPaiement(mode, montant, ref){
