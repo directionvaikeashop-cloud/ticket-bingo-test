@@ -1873,6 +1873,71 @@ def stripe_crediter():
         print(f"[STRIPE CREDIT ERR] {e}")
         return jsonify({"ok": False, "msg": str(e)}), 500
 
+@app.route("/api/organisateur/mes-joueurs")
+def mes_joueurs():
+    """ORGANISATEUR — Ses joueurs avec codes, tickets et soldes de pions"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify([]), 403
+    if s.get("admin"):
+        tickets = DB.get("tickets", [])
+    else:
+        tickets = [t for t in DB.get("tickets", []) if t.get("code_org") == s["code"]]
+    out = []
+    for t in tickets:
+        code = (t.get("code_acheteur") or "").upper()
+        solde = DB.get("pions_joueurs", {}).get(code, {})
+        out.append({
+            "id": t.get("id"),
+            "code": code,
+            "acheteur": t.get("acheteur", ""),
+            "jeu": t.get("jeu", ""),
+            "serie": t.get("serie", ""),
+            "page_debut": t.get("page_debut"),
+            "page_fin": t.get("page_fin"),
+            "pdf_url": t.get("pdf_url"),
+            "email": t.get("email", ""),
+            "solde_pions": {
+                "20": solde.get("20", 0),
+                "50": solde.get("50", 0),
+                "100": solde.get("100", 0)
+            }
+        })
+    return jsonify(out)
+
+@app.route("/api/ticket/modifier", methods=["POST"])
+def modifier_ticket():
+    """ORGANISATEUR — Assigner/modifier le jeu, le PDF et les pages d'un ticket joueur"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    d = request.json
+    tid = d.get("ticket_id", "")
+    t = next((x for x in DB.get("tickets", []) if x.get("id") == tid), None)
+    if not t:
+        return jsonify({"ok": False, "msg": "Ticket introuvable"}), 404
+    if not s.get("admin") and t.get("code_org") != s["code"]:
+        return jsonify({"ok": False, "msg": "Ce ticket ne vous appartient pas"}), 403
+    for champ in ["acheteur", "jeu", "serie", "email"]:
+        if d.get(champ) is not None and str(d.get(champ)).strip() != "":
+            t[champ] = str(d[champ]).strip()
+    for champ in ["page_debut", "page_fin", "prix"]:
+        if d.get(champ) not in (None, ""):
+            try:
+                t[champ] = int(d[champ])
+            except Exception:
+                pass
+    if d.get("pdf_url"):
+        t["pdf_url"] = d["pdf_url"]
+    save_data()
+    return jsonify({"ok": True, "ticket": t})
+
 @app.route("/api/admin/recreer-tickets", methods=["POST"])
 def recreer_tickets_masse():
     """ADMIN — Recree des tickets en masse apres un reset.
