@@ -3199,11 +3199,23 @@ function checkPionsJoueursEnAttente(){
             '<div><div style="font-size:13px;font-weight:600;color:#fff">🎮 Joueur : ' + c.code_joueur + '</div>' +
             '<div style="font-size:11px;color:rgba(255,255,255,.5)">' + c.nb_pions + ' pions à ' + c.valeur_pion + ' XPF — ' + (c.mode_paiement||'') + ' — ' + (c.ref_paiement||'') + '</div></div>' +
             '<div style="font-size:12px;font-weight:600;color:#34d399">' + ((c.montant_paye||0).toLocaleString('fr-FR')) + ' XPF</div></div>';
+          var ligneBtn = document.createElement('div');
+          ligneBtn.style.cssText = 'display:flex;gap:8px';
           var btn = document.createElement('button');
-          btn.style.cssText = 'width:100%;padding:8px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600';
-          btn.textContent = '✅ Valider et créditer le joueur';
+          btn.style.cssText = 'flex:1;padding:8px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600';
+          btn.textContent = '✅ Valider et créditer';
           (function(cid){ btn.onclick = function(){ validerPionsJoueur(cid); setTimeout(checkPionsJoueursEnAttente,1000); }; })(c.id);
-          div.appendChild(btn);
+          var btnR = document.createElement('button');
+          btnR.style.cssText = 'padding:8px 12px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:6px;cursor:pointer;font-size:13px;font-weight:600';
+          btnR.textContent = '🗑️ Refuser';
+          (function(cid, cinfo){ btnR.onclick = function(){
+            if(!confirm('Refuser cette commande ?\n' + cinfo + '\n\nAucun pion ne sera crédité — à utiliser quand le paiement n\'est jamais arrivé.')) return;
+            refuserPionsJoueur(cid);
+            setTimeout(checkPionsJoueursEnAttente, 1000);
+          }; })(c.id, c.code_joueur + ' — ' + c.nb_pions + ' pions à ' + c.valeur_pion + ' XPF (' + (c.montant_paye||0) + ' XPF)');
+          ligneBtn.appendChild(btn);
+          ligneBtn.appendChild(btnR);
+          div.appendChild(ligneBtn);
           liste.appendChild(div);
         });
       }
@@ -3212,6 +3224,18 @@ function checkPionsJoueursEnAttente(){
     }
   })
   .catch(function(){});
+}
+
+async function refuserPionsJoueur(commandeId){
+  try{
+    const r = await fetch('/api/pions/refuser-joueur', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({commande_id: commandeId})
+    });
+    const d = await r.json();
+    if(d.ok){ toast('toast-adm', '🗑️ Commande refusée'); }
+  }catch(e){}
 }
 
 async function validerPionsJoueur(commandeId){
