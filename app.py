@@ -1802,6 +1802,65 @@ if HAS_WEBSOCKET:
             if ws in ws_micro_joueurs.get(code_org, []):
                 ws_micro_joueurs[code_org].remove(ws)
 
+# === JOUEURS ORGANISATEUR ===
+@app.route("/api/joueurs/liste")
+def liste_joueurs():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify([])
+    code_org = s["code"]
+    # Récupérer tous les tickets de cet organisateur
+    tickets = [t for t in DB.get("tickets", []) if t.get("code_org") == code_org]
+    return jsonify(tickets)
+
+@app.route("/api/joueurs/distribuer", methods=["POST"])
+def distribuer_ticket():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    
+    d = request.json
+    code_joueur = d.get("code_joueur", "").upper()
+    jeu = d.get("jeu", "")
+    serie = int(d.get("serie", 1))
+    nb_pages = int(d.get("nb_pages", 1))
+    code_org = s["code"]
+    
+    # Chercher le ticket du joueur
+    ticket_trouve = None
+    for t in DB.get("tickets", []):
+        if t.get("code_acheteur") == code_joueur:
+            ticket_trouve = t
+            break
+    
+    if not ticket_trouve:
+        return jsonify({"ok": False, "msg": "Code joueur introuvable"})
+    
+    # Trouver le PDF de l'organisateur pour ce jeu
+    pdf_url = None
+    for v in DB.get("ventes", []):
+        if v.get("code_org") == code_org and v.get("jeu") == jeu and v.get("pdf_url"):
+            pdf_url = v.get("pdf_url")
+            break
+    
+    # Mettre à jour le ticket
+    ticket_trouve["jeu"] = jeu
+    ticket_trouve["serie"] = str(serie)
+    ticket_trouve["code_org"] = code_org
+    ticket_trouve["page_debut"] = serie
+    ticket_trouve["page_fin"] = serie + nb_pages - 1
+    ticket_trouve["pdf_url"] = pdf_url
+    ticket_trouve["actif"] = True
+    
+    save_data()
+    return jsonify({"ok": True})
+
 @app.route("/api/micro/audio", methods=["POST"])
 def recevoir_audio():
     global DB
