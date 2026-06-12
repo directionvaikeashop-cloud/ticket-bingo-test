@@ -4063,9 +4063,10 @@ function chargerSoldesPionsJoueur(code){
   fetch('/api/pions/solde-joueur/' + code)
   .then(function(r){ return r.json(); })
   .then(function(d){
-    if(document.getElementById('joueur-solde-20')) document.getElementById('joueur-solde-20').textContent = d.pions_20 || 0;
-    if(document.getElementById('joueur-solde-50')) document.getElementById('joueur-solde-50').textContent = d.pions_50 || 0;
-    if(document.getElementById('joueur-solde-100')) document.getElementById('joueur-solde-100').textContent = d.pions_100 || 0;
+    // Mettre a jour TOUTES les copies de l'affichage (l'ecran pions, l'ecran jeu, etc.)
+    document.querySelectorAll('[id="joueur-solde-20"]').forEach(function(el){ el.textContent = d.pions_20 || 0; });
+    document.querySelectorAll('[id="joueur-solde-50"]').forEach(function(el){ el.textContent = d.pions_50 || 0; });
+    document.querySelectorAll('[id="joueur-solde-100"]').forEach(function(el){ el.textContent = d.pions_100 || 0; });
   })
   .catch(function(){});
 }
