@@ -1883,6 +1883,92 @@ def lire_message_admin():
         return jsonify({"actif": False})
     return jsonify({"actif": True, "texte": msg.get("texte", ""), "date": msg.get("date", "")})
 
+@app.route("/api/message-joueurs")
+def lire_message_joueurs():
+    """Tous — Message d'information aux joueuses"""
+    global DB
+    DB = load_data()
+    msg = DB.get("message_joueurs", {})
+    if not msg.get("actif"):
+        return jsonify({"actif": False})
+    return jsonify({"actif": True, "texte": msg.get("texte", ""), "date": msg.get("date", "")})
+
+@app.route("/api/admin/message-joueurs", methods=["POST"])
+def publier_message_joueurs():
+    """ADMIN — Publier ou retirer le message aux joueuses"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    d = request.json
+    texte = (d.get("texte") or "").strip()
+    if texte:
+        DB["message_joueurs"] = {"actif": True, "texte": texte[:600],
+                                 "date": datetime.datetime.now().strftime("%d/%m %H:%M")}
+    else:
+        DB["message_joueurs"] = {"actif": False}
+    save_data()
+    return jsonify({"ok": True, "actif": bool(texte)})
+
+@app.route("/api/admin/envoyer-code", methods=["POST"])
+def envoyer_code_joueur():
+    """ADMIN — Envoyer par email le code d'acces d'une joueuse (bienvenue + cadeau)"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    d = request.json
+    code = (d.get("code") or "").upper().strip()
+    email = (d.get("email") or "").strip()
+    nom = (d.get("nom") or "").strip()
+    if not code or not email or "@" not in email:
+        return jsonify({"ok": False, "msg": "Code et email valide obligatoires"}), 400
+    # Verifier que le code existe (ticket actif)
+    ticket = next((t for t in DB.get("tickets", []) if t.get("code_acheteur", "").upper() == code), None)
+    if not ticket:
+        return jsonify({"ok": False, "msg": f"Aucun ticket actif avec le code {code}"}), 404
+    if not nom:
+        nom = ticket.get("acheteur", "") or "joueuse"
+    if not SENDGRID_API_KEY:
+        return jsonify({"ok": False, "msg": "SendGrid non configuré"}), 500
+    try:
+        html = f"""
+        <div style='font-family:sans-serif;max-width:520px;margin:0 auto;background:#08090d;color:#f0f2f8;padding:24px;border-radius:12px'>
+          <div style='text-align:center;margin-bottom:24px'>
+            <div style='font-size:48px'>🎱</div>
+            <h1 style='font-size:24px;color:#34d399;margin:8px 0'>Ticket Bingo</h1>
+          </div>
+          <p>Ia ora na <strong>{nom}</strong> ! 🌺</p>
+          <p>Voici votre code personnel — notez-le précieusement, il est à vous pour toujours :</p>
+          <div style='background:#111218;border:2px solid #10b981;border-radius:12px;padding:24px;margin:20px 0;text-align:center'>
+            <div style='font-size:12px;color:#6b7280;margin-bottom:8px'>VOTRE CODE PERSONNEL</div>
+            <div style='font-family:monospace;font-size:40px;font-weight:800;letter-spacing:10px;color:#34d399'>{code}</div>
+          </div>
+          <div style='background:#0d2818;border:1px solid #10b981;border-radius:10px;padding:16px;margin:16px 0;text-align:center'>
+            <p style='margin:0;font-size:15px'>🎁 <strong>2 000 XPF de pions vous ont été OFFERTS</strong></p>
+            <p style='margin:4px 0 0 0;font-size:13px;color:#9ca3af'>Ils vous attendent déjà sur votre code, avec vos pions !</p>
+          </div>
+          <div style='text-align:center;margin:24px 0'>
+            <a href='https://ticket-bingo-production.up.railway.app' style='padding:14px 32px;background:#10b981;color:#fff;text-decoration:none;border-radius:8px;font-size:15px;font-weight:600'>🎯 Jouer maintenant</a>
+          </div>
+          <p style='font-size:13px;text-align:center'><a href='https://ticket-bingo-production.up.railway.app/guide-joueur' style='color:#34d399'>📗 Le guide du joueur en 2 minutes</a></p>
+          <p style='font-size:12px;color:#6b7280;text-align:center'>Entrez votre code dans la section 🎮 Espace Joueur — À très vite pour le prochain tournoi ! 🌺</p>
+        </div>"""
+        message = Mail(from_email=(FROM_EMAIL, FROM_NAME), to_emails=email,
+                      subject=f"🎱 Votre code Ticket Bingo — {code} (+ 2 000 XPF offerts !)", html_content=html)
+        SendGridAPIClient(SENDGRID_API_KEY).send(message)
+        # Memoriser l'email sur le ticket pour les prochains envois
+        ticket["email"] = email
+        save_data()
+        return jsonify({"ok": True, "msg": f"Email envoyé à {email}"})
+    except Exception as e:
+        print(f"[EMAIL CODE ERR] {e}")
+        return jsonify({"ok": False, "msg": f"Erreur d'envoi : {e}"}), 500
+
 @app.route("/api/admin/message", methods=["POST"])
 def publier_message_admin():
     """ADMIN — Publier ou retirer le message d'information"""
