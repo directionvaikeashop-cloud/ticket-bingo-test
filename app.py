@@ -543,6 +543,8 @@ def get_ticket_acheteur(code):
     global DB
     DB = load_data()
     code = code.upper().strip()
+    if code in DB.get("codes_bloques", []):
+        return jsonify({"ok": False, "msg": "Ce code a été désactivé. Contactez votre organisateur."}), 403
     # Chercher dans tickets_acheteurs
     ticket_id = DB.get("tickets_acheteurs", {}).get(code)
     if ticket_id:
@@ -1628,6 +1630,8 @@ def commande_pions_joueur():
     global DB
     DB = load_data()
     d = request.json
+    if (d.get("code_joueur") or "").upper().strip() in DB.get("codes_bloques", []):
+        return jsonify({"ok": False, "msg": "Ce code a été désactivé"}), 403
     code_joueur = d.get("code_joueur", "").upper()
     valeur_pion = int(d.get("valeur_pion", 0))
     montant_paye = float(d.get("montant_paye", 0))
@@ -1662,6 +1666,8 @@ def commande_pions_joueur():
 def solde_pions_joueur(code_joueur):
     global DB
     DB = load_data()
+    if code_joueur.upper().strip() in DB.get("codes_bloques", []):
+        return jsonify({"pions_20": 0, "pions_50": 0, "pions_100": 0, "bloque": True})
     pions = DB.get("pions_joueurs", {}).get(code_joueur.upper(), {})
     return jsonify({
         "pions_20": pions.get("20", 0),
@@ -1973,6 +1979,32 @@ def publier_message_joueurs():
     save_data()
     return jsonify({"ok": True, "actif": bool(texte)})
 
+@app.route("/api/admin/bloquer-code", methods=["POST"])
+def bloquer_code_joueur():
+    """ADMIN — Bloquer ou debloquer un code joueur (code compromis, litige...)"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    d = request.json
+    code = (d.get("code") or "").upper().strip()
+    bloquer = bool(d.get("bloquer", True))
+    if not code:
+        return jsonify({"ok": False, "msg": "Code obligatoire"}), 400
+    if "codes_bloques" not in DB:
+        DB["codes_bloques"] = []
+    if bloquer:
+        if code not in DB["codes_bloques"]:
+            DB["codes_bloques"].append(code)
+        msg = f"Code {code} BLOQUÉ — connexion et pions inaccessibles"
+    else:
+        DB["codes_bloques"] = [c for c in DB["codes_bloques"] if c != code]
+        msg = f"Code {code} débloqué"
+    save_data()
+    return jsonify({"ok": True, "msg": msg, "bloques": DB["codes_bloques"]})
+
 @app.route("/api/admin/envoyer-code", methods=["POST"])
 def envoyer_code_joueur():
     """ADMIN — Envoyer par email le code d'acces d'une joueuse (bienvenue + cadeau)"""
@@ -2166,7 +2198,7 @@ b{color:#fff}
 
 <div class="card"><h2>1. 🔑 Ton code personnel</h2>
 <p>Ton organisateur te remet un <b>code unique</b> :</p>
-<div class="code-demo">WQ7HEA</div>
+<div class="code-demo">XXXXXX</div>
 <p>C'est ta clé d'entrée. Sur la page d'accueil, tape-le dans <b>« 🎮 Espace Joueur »</b> et clique <b>« 🎯 Jouer maintenant ! »</b></p>
 <div class="astuce">⭐ Ton code est PERMANENT : garde-le précieusement (note-le dans ton téléphone !). Tes pions y restent attachés pour toujours, de tournoi en tournoi. Ne le prête à personne.</div></div>
 
