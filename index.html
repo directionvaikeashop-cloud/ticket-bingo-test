@@ -253,6 +253,44 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     <div id="tab-org-verif" class="tab"></div>
     <div id="tab-org-revendeurs" class="tab"></div>
     <div id="tab-org-pions" class="tab"></div>
+    <div id="tab-org-joueurs" class="tab">
+      <!-- JOUEURS -->
+      <div class="card" style="margin-bottom:14px">
+        <div class="ct" style="margin-bottom:12px">👥 Mes joueurs</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:10px">Liste des joueurs avec leurs codes ticket</div>
+        <div id="org-joueurs-liste"><div style="text-align:center;padding:12px;color:var(--mu);font-size:13px">Chargement...</div></div>
+      </div>
+
+      <!-- DISTRIBUER TICKETS -->
+      <div class="card" style="margin-bottom:14px;background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.05));border:1px solid rgba(99,102,241,.3)">
+        <div class="ct" style="margin-bottom:12px">🎫 Distribuer un ticket</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.5);margin-bottom:10px">Assigner un jeu et un PDF à un joueur</div>
+        
+        <div class="lbl">Code du joueur</div>
+        <input id="dist-code-joueur" type="text" placeholder="Ex: ZYW6PN" style="text-transform:uppercase;margin-bottom:8px"/>
+        
+        <div class="lbl">Jeu</div>
+        <select id="dist-jeu" style="margin-bottom:8px">
+          <option value="">Choisir un jeu...</option>
+          <option value="TRIPLE ACTION 75">🎯 TRIPLE ACTION 75</option>
+          <option value="60 BOULES">🎱 60 BOULES</option>
+          <option value="40 BOULES">🎳 40 BOULES</option>
+          <option value="4 COINS">🪙 4 COINS</option>
+          <option value="500 FRANCS">💵 500 FRANCS</option>
+          <option value="1 DOLLAR">💰 1 DOLLAR</option>
+          <option value="OHANA 75">🌺 OHANA 75</option>
+        </select>
+
+        <div class="lbl">Série (page de début)</div>
+        <input id="dist-serie" type="number" placeholder="Ex: 1" min="1" style="margin-bottom:8px"/>
+        
+        <div class="lbl">Nombre de pages</div>
+        <input id="dist-pages" type="number" placeholder="Ex: 1" min="1" value="1" style="margin-bottom:12px"/>
+        
+        <button onclick="distribuerTicket()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">🎫 Distribuer le ticket</button>
+        <div id="dist-result" style="margin-top:8px"></div>
+      </div>
+    </div>
   </div>
   <nav class="nav">
     <button class="nb active" onclick="switchOrgTab('tickets',this)"><span class="ni">🎫</span>Tickets</button>
@@ -260,6 +298,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     <button class="nb" onclick="switchOrgTab('verif',this)"><span class="ni">🏆</span>Vérifier</button>
     <button class="nb" onclick="switchOrgTab('revendeurs',this)"><span class="ni">🛒</span>Revendeurs</button>
     <button class="nb" onclick="switchOrgTab('pions',this)"><span class="ni">🪙</span>Pions</button>
+    <button class="nb" onclick="switchOrgTab('joueurs',this)"><span class="ni">👥</span>Joueurs</button>
   </nav>
 </div>
 
@@ -1779,10 +1818,78 @@ function switchJoueurTab(n, el){
   if(n==='pions') chargerSoldesPionsJoueur(codeJoueurActuel);
 }
 
+// === JOUEURS ORGANISATEUR ===
+async function loadJoueursOrg(){
+  try{
+    const r = await fetch('/api/joueurs/liste', {headers: {'X-Token': TOKEN}});
+    const joueurs = await r.json();
+    const liste = document.getElementById('org-joueurs-liste');
+    if(!liste) return;
+    if(!joueurs.length){
+      liste.innerHTML = '<div style="text-align:center;padding:12px;color:var(--mu);font-size:13px">Aucun joueur pour le moment</div>';
+      return;
+    }
+    liste.innerHTML = '';
+    joueurs.forEach(function(j){
+      var div = document.createElement('div');
+      div.style.cssText = 'background:var(--s2);border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center';
+      div.innerHTML = '<div>' +
+        '<div style="font-size:13px;font-weight:600;color:#fff">' + (j.acheteur||'Joueur') + '</div>' +
+        '<div style="font-size:11px;color:var(--mu)">Code: <span style="color:#818cf8;font-weight:700">' + j.code_acheteur + '</span></div>' +
+        '<div style="font-size:11px;color:var(--mu)">' + (j.jeu ? '🎮 ' + j.jeu : '⏳ Pas encore de jeu assigné') + '</div>' +
+        '</div>' +
+        '<button onclick="prefillDistribuer(this.dataset.code)" data-code="' + j.code_acheteur + '" style="padding:6px 10px;background:rgba(99,102,241,.3);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:11px">🎫 Distribuer</button>';
+      liste.appendChild(div);
+    });
+  }catch(e){}
+}
+
+function prefillDistribuer(el){
+  var code = el.dataset ? el.dataset.code : el;
+  document.getElementById('dist-code-joueur').value = code;
+  // Scroller vers le formulaire
+  document.getElementById('dist-code-joueur').scrollIntoView({behavior:'smooth'});
+}
+
+async function distribuerTicket(){
+  var code = document.getElementById('dist-code-joueur').value.trim().toUpperCase();
+  var jeu = document.getElementById('dist-jeu').value;
+  var serie = document.getElementById('dist-serie').value;
+  var pages = document.getElementById('dist-pages').value;
+  
+  if(!code){ alert('Entrez le code du joueur'); return; }
+  if(!jeu){ alert('Choisissez un jeu'); return; }
+  if(!serie){ alert('Entrez la série de départ'); return; }
+  
+  try{
+    const r = await fetch('/api/joueurs/distribuer', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({
+        code_joueur: code,
+        jeu: jeu,
+        serie: parseInt(serie),
+        nb_pages: parseInt(pages||1)
+      })
+    });
+    const d = await r.json();
+    if(d.ok){
+      document.getElementById('dist-result').innerHTML = 
+        '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399">✅ Ticket distribué au joueur ' + code + ' !</div>';
+      document.getElementById('dist-code-joueur').value = '';
+      document.getElementById('dist-serie').value = '';
+      loadJoueursOrg();
+    } else {
+      alert(d.msg || 'Erreur');
+    }
+  }catch(e){ alert('Erreur de connexion'); }
+}
+
 function switchOrgTab(n, el){
   document.querySelectorAll("#s-organisateur .tab").forEach(t=>t.classList.remove("active"));
   document.querySelectorAll("#s-organisateur .nb").forEach(b=>b.classList.remove("active"));
   document.getElementById("tab-org-"+n).classList.add("active");
+  if(n==="joueurs") loadJoueursOrg();
   el.classList.add("active");
   if(n==="verif") loadAlertesBingo();
   if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();setTimeout(function(){loadVentesPaiement();loadMesCommandes();},500);startAutoRefreshOrg();}
