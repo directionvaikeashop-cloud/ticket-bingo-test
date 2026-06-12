@@ -1,6 +1,6 @@
 import hashlib, datetime, os, secrets, string, json, base64
 import urllib.request, urllib.parse
-from flask import Flask, request, jsonify, send_from_directory, Response, send_file
+from flask import Flask, request, jsonify, send_from_directory, Response, send_file, g
 try:
     from flask_sock import Sock
     HAS_WEBSOCKET = True
@@ -29,6 +29,21 @@ app = Flask(__name__, static_folder=".")
 if HAS_WEBSOCKET:
     sock = Sock(app)
 
+@app.before_request
+def _verrouiller_ecritures():
+    if request.method == "POST":
+        _VERROU_ECRITURES.acquire()
+        g.verrou_ecriture_pris = True
+
+@app.teardown_request
+def _liberer_ecritures(exc=None):
+    if getattr(g, "verrou_ecriture_pris", False):
+        g.verrou_ecriture_pris = False
+        try:
+            _VERROU_ECRITURES.release()
+        except RuntimeError:
+            pass
+
 SENDGRID_API_KEY = os.environ.get("SENDGRID_API_KEY", "")
 FROM_EMAIL = os.environ.get("FROM_EMAIL", "directionvaikeashop@gmail.com")
 FROM_NAME = "Ticket Bingo"
@@ -40,6 +55,11 @@ DATA_FILE = "/data/ticketbingo_data.json"
 
 import threading
 _VERROU_SAUVEGARDE = threading.Lock()
+
+# Les operations d'ECRITURE (POST) passent une par une pour ne plus jamais
+# qu'une operation ecrase ce qu'une autre vient d'enregistrer (perte de pions, etc.)
+# Les lectures (GET, actualisation des boules...) restent paralleles et rapides.
+_VERROU_ECRITURES = threading.Lock()
 
 def load_data():
     # Essayer le fichier principal, puis la copie de secours (.bak)
