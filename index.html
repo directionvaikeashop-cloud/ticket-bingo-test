@@ -709,6 +709,18 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div id="maintenance-result" style="margin-top:8px"></div>
       </div>
 
+      <!-- BLOQUER UN CODE JOUEUR -->
+      <div style="background:linear-gradient(135deg,rgba(239,68,68,.12),rgba(185,28,28,.08));border:1px solid rgba(239,68,68,.4);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:700;color:#f87171;margin-bottom:8px">🚫 Bloquer un code joueur</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:10px">Code compromis ou litige : la connexion et les pions deviennent inaccessibles. Réversible.</div>
+        <input id="bloc-code" placeholder="Code (ex: WQ7HEA)" style="width:100%;padding:9px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:#fff;font-size:13px;text-transform:uppercase;margin-bottom:8px">
+        <div style="display:flex;gap:8px">
+          <button onclick="bloquerCode(true)" style="flex:1;padding:10px;background:#dc2626;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">🚫 Bloquer</button>
+          <button onclick="bloquerCode(false)" style="flex:1;padding:10px;background:rgba(255,255,255,.1);color:#fff;border:0.5px solid var(--bd);border-radius:8px;cursor:pointer;font-size:13px">✅ Débloquer</button>
+        </div>
+        <div id="bloc-result" style="margin-top:8px"></div>
+      </div>
+
       <!-- ENVOYER UN CODE JOUEUR -->
       <div style="background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(5,150,105,.08));border:1px solid rgba(16,185,129,.4);border-radius:12px;padding:14px;margin-bottom:14px">
         <div style="font-size:14px;font-weight:700;color:#34d399;margin-bottom:8px">✉️ Envoyer un code joueur par email</div>
@@ -4923,6 +4935,29 @@ document.addEventListener('change', function(e){
   if(e.target && e.target.id === 'joueur-pion-mode') calcPionsJoueur();
   if(e.target && e.target.id === 'pion-mode-paiement') calcPions();
 });
+
+// === BLOCAGE DE CODE ===
+async function bloquerCode(bloquer){
+  var codeB = document.getElementById('bloc-code').value.trim().toUpperCase();
+  var res = document.getElementById('bloc-result');
+  if(!codeB){ res.innerHTML = '<div style="color:#f87171;font-size:12px">Entrez un code</div>'; return; }
+  if(bloquer && !confirm('Bloquer le code ' + codeB + ' ?\nLa joueuse ne pourra plus se connecter ni utiliser ses pions.')) return;
+  try{
+    const r = await fetch('/api/admin/bloquer-code', {
+      method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({code: codeB, bloquer: bloquer})
+    });
+    const d = await r.json();
+    if(d.ok){
+      res.innerHTML = '<div style="background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);border-radius:8px;padding:8px;color:#fca5a5;font-size:12px">' + d.msg + (d.bloques && d.bloques.length ? '<br>Codes bloqués : ' + d.bloques.join(', ') : '') + '</div>';
+      document.getElementById('bloc-code').value = '';
+    } else {
+      res.innerHTML = '<div style="color:#f87171;font-size:12px">' + (d.msg || 'Erreur') + '</div>';
+    }
+  }catch(e){
+    res.innerHTML = '<div style="color:#f87171;font-size:12px">Erreur réseau</div>';
+  }
+}
 
 // === ENVOI DE CODE PAR EMAIL ===
 async function envoyerCodeJoueur(){
