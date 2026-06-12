@@ -1404,14 +1404,9 @@ function buildOrgSpace(){
       
       <!-- Choix du jeu -->
       <div class="lbl">Jeu</div>
-      <select id="cmd-jeu" style="margin-bottom:10px;font-size:13px">
+      <select class="sel-jeu-generateur" id="cmd-jeu" style="margin-bottom:10px;font-size:13px">
         <option value="">Choisir un jeu...</option>
-        <option value="TRIPLE ACTION 75">🎯 TRIPLE ACTION 75</option>
-        <option value="60 BOULES">🎱 60 BOULES</option>
-        <option value="40 BOULES">🎳 40 BOULES</option>
-        <option value="4 COINS">🪙 4 COINS</option>
-        <option value="500 FRANCS">💵 500 FRANCS</option>
-        <option value="1 DOLLAR">💰 1 DOLLAR</option>
+        <!-- options chargees automatiquement depuis les generateurs installes -->
       </select>
       
       <!-- Choix du pack -->
@@ -1596,14 +1591,9 @@ function buildOrgSpace(){
     <div class="card" style="background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.1));border:1px solid rgba(16,185,129,.3);margin-bottom:14px">
       <div class="ct" style="margin-bottom:10px">📢 Annoncer un jeu aux joueurs</div>
       <div class="lbl">Jeu à annoncer</div>
-      <select id="annonce-jeu" style="margin-bottom:8px">
+      <select class="sel-jeu-generateur" id="annonce-jeu" style="margin-bottom:8px">
         <option value="">Choisir un jeu...</option>
-        <option value="TRIPLE ACTION 75">🎯 TRIPLE ACTION 75</option>
-        <option value="60 BOULES">🎱 60 BOULES</option>
-        <option value="40 BOULES">🎳 40 BOULES</option>
-        <option value="4 COINS">🪙 4 COINS</option>
-        <option value="500 FRANCS">💵 500 FRANCS</option>
-        <option value="1 DOLLAR">💰 1 DOLLAR</option>
+        <!-- options chargees automatiquement depuis les generateurs installes -->
       </select>
       <div class="lbl">Prix du ticket (XPF)</div>
       <input id="annonce-prix" type="number" placeholder="Ex: 100" min="1" style="margin-bottom:8px"/>
@@ -1895,14 +1885,9 @@ function buildRevSpace(){
       
       <!-- Choix du jeu -->
       <div class="lbl">Jeu</div>
-      <select id="cmd-jeu" style="margin-bottom:10px;font-size:13px">
+      <select class="sel-jeu-generateur" id="cmd-jeu" style="margin-bottom:10px;font-size:13px">
         <option value="">Choisir un jeu...</option>
-        <option value="TRIPLE ACTION 75">🎯 TRIPLE ACTION 75</option>
-        <option value="60 BOULES">🎱 60 BOULES</option>
-        <option value="40 BOULES">🎳 40 BOULES</option>
-        <option value="4 COINS">🪙 4 COINS</option>
-        <option value="500 FRANCS">💵 500 FRANCS</option>
-        <option value="1 DOLLAR">💰 1 DOLLAR</option>
+        <!-- options chargees automatiquement depuis les generateurs installes -->
       </select>
       
       <!-- Choix du pack -->
@@ -4890,6 +4875,29 @@ async function envoyerCodeJoueur(){
     res.innerHTML = '<div style="color:#f87171;font-size:12px">Erreur réseau</div>';
   }
 }
+
+// === JEUX DES GENERATEURS (listes automatiques) ===
+function chargerJeuxGenerateurs(){
+  fetch('/api/jeux-generateurs')
+  .then(function(r){ return r.json(); })
+  .then(function(jeux){
+    if(!Array.isArray(jeux)) return;
+    document.querySelectorAll('.sel-jeu-generateur').forEach(function(sel){
+      var valeurActuelle = sel.value;
+      // Garder uniquement le placeholder puis reconstruire
+      sel.innerHTML = '<option value="">Choisir un jeu...</option>';
+      jeux.forEach(function(j){
+        var opt = document.createElement('option');
+        opt.value = j.nom;
+        opt.textContent = (j.emoji ? j.emoji + ' ' : '') + j.nom;
+        sel.appendChild(opt);
+      });
+      if(valeurActuelle) sel.value = valeurActuelle;
+    });
+  })
+  .catch(function(){});
+}
+chargerJeuxGenerateurs();
 
 // === MESSAGE AUX JOUEURS ===
 async function publierMessageJoueurs(){
