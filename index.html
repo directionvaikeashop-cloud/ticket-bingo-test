@@ -1065,6 +1065,21 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       <div style="font-size:11px;color:var(--mu);margin-bottom:8px">Max 1000 tickets par génération — Le PDF se télécharge automatiquement</div>
       <div class="lbl">Nom du client (pour suivi)</div>
       <input id="gen-client" placeholder="Ex: Marie Dupont" style="margin-bottom:12px"/>
+      <div style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.08));border:1.5px solid #6366f1;border-radius:10px;padding:14px;margin-bottom:10px">
+        <div style="font-size:13px;font-weight:700;color:#a5b4fc;margin-bottom:4px">🎰 GÉNÉRATEUR UNIVERSEL — tous les jeux installés</div>
+        <div style="font-size:11px;color:rgba(255,255,255,.5);margin-bottom:10px">La liste se met à jour automatiquement à chaque nouveau jeu installé (OHANA 75 10 BOULES inclus)</div>
+        <div class="lbl">Jeu</div>
+        <select id="genu-jeu" class="sel-jeu-generateur" style="width:100%;padding:9px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:#fff;font-size:13px;margin-bottom:8px">
+        <option value="">Choisir un jeu...</option>
+        <!-- options chargees automatiquement depuis les generateurs installes -->
+      </select>
+        <div class="g2">
+          <div><div class="lbl">Nb tickets</div><input id="genu-nb" type="number" value="500" min="1" max="1000"/></div>
+          <div><div class="lbl">Série départ</div><input id="genu-serie" type="number" value="1" min="1"/></div>
+        </div>
+        <button onclick="genererJeuUniversel()" id="btn-genu" style="width:100%;padding:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;margin-top:6px">⚡ Générer le PDF</button>
+        <div id="genu-result" style="margin-top:6px"></div>
+      </div>
       <div style="background:linear-gradient(135deg,rgba(30,136,229,rgba(30,136,229,.1));border:1px solid rgba(30,136,229,.3);border-radius:10px;padding:14px;margin-bottom:10px">
         <div style="font-size:13px;font-weight:600;color:#64b5f6;margin-bottom:10px">🎯 TRIPLE ACTION 75</div>
         <div class="g2">
@@ -3442,11 +3457,50 @@ async function genererJeu(uid, route){
   btn.innerHTML = '⚡ Générer';
 }
 
+async function genererJeuUniversel(){
+  const jeu = document.getElementById('genu-jeu').value;
+  const nb = parseInt(document.getElementById('genu-nb')?.value || 500);
+  const serie = parseInt(document.getElementById('genu-serie')?.value || 1);
+  const btn = document.getElementById('btn-genu');
+  const result = document.getElementById('genu-result');
+  if(!jeu){alert('Choisissez un jeu');return;}
+  if(nb < 1 || nb > 1000){alert('Entre 1 et 1000 tickets');return;}
+  btn.disabled = true;
+  btn.innerHTML = '⏳ Génération en cours...';
+  result.innerHTML = '<div style="text-align:center;padding:8px;font-size:12px;color:var(--mu)">⏳ Génération de '+nb+' tickets '+jeu+'...</div>';
+  try{
+    const client = document.getElementById('gen-client')?.value.trim() || '';
+    const r = await fetch('/api/admin/generer-jeu', {
+      method:'POST',
+      headers:{'Content-Type':'application/json','X-Token':TOKEN},
+      body: JSON.stringify({jeu:jeu, nb_tickets:nb, serie_start:serie, client:client})
+    });
+    if(r.ok){
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = jeu.replace(/[^A-Za-z0-9]+/g,'_')+'_'+String(serie).padStart(5,'0')+'.pdf';
+      a.click();
+      URL.revokeObjectURL(url);
+      result.innerHTML = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:8px;text-align:center;color:#34d399;font-size:12px;font-weight:600">✅ '+nb+' tickets '+jeu+' téléchargés !</div>';
+      loadCommandes();
+    } else {
+      const d = await r.json();
+      result.innerHTML = '<div style="background:rgba(239,68,68,.2);border:1px solid #ef4444;border-radius:8px;padding:8px;text-align:center;color:#f87171;font-size:12px">❌ '+(d.msg||'Erreur')+'</div>';
+    }
+  }catch(e){
+    result.innerHTML = '<div style="background:rgba(239,68,68,.2);border:1px solid #ef4444;border-radius:8px;padding:8px;text-align:center;color:#f87171;font-size:12px">❌ Erreur de connexion</div>';
+  }
+  btn.disabled = false;
+  btn.innerHTML = '⚡ Générer le PDF';
+}
+
 // Garder genererTA75 pour compatibilité
 function genererTA75(){ genererJeu('ta75','generer-ta75'); }
 
-// === GENERATION TICKETS TA75 ===
-async function genererTA75(){
+// === ANCIENNE GENERATION TA75 (remplacee par genererJeu) ===
+async function _ancienGenererTA75(){
   const nb = parseInt(document.getElementById('ta75-nb')?.value || 500);
   const serie = parseInt(document.getElementById('ta75-serie')?.value || 1);
   const btn = document.getElementById('btn-ta75');
