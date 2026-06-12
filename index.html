@@ -3651,7 +3651,8 @@ function calcPions(){
     if(calcDiv) calcDiv.style.display = 'none';
     return;
   }
-  var commission = Math.round(montant * 0.20);
+  var modeO = (document.getElementById('pion-mode-paiement') || {}).value || '';
+  var commission = Math.round(montant * tauxCommissionPions(modeO));
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionSelectionne);
   calcDiv.style.display = 'block';
@@ -3667,7 +3668,7 @@ async function commanderPions(){
   var mode = document.getElementById('pion-mode-paiement') ? document.getElementById('pion-mode-paiement').value : '';
   var ref = document.getElementById('pion-ref-paiement') ? document.getElementById('pion-ref-paiement').value.trim() : '';
   if(!mode){ alert('Choisissez votre mode de paiement'); return; }
-  var commission = Math.round(montant * 0.20);
+  var commission = Math.round(montant * tauxCommissionPions(mode));
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionSelectionne);
 
@@ -3908,6 +3909,11 @@ function selValeurPionJoueur(val, el){
   calcPionsJoueur();
 }
 
+// Taux de commission : 2% par CARTE, 20% pour les autres modes
+function tauxCommissionPions(mode){
+  return (mode === 'Carte') ? 0.02 : 0.20;
+}
+
 function calcPionsJoueur(){
   var montant = parseFloat(document.getElementById('joueur-pion-montant').value || 0);
   var calcDiv = document.getElementById('joueur-pion-calcul');
@@ -3915,7 +3921,8 @@ function calcPionsJoueur(){
     if(calcDiv) calcDiv.style.display = 'none';
     return;
   }
-  var commission = Math.round(montant * 0.20);
+  var modeJ = (document.getElementById('joueur-pion-mode') || {}).value || '';
+  var commission = Math.round(montant * tauxCommissionPions(modeJ));
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionJoueur);
   calcDiv.style.display = 'block';
@@ -3933,7 +3940,7 @@ async function commanderPionsJoueur(){
   if(!mode){ alert('Choisissez votre mode de paiement'); return; }
   if(!ref) ref = 'TUKEA-' + Date.now().toString().slice(-6);
   
-  var commission = Math.round(montant * 0.20);
+  var commission = Math.round(montant * tauxCommissionPions(mode));
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionJoueur);
 
@@ -4737,6 +4744,12 @@ async function basculerMaintenance(){
 
 verifierMaintenance();
 setInterval(verifierMaintenance, 30000);
+
+// Recalculer les pions affiches quand le mode de paiement change (carte 2% / autres 20%)
+document.addEventListener('change', function(e){
+  if(e.target && e.target.id === 'joueur-pion-mode') calcPionsJoueur();
+  if(e.target && e.target.id === 'pion-mode-paiement') calcPions();
+});
 
 // === RAPPROCHEMENT STRIPE ===
 async function chargerPaiementsStripe(){
