@@ -38,19 +38,34 @@ CLOUDINARY_PRESET = "alerte_upload"
 # Stockage persistant
 DATA_FILE = "/data/ticketbingo_data.json"
 
+import threading
+_VERROU_SAUVEGARDE = threading.Lock()
+
 def load_data():
-    try:
-        if os.path.exists(DATA_FILE):
-            with open(DATA_FILE, "r") as f:
-                data = json.load(f)
-            for k in ["tickets_acheteurs", "acces_docs", "alertes_bingo", "tirage"]:
-                if k not in data:
-                    data[k] = [] if k in ["alertes_bingo", "tirage"] else {}
-            if not data.get("jeux"):
-                data["jeux"] = ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"]
-            return data
-    except Exception as e:
-        print(f"[LOAD ERR] {e}")
+    # Essayer le fichier principal, puis la copie de secours (.bak)
+    for chemin in [DATA_FILE, DATA_FILE + ".bak"]:
+        try:
+            if os.path.exists(chemin):
+                with open(chemin, "r") as f:
+                    data = json.load(f)
+                if chemin.endswith(".bak"):
+                    print("[LOAD] Fichier principal illisible — copie de secours utilisée")
+                for k in ["tickets_acheteurs", "acces_docs", "alertes_bingo", "tirage"]:
+                    if k not in data:
+                        data[k] = [] if k in ["alertes_bingo", "tirage"] else {}
+                if not data.get("jeux"):
+                    data["jeux"] = ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"]
+                return data
+        except Exception as e:
+            print(f"[LOAD ERR] {chemin}: {e}")
+            # Conserver le fichier abime pour recuperation eventuelle (jamais l'ecraser)
+            try:
+                import shutil
+                horodatage = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                shutil.copy(chemin, chemin + ".corrompu_" + horodatage)
+            except Exception:
+                pass
+    print("[LOAD] ATTENTION : aucune donnée lisible — démarrage sur base vide")
     return {
         "ventes": [], "tickets": [],
         "jeux": ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"],
@@ -62,50 +77,25 @@ def load_data():
 
 def save_data():
     try:
-        os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
-        # Vérifier que DB est valide
-        test = json.dumps(DB, ensure_ascii=False, default=str)
-        if len(test) < 100:
-            print("[SAVE SKIP] Données trop courtes — annulé")
-            return
-        # Backup avant sauvegarde
-        backup_file = DATA_FILE + '.backup'
-        if os.path.exists(DATA_FILE):
-            try:
-                import shutil
-                shutil.copy2(DATA_FILE, backup_file)
-            except:
-                pass
-        # Sauvegarde atomique via fichier temporaire
-        tmp_file = DATA_FILE + '.tmp'
-        with open(tmp_file, "w") as f:
-            json.dump(DB, f, ensure_ascii=False, default=str)
-        os.replace(tmp_file, DATA_FILE)
+        with _VERROU_SAUVEGARDE:
+            os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
+            # 1) Ecrire dans un fichier TEMPORAIRE (le fichier principal n'est jamais a moitie ecrit)
+            tmp = DATA_FILE + ".tmp"
+            with open(tmp, "w") as f:
+                json.dump(DB, f, ensure_ascii=False, default=str)
+                f.flush()
+                os.fsync(f.fileno())
+            # 2) Conserver la version precedente comme copie de secours
+            if os.path.exists(DATA_FILE):
+                try:
+                    os.replace(DATA_FILE, DATA_FILE + ".bak")
+                except Exception:
+                    pass
+            # 3) Remplacement ATOMIQUE : soit l'ancien fichier, soit le nouveau, jamais un fichier abime
+            os.replace(tmp, DATA_FILE)
         print(f"[SAVE OK] {DATA_FILE}")
     except Exception as e:
         print(f"[SAVE ERR] {e}")
-
-def load_data():
-    global DB
-    try:
-        with open(DATA_FILE, "r") as f:
-            data = json.load(f)
-        if len(str(data)) < 100:
-            raise ValueError("Données trop courtes")
-        return data
-    except Exception as e:
-        print(f"[LOAD ERR] {e}")
-        # Essayer le backup
-        backup_file = DATA_FILE + '.backup'
-        if os.path.exists(backup_file):
-            try:
-                with open(backup_file, "r") as f:
-                    data = json.load(f)
-                print("[LOAD BACKUP] Backup restauré automatiquement !")
-                return data
-            except:
-                pass
-        return DB
 
 DB = load_data()
 
@@ -368,7 +358,7 @@ def get_stats():
     DB = load_data()
     today = datetime.date.today().isoformat()
     vj = [v for v in DB["ventes"] if v["date"][:10] == today]
-    return jsonify({"ventes_jour": len(vj), "tickets_jour": sum(v.get("total_feuilles", v.get("pack", 0)) for v in vj), "total_jour": sum(v.get("total", 0) for v in vj)})
+    return jsonify({"ventes_jour": len(vj), "tickets_jour": sum(v["total_feuilles"] for v in vj), "total_jour": sum(v["total"] for v in vj)})
 
 @app.route("/api/ticket", methods=["POST"])
 def enregistrer_ticket():
@@ -749,7 +739,7 @@ def commander_pions():
     montant_paye = float(d.get("montant_paye", 0))
     commission = float(d.get("commission", 0))
     nb_pions = int(d.get("nb_pions", 0))
-    if not valeur_pion or montant_paye <= 0 or nb_pions <= 0:
+    if not valeur_pion or montant_paye < 500 or nb_pions <= 0:
         return jsonify({"ok": False, "msg": "Données invalides"}), 400
     if "commandes_pions" not in DB:
         DB["commandes_pions"] = []
@@ -1312,7 +1302,7 @@ def calculer_cagnotte():
     
     # Calcul cagnotte — 80% joueur, 20% organisateur
     cagnotte_annoncee = round(total_mises * 0.80)  # 80% pour le gagnant
-    part_org = round(total_mises * 0.02)            # 20% pour l'organisateur
+    part_org = round(total_mises * 0.20)            # 20% pour l'organisateur
     
     # Sauvegarder la cagnotte du tournoi
     if "cagnottes" not in DB:
@@ -1412,31 +1402,6 @@ def get_signals():
         signals = [s for s in signals if s["id"] > after]
     return jsonify(signals)
 
-# === GESTION JEUX PERSONNALISES ===
-@app.route("/api/jeux/ajouter", methods=["POST"])
-def ajouter_jeu():
-    global DB
-    DB = load_data()
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s or not s.get("admin"):
-        return jsonify({"ok": False}), 403
-    nom = request.json.get("nom", "").strip().upper()
-    if not nom:
-        return jsonify({"ok": False, "msg": "Nom invalide"}), 400
-    if "jeux_custom" not in DB:
-        DB["jeux_custom"] = []
-    if nom not in DB["jeux_custom"]:
-        DB["jeux_custom"].append(nom)
-    save_data()
-    return jsonify({"ok": True})
-
-@app.route("/api/jeux/liste")
-def liste_jeux():
-    global DB
-    DB = load_data()
-    return jsonify(DB.get("jeux_custom", []))
-
 # === PIONS JOUEUR DIRECT ===
 # === ANNONCES JEUX ===
 @app.route("/api/annonce/jeu", methods=["POST", "DELETE"])
@@ -1501,7 +1466,7 @@ def commander_ticket_pions():
         solde_total += int(valeur) * nb
     
     if solde_total < total:
-        return jsonify({"ok": False, "msg": f"Pions insuffisants — vous avez {solde_total} XPF de pions, ce jeu coûte {total} XPF. Commandez plus de pions !"}), 400
+        return jsonify({"ok": False, "msg": f"Solde insuffisant — vous avez {solde_total} XPF de pions, il faut {total} XPF"}), 400
     
     # Débiter les pions (priorité aux pions de plus petite valeur)
     reste = total
@@ -1571,42 +1536,6 @@ def valider_ticket_pions():
     save_data()
     return jsonify({"ok": True})
 
-# === SYSTEME BONUS ===
-def calculer_bonus(code_joueur, montant, nb_pions, valeur_pion):
-    """Calcule les bonus selon les règles"""
-    global DB
-    bonus = 0
-    raisons = []
-    
-    historique = DB.get("historique_commandes", {}).get(code_joueur, [])
-    nb_commandes = len(historique)
-    
-    # BONUS BIENVENUE - 1ere commande = +5 pions
-    if nb_commandes == 0:
-        bonus += 5
-        raisons.append("🎁 Bonus bienvenue : +5 pions !")
-    
-    # BONUS VOLUME
-    if montant >= 10000:
-        extra = int(nb_pions * 0.15)
-        bonus += extra
-        raisons.append(f"💰 Bonus volume 15% : +{extra} pions !")
-    elif montant >= 5000:
-        extra = int(nb_pions * 0.10)
-        bonus += extra
-        raisons.append(f"💰 Bonus volume 10% : +{extra} pions !")
-    elif montant >= 2000:
-        extra = int(nb_pions * 0.05)
-        bonus += extra
-        raisons.append(f"💰 Bonus volume 5% : +{extra} pions !")
-    
-    # BONUS FIDELITE - toutes les 5 commandes = +10 pions
-    if nb_commandes > 0 and (nb_commandes + 1) % 5 == 0:
-        bonus += 10
-        raisons.append("🔄 Bonus fidélité 5ème commande : +10 pions !")
-    
-    return bonus, raisons
-
 @app.route("/api/pions/commande-joueur", methods=["POST"])
 def commande_pions_joueur():
     global DB
@@ -1620,14 +1549,11 @@ def commande_pions_joueur():
     mode_paiement = d.get("mode_paiement", "")
     ref_paiement = d.get("ref_paiement", "")
     
-    if not code_joueur or not valeur_pion or montant_paye <= 0:
+    if not code_joueur or not valeur_pion or montant_paye < 500:
         return jsonify({"ok": False, "msg": "Données invalides"}), 400
     
     if "commandes_pions_joueurs" not in DB:
         DB["commandes_pions_joueurs"] = []
-    
-    # Calculer bonus
-    bonus_pions, bonus_raisons = calculer_bonus(code_joueur, montant_paye, nb_pions, valeur_pion)
     
     commande = {
         "id": secrets.token_hex(4).upper(),
@@ -1636,115 +1562,14 @@ def commande_pions_joueur():
         "montant_paye": montant_paye,
         "commission": commission,
         "nb_pions": nb_pions,
-        "bonus_pions": bonus_pions,
-        "bonus_raisons": bonus_raisons,
-        "nb_pions_total": nb_pions + bonus_pions,
         "mode_paiement": mode_paiement,
         "ref_paiement": ref_paiement,
         "statut": "en_attente_validation",
         "date": datetime.datetime.now().isoformat()
     }
     DB["commandes_pions_joueurs"].insert(0, commande)
-    
-    # Enregistrer dans historique commandes
-    if "historique_commandes" not in DB:
-        DB["historique_commandes"] = {}
-    if code_joueur not in DB["historique_commandes"]:
-        DB["historique_commandes"][code_joueur] = []
-    DB["historique_commandes"][code_joueur].append({
-        "date": datetime.datetime.now().isoformat(),
-        "montant": montant_paye,
-        "nb_pions": nb_pions + bonus_pions
-    })
-    
     save_data()
-    return jsonify({"ok": True, "commande_id": commande["id"], "bonus_pions": bonus_pions, "bonus_raisons": bonus_raisons})
-
-@app.route("/api/notification/joueur/<code_joueur>")
-def get_notification_joueur(code_joueur):
-    global DB
-    DB = load_data()
-    notifs = DB.get("notifications_joueurs", {})
-    notif = notifs.get(code_joueur.upper())
-    if notif and not notif.get("lu"):
-        return jsonify({"ok": True, "message": notif["message"]})
-    return jsonify({"ok": False})
-
-@app.route("/api/notification/joueur/lue/<code_joueur>", methods=["POST"])
-def marquer_notification_lue(code_joueur):
-    global DB
-    DB = load_data()
-    if "notifications_joueurs" in DB and code_joueur.upper() in DB["notifications_joueurs"]:
-        DB["notifications_joueurs"][code_joueur.upper()]["lu"] = True
-        save_data()
-    return jsonify({"ok": True})
-
-@app.route("/api/parrainage/code/<code_joueur>")
-def get_code_parrainage(code_joueur):
-    """Retourne le code de parrainage du joueur"""
-    global DB
-    DB = load_data()
-    parrainages = DB.get("parrainages", {})
-    code_parrain = parrainages.get(code_joueur, {}).get("code_parrain")
-    if not code_parrain:
-        # Générer un code parrainage unique
-        code_parrain = "PAR" + secrets.token_hex(3).upper()
-        if "parrainages" not in DB:
-            DB["parrainages"] = {}
-        DB["parrainages"][code_joueur] = {"code_parrain": code_parrain, "filleuls": [], "bonus_recu": 0}
-        save_data()
-    filleuls = parrainages.get(code_joueur, {}).get("filleuls", [])
-    bonus_total = parrainages.get(code_joueur, {}).get("bonus_recu", 0)
-    return jsonify({"ok": True, "code_parrain": code_parrain, "nb_filleuls": len(filleuls), "bonus_total": bonus_total})
-
-@app.route("/api/parrainage/utiliser", methods=["POST"])
-def utiliser_parrainage():
-    """Un nouveau joueur utilise un code parrainage"""
-    global DB
-    DB = load_data()
-    d = request.json
-    code_joueur = d.get("code_joueur", "").upper()
-    code_parrain = d.get("code_parrain", "").upper()
-    
-    if not code_joueur or not code_parrain:
-        return jsonify({"ok": False, "msg": "Données invalides"})
-    
-    # Trouver le parrain
-    parrainages = DB.get("parrainages", {})
-    parrain_code = None
-    for joueur, info in parrainages.items():
-        if info.get("code_parrain") == code_parrain:
-            parrain_code = joueur
-            break
-    
-    if not parrain_code:
-        return jsonify({"ok": False, "msg": "Code parrainage invalide"})
-    
-    if code_joueur == parrain_code:
-        return jsonify({"ok": False, "msg": "Vous ne pouvez pas vous parrainer vous-même"})
-    
-    # Vérifier que ce joueur n'a pas déjà été parrainé
-    if code_joueur in parrainages.get(parrain_code, {}).get("filleuls", []):
-        return jsonify({"ok": False, "msg": "Parrainage déjà utilisé"})
-    
-    # Bonus parrain : +10 pions à 20 XPF
-    if "pions_joueurs" not in DB:
-        DB["pions_joueurs"] = {}
-    if parrain_code not in DB["pions_joueurs"]:
-        DB["pions_joueurs"][parrain_code] = {}
-    DB["pions_joueurs"][parrain_code]["20"] = DB["pions_joueurs"][parrain_code].get("20", 0) + 10
-    
-    # Bonus filleul : +5 pions à 20 XPF
-    if code_joueur not in DB["pions_joueurs"]:
-        DB["pions_joueurs"][code_joueur] = {}
-    DB["pions_joueurs"][code_joueur]["20"] = DB["pions_joueurs"][code_joueur].get("20", 0) + 5
-    
-    # Enregistrer le parrainage
-    DB["parrainages"][parrain_code]["filleuls"].append(code_joueur)
-    DB["parrainages"][parrain_code]["bonus_recu"] = DB["parrainages"][parrain_code].get("bonus_recu", 0) + 10
-    
-    save_data()
-    return jsonify({"ok": True, "msg": "Parrainage activé ! +10 pions pour le parrain, +5 pions pour vous !"})
+    return jsonify({"ok": True, "commande_id": commande["id"]})
 
 @app.route("/api/pions/solde-joueur/<code_joueur>")
 def solde_pions_joueur(code_joueur):
@@ -1777,11 +1602,33 @@ def valider_pions_joueur():
                 DB["pions_joueurs"] = {}
             if code_joueur not in DB["pions_joueurs"]:
                 DB["pions_joueurs"][code_joueur] = {}
-            nb_total = c.get("nb_pions_total", nb)
-            DB["pions_joueurs"][code_joueur][valeur] = DB["pions_joueurs"][code_joueur].get(valeur, 0) + nb_total
+            DB["pions_joueurs"][code_joueur][valeur] = DB["pions_joueurs"][code_joueur].get(valeur, 0) + nb
             break
     save_data()
     return jsonify({"ok": True})
+
+@app.route("/api/pions/recrediter-joueur", methods=["POST"])
+def recrediter_pions_joueur():
+    """ADMIN — Recredite directement des pions a un joueur (recuperation apres incident)"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    d = request.json
+    code_joueur = d.get("code_joueur", "").upper().strip()
+    valeur = str(int(d.get("valeur_pion", 0)))
+    nb = int(d.get("nb_pions", 0))
+    if not code_joueur or valeur not in ["20", "50", "100"] or nb == 0:
+        return jsonify({"ok": False, "msg": "Données invalides"}), 400
+    if "pions_joueurs" not in DB:
+        DB["pions_joueurs"] = {}
+    if code_joueur not in DB["pions_joueurs"]:
+        DB["pions_joueurs"][code_joueur] = {}
+    DB["pions_joueurs"][code_joueur][valeur] = max(0, DB["pions_joueurs"][code_joueur].get(valeur, 0) + nb)
+    save_data()
+    return jsonify({"ok": True, "solde": DB["pions_joueurs"][code_joueur]})
 
 @app.route("/api/pions/commandes-joueurs")
 def get_commandes_joueurs():
@@ -1831,73 +1678,16 @@ if HAS_WEBSOCKET:
         try:
             while True:
                 # Garder la connexion ouverte
-                data = ws.receive(timeout=60)
+                # None = simple timeout d'attente, PAS une deconnexion -> on continue
+                # (une vraie deconnexion leve une exception, geree par le except)
+                data = ws.receive(timeout=25)
                 if data is None:
-                    break
+                    continue
         except:
             pass
         finally:
             if ws in ws_micro_joueurs.get(code_org, []):
                 ws_micro_joueurs[code_org].remove(ws)
-
-# === JOUEURS ORGANISATEUR ===
-@app.route("/api/joueurs/liste")
-def liste_joueurs():
-    global DB
-    DB = load_data()
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s:
-        return jsonify([])
-    code_org = s["code"]
-    # Récupérer tous les tickets de cet organisateur
-    tickets = [t for t in DB.get("tickets", []) if t.get("code_org") == code_org]
-    return jsonify(tickets)
-
-@app.route("/api/joueurs/distribuer", methods=["POST"])
-def distribuer_ticket():
-    global DB
-    DB = load_data()
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s:
-        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
-    
-    d = request.json
-    code_joueur = d.get("code_joueur", "").upper()
-    jeu = d.get("jeu", "")
-    serie = int(d.get("serie", 1))
-    nb_pages = int(d.get("nb_pages", 1))
-    code_org = s["code"]
-    
-    # Chercher le ticket du joueur
-    ticket_trouve = None
-    for t in DB.get("tickets", []):
-        if t.get("code_acheteur") == code_joueur:
-            ticket_trouve = t
-            break
-    
-    if not ticket_trouve:
-        return jsonify({"ok": False, "msg": "Code joueur introuvable"})
-    
-    # Trouver le PDF de l'organisateur pour ce jeu
-    pdf_url = None
-    for v in DB.get("ventes", []):
-        if v.get("code_org") == code_org and v.get("jeu") == jeu and v.get("pdf_url"):
-            pdf_url = v.get("pdf_url")
-            break
-    
-    # Mettre à jour le ticket
-    ticket_trouve["jeu"] = jeu
-    ticket_trouve["serie"] = str(serie)
-    ticket_trouve["code_org"] = code_org
-    ticket_trouve["page_debut"] = serie
-    ticket_trouve["page_fin"] = serie + nb_pages - 1
-    ticket_trouve["pdf_url"] = pdf_url
-    ticket_trouve["actif"] = True
-    
-    save_data()
-    return jsonify({"ok": True})
 
 @app.route("/api/micro/audio", methods=["POST"])
 def recevoir_audio():
@@ -2117,29 +1907,6 @@ def generer_500_francs():
         return jsonify({"ok": False, "msg": str(e)}), 500
 
 # === GENERATION 1 DOLLAR ===
-@app.route("/api/admin/generer-ohana75", methods=["POST"])
-def generer_ohana75():
-    """Génère un PDF OHANA 75"""
-    global DB
-    DB = load_data()
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s or not s.get("admin"):
-        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
-    d = request.json or {}
-    nb_tickets = min(int(d.get("nb_tickets", 500)), 1000)
-    serie_start = int(d.get("serie_start", 1))
-    output_path = f"/data/OHANA75_{serie_start:05d}_to_{serie_start + nb_tickets - 1:05d}.pdf"
-    os.makedirs("/data", exist_ok=True)
-    try:
-        generate_ohana75_pdf(nb_tickets=nb_tickets, serie_start=serie_start, output_path=output_path)
-        return send_file(output_path, as_attachment=True,
-                        download_name=f"OHANA75_{serie_start:05d}.pdf",
-                        mimetype="application/pdf")
-    except Exception as e:
-        print(f"[OHANA75 ERR] {e}")
-        return jsonify({"ok": False, "msg": str(e)}), 500
-
 @app.route("/api/admin/generer-1-dollar", methods=["POST"])
 def generer_1_dollar():
     global DB
@@ -2205,6 +1972,66 @@ def creer_session_paiement():
         print(f"[STRIPE ERR] {e}")
         return jsonify({"ok": False, "msg": str(e)}), 500
 
+@app.route("/api/pions/stripe-checkout", methods=["POST"])
+def stripe_checkout_pions():
+    """Cree une session de paiement Stripe pour un achat de pions (joueur ou organisateur)"""
+    if not stripe or not STRIPE_SECRET_KEY:
+        return jsonify({"ok": False, "msg": "Paiement par carte non configuré — choisissez un autre mode"}), 503
+    global DB
+    DB = load_data()
+    d = request.json
+    profil = d.get("profil", "joueur")  # joueur ou organisateur
+    valeur_pion = int(d.get("valeur_pion", 0))
+    montant = int(d.get("montant", 0))
+
+    if profil == "organisateur":
+        token = request.headers.get("X-Token", "")
+        s = verif_session(token)
+        if not s:
+            return jsonify({"ok": False, "msg": "Session expirée"}), 403
+        code = s["code"]
+    else:
+        code = d.get("code", "").upper().strip()
+
+    if not code or valeur_pion not in [20, 50, 100] or montant < 500:
+        return jsonify({"ok": False, "msg": "Données invalides"}), 400
+
+    # Calcul COTE SERVEUR (anti-triche) : commission 20%, pions sur la valeur restante
+    commission = round(montant * 0.20)
+    nb_pions = int((montant - commission) // valeur_pion)
+    if nb_pions <= 0:
+        return jsonify({"ok": False, "msg": "Montant trop faible pour cette valeur de pion"}), 400
+
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{
+                "price_data": {
+                    "currency": "xpf",
+                    "product_data": {
+                        "name": f"{nb_pions} pions à {valeur_pion} XPF",
+                        "description": f"Ticket Bingo — Pions ({code})"
+                    },
+                    "unit_amount": montant,
+                },
+                "quantity": 1,
+            }],
+            mode="payment",
+            success_url="https://ticket-bingo-production.up.railway.app?paiement=pions_ok",
+            cancel_url="https://ticket-bingo-production.up.railway.app?paiement=pions_annule",
+            metadata={
+                "type": "pions_joueur" if profil == "joueur" else "pions_org",
+                "code": code,
+                "valeur_pion": str(valeur_pion),
+                "nb_pions": str(nb_pions),
+                "commission": str(commission)
+            }
+        )
+        return jsonify({"ok": True, "url": session.url})
+    except Exception as e:
+        print(f"[STRIPE PIONS ERR] {e}")
+        return jsonify({"ok": False, "msg": "Erreur de paiement — choisissez un autre mode"}), 500
+
 @app.route("/api/paiement/webhook", methods=["POST"])
 def stripe_webhook():
     """Reçoit les notifications Stripe après paiement"""
@@ -2212,20 +2039,9 @@ def stripe_webhook():
     sig_header = request.headers.get("Stripe-Signature", "")
     
     try:
-        if STRIPE_WEBHOOK_SECRET and sig_header:
-            event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
-        else:
-            # Accepter sans vérification signature si secret non configuré
-            import json as json_lib
-            event = json_lib.loads(payload)
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
     except Exception as e:
-        print(f"[WEBHOOK ERR] {e}")
-        # Essayer quand même de traiter l'événement sans vérification
-        try:
-            import json as json_lib
-            event = json_lib.loads(payload)
-        except:
-            return jsonify({"ok": False, "msg": str(e)}), 400
+        return jsonify({"ok": False}), 400
     
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
@@ -2274,23 +2090,10 @@ def stripe_webhook():
         # Si c'est un achat de pions, créditer automatiquement
         if type_p == "pions" and code_org:
             nb_pions = int(metadata.get("nb_pions", 0))
-            valeur_pion = str(metadata.get("valeur_pion", "20"))
-            type_acheteur = metadata.get("type_acheteur", "organisateur")
             if nb_pions > 0:
-                if type_acheteur == "joueur":
-                    # Créditer dans pions_joueurs
-                    if "pions_joueurs" not in DB:
-                        DB["pions_joueurs"] = {}
-                    if code_org not in DB["pions_joueurs"]:
-                        DB["pions_joueurs"][code_org] = {}
-                    DB["pions_joueurs"][code_org][valeur_pion] = DB["pions_joueurs"][code_org].get(valeur_pion, 0) + nb_pions
-                else:
-                    # Créditer dans pions organisateur
-                    if "pions" not in DB:
-                        DB["pions"] = {}
-                    if code_org not in DB["pions"]:
-                        DB["pions"][code_org] = 0
-                    DB["pions"][code_org] = DB["pions"].get(code_org, 0) + nb_pions
+                if "pions" not in DB:
+                    DB["pions"] = {}
+                DB["pions"][code_org] = DB["pions"].get(code_org, 0) + nb_pions
                 if "transactions_pions" not in DB:
                     DB["transactions_pions"] = []
                 DB["transactions_pions"].append({
@@ -2303,89 +2106,60 @@ def stripe_webhook():
                 })
                 print(f"[STRIPE] {nb_pions} pions crédités à {code_org}")
         
-        # Si c'est un achat de tickets (circuit automatique Stripe)
-        if type_p == "tickets" and code_org:
-            jeu = metadata.get("jeu", "")
-            pack = int(metadata.get("pack", 0))
-            prix_xpf = int(metadata.get("prix_xpf", 0))
-            serie = int(metadata.get("serie", "1"))
-            
-            if jeu and pack > 0:
-                try:
-                    # Générer le PDF automatiquement
-                    pdf_id = secrets.token_hex(8)
-                    os.makedirs("/data/pdfs", exist_ok=True)
-                    output_path = f"/data/pdfs/{pdf_id}.pdf"
-                    pdf_url = f"/api/pdf/{pdf_id}"
-                    
-                    # Choisir le bon générateur selon le jeu
-                    jeu_lower = jeu.lower().replace(" ", "_")
-                    if "triple" in jeu_lower or "ta75" in jeu_lower:
-                        from generate_triple_action_75 import generate_pdf as gen_pdf
-                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
-                    elif "60" in jeu_lower and "boule" in jeu_lower:
-                        from generate_60_boules import generate_pdf as gen_pdf
-                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
-                    elif "40" in jeu_lower and "boule" in jeu_lower:
-                        print(f"[STRIPE] Génération 40 BOULES: {pack} tickets -> {output_path}")
-                        from generate_40_boules import generate_pdf as gen_pdf
-                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
-                        print(f"[STRIPE] PDF 40 BOULES généré OK!")
-                    elif "4" in jeu_lower and "coin" in jeu_lower:
-                        from generate_4_coins import generate_pdf as gen_pdf
-                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
-                    elif "500" in jeu_lower and "franc" in jeu_lower:
-                        from generate_500_francs import generate_pdf as gen_pdf
-                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
-                    elif "dollar" in jeu_lower or "1_dollar" in jeu_lower:
-                        from generate_1_dollar import generate_pdf as gen_pdf
-                        gen_pdf(nb_tickets=pack, serie_start=serie, output_path=output_path)
-                    else:
-                        raise Exception(f"Jeu non reconnu: {jeu}")
-                    
-                    # Créer la vente automatiquement avec PDF
-                    if "ventes" not in DB:
-                        DB["ventes"] = []
-                    
-                    vente_id = secrets.token_hex(4).upper()
-                    DB["ventes"].insert(0, {
-                        "id": vente_id,
-                        "client": DB["codes"].get(code_org, {}).get("nom", code_org),
-                        "email": DB["codes"].get(code_org, {}).get("email", ""),
-                        "jeu": jeu,
-                        "pack": pack,
-                        "serie": str(serie),
-                        "prix": prix_xpf,
-                        "total": prix_xpf,
-                        "pdf_url": pdf_url,
-                        "code_org": code_org,
-                        "paiement_statut": "valide",
-                        "mode_paiement": "Carte Stripe",
-                        "date": datetime.datetime.now().isoformat(),
-                        "stripe_auto": True
-                    })
-                    
-                    print(f"[STRIPE TICKETS] PDF généré automatiquement : {pack} tickets {jeu} pour {code_org}")
-                    
-                except Exception as e:
-                    import traceback
-                    print(f"[STRIPE TICKETS ERR] Génération PDF échouée: {e}")
-                    print(f"[STRIPE TICKETS TRACE] {traceback.format_exc()}")
-                    # En cas d'erreur, créer quand même la commande pour traitement manuel
-                    if "commandes_tickets" not in DB:
-                        DB["commandes_tickets"] = []
-                    DB["commandes_tickets"].insert(0, {
-                        "id": gen_code(8),
-                        "code_org": code_org,
-                        "nom_org": DB["codes"].get(code_org, {}).get("nom", code_org),
-                        "jeu": jeu,
-                        "pack": pack,
-                        "prix": prix_xpf,
-                        "serie": str(serie),
-                        "statut": "payee_stripe_erreur_pdf",
-                        "mode_paiement": "Carte Stripe",
-                        "date": datetime.datetime.now().isoformat()
-                    })
+        # Pions JOUEUR payes par carte : crediter automatiquement
+        if type_p == "pions_joueur":
+            code_joueur = metadata.get("code", "")
+            valeur = metadata.get("valeur_pion", "0")
+            nb_pions = int(metadata.get("nb_pions", 0))
+            if code_joueur and nb_pions > 0:
+                if "pions_joueurs" not in DB:
+                    DB["pions_joueurs"] = {}
+                if code_joueur not in DB["pions_joueurs"]:
+                    DB["pions_joueurs"][code_joueur] = {}
+                DB["pions_joueurs"][code_joueur][valeur] = DB["pions_joueurs"][code_joueur].get(valeur, 0) + nb_pions
+                if "commandes_pions_joueurs" not in DB:
+                    DB["commandes_pions_joueurs"] = []
+                DB["commandes_pions_joueurs"].insert(0, {
+                    "id": secrets.token_hex(4).upper(),
+                    "code_joueur": code_joueur,
+                    "valeur_pion": int(valeur),
+                    "montant_paye": montant,
+                    "commission": int(metadata.get("commission", 0)),
+                    "nb_pions": nb_pions,
+                    "mode_paiement": "Carte (Stripe)",
+                    "ref_paiement": session["id"][:24],
+                    "statut": "validee",
+                    "date": datetime.datetime.now().isoformat()
+                })
+                print(f"[STRIPE] {nb_pions} pions credites au joueur {code_joueur}")
+
+        # Pions ORGANISATEUR payes par carte : crediter automatiquement
+        if type_p == "pions_org":
+            code_o = metadata.get("code", "")
+            valeur = metadata.get("valeur_pion", "0")
+            nb_pions = int(metadata.get("nb_pions", 0))
+            if code_o and nb_pions > 0:
+                if "pions_org" not in DB:
+                    DB["pions_org"] = {}
+                if code_o not in DB["pions_org"]:
+                    DB["pions_org"][code_o] = {}
+                DB["pions_org"][code_o][valeur] = DB["pions_org"][code_o].get(valeur, 0) + nb_pions
+                if "commandes_pions" not in DB:
+                    DB["commandes_pions"] = []
+                DB["commandes_pions"].insert(0, {
+                    "id": secrets.token_hex(4).upper(),
+                    "code_org": code_o,
+                    "nom_org": code_o,
+                    "valeur_pion": int(valeur),
+                    "montant_paye": montant,
+                    "commission": int(metadata.get("commission", 0)),
+                    "nb_pions": nb_pions,
+                    "mode_paiement": "Carte (Stripe)",
+                    "ref_paiement": session["id"][:24],
+                    "statut": "validee",
+                    "date": datetime.datetime.now().isoformat()
+                })
+                print(f"[STRIPE] {nb_pions} pions credites a l'organisateur {code_o}")
 
         # Si c'est un achat PDF, enregistrer la commande
         if type_p == "pdf" and code_org:
@@ -2406,38 +2180,6 @@ def stripe_webhook():
         
         save_data()
         print(f"[STRIPE] Paiement reçu: {type_p} — {montant} XPF — {code_org}")
-        
-        # Envoyer notification email à l'admin
-        try:
-            if SENDGRID_API_KEY:
-                import urllib.request
-                import json as json_lib
-                email_body = f"""
-🎉 Nouveau paiement Stripe reçu !
-
-Type : {type_p}
-Code : {code_org}
-Montant : {montant} XPF
-Date : {datetime.datetime.now().strftime('%d/%m/%Y %H:%M')}
-
-Ce paiement a été automatiquement crédité.
-"""
-                data = json_lib.dumps({
-                    "personalizations": [{"to": [{"email": "directionvaikeashop@gmail.com"}]}],
-                    "from": {"email": FROM_EMAIL, "name": FROM_NAME},
-                    "subject": f"💳 Paiement Stripe reçu — {montant} XPF",
-                    "content": [{"type": "text/plain", "value": email_body}]
-                }).encode()
-                req = urllib.request.Request(
-                    "https://api.sendgrid.com/v3/mail/send",
-                    data=data,
-                    headers={"Authorization": f"Bearer {SENDGRID_API_KEY}", "Content-Type": "application/json"},
-                    method="POST"
-                )
-                urllib.request.urlopen(req, timeout=10)
-                print(f"[EMAIL] Notification admin envoyée pour paiement {montant} XPF")
-        except Exception as e:
-            print(f"[EMAIL ERR] {e}")
     
     return jsonify({"ok": True})
 
@@ -2493,9 +2235,9 @@ def payer_abonnement():
         return jsonify({"ok": False, "msg": str(e)}), 500
 
 # === PAIEMENT PIONS VIA STRIPE ===
-@app.route("/api/paiement/tickets", methods=["POST"])
-def payer_tickets_stripe():
-    """Crée une session Stripe pour achat de tickets PDF"""
+@app.route("/api/paiement/pions", methods=["POST"])
+def payer_pions():
+    """Crée une session Stripe pour achat de pions par l'organisateur"""
     if not stripe or not STRIPE_SECRET_KEY:
         return jsonify({"ok": False, "msg": "Paiement en ligne non configuré"}), 503
     
@@ -2505,76 +2247,9 @@ def payer_tickets_stripe():
     if not s:
         return jsonify({"ok": False, "msg": "Accès refusé"}), 403
     
-    jeu = d.get("jeu", "")
-    pack = int(d.get("pack", 0))
-    prix = int(d.get("prix", 0))
-    serie = d.get("serie", "1")
-    code_org = s["code"]
-    
-    if not jeu or pack <= 0 or prix <= 0:
-        return jsonify({"ok": False, "msg": "Données invalides"}), 400
-    
-    # Convertir XPF en EUR (1 EUR ≈ 119.33 XPF)
-    prix_eur = max(1, round(prix / 119.33, 2))
-    prix_centimes = int(prix_eur * 100)
-    
-    try:
-        session = stripe.checkout.Session.create(
-            payment_method_types=["card"],
-            line_items=[{
-                "price_data": {
-                    "currency": "eur",
-                    "product_data": {
-                        "name": f"{pack} tickets {jeu}",
-                        "description": f"Pack de {pack} tickets — Série {serie} — Génération automatique du PDF"
-                    },
-                    "unit_amount": prix_centimes,
-                },
-                "quantity": 1,
-            }],
-            mode="payment",
-            success_url=f"https://ticket-bingo-production.up.railway.app?paiement=success&type=tickets",
-            cancel_url=f"https://ticket-bingo-production.up.railway.app?paiement=cancel",
-            metadata={
-                "type": "tickets",
-                "code_org": code_org,
-                "jeu": jeu,
-                "pack": str(pack),
-                "prix_xpf": str(prix),
-                "serie": serie
-            },
-            customer_email=s.get("email") or None
-        )
-        return jsonify({"ok": True, "url": session.url})
-    except Exception as e:
-        print(f"[STRIPE TICKETS ERR] {e}")
-        return jsonify({"ok": False, "msg": str(e)}), 500
-
-@app.route("/api/paiement/pions", methods=["POST"])
-def payer_pions():
-    """Crée une session Stripe pour achat de pions par l'organisateur ou le joueur"""
-    if not stripe or not STRIPE_SECRET_KEY:
-        return jsonify({"ok": False, "msg": "Paiement en ligne non configuré"}), 503
-    
-    d = request.json
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token) if token else None
-    
-    # Accepter organisateur (avec token) ou joueur (avec code direct)
-    code = d.get("code", "")
-    type_acheteur = d.get("type", "organisateur")
-    
-    if not s and not code:
-        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
-    
-    if s:
-        code = s["code"]
-    
     nb_pions = int(d.get("nb_pions", 0))
-    montant = int(d.get("montant", 0))
-    valeur_pion = int(d.get("valeur_pion", 20))
-    prix = montant  # prix = montant payé
-    code_org = code
+    prix = int(d.get("prix", 0))
+    code_org = s["code"]
     
     if nb_pions <= 0 or prix <= 0:
         return jsonify({"ok": False, "msg": "Montant invalide"}), 400
@@ -2600,8 +2275,6 @@ def payer_pions():
                 "type": "pions",
                 "code_org": code_org,
                 "nb_pions": str(nb_pions),
-                "valeur_pion": str(valeur_pion),
-                "type_acheteur": type_acheteur,
                 "prix": str(prix)
             }
         )
