@@ -3699,6 +3699,9 @@ async function commanderPions(){
     const d = await r.json();
     if(d.ok){
       toast('toast-pions', '✅ Commande envoyée ! Réf: ' + d.commande_id);
+      if(mode === 'CCP' || mode === 'Deblock'){
+        afficherInstructionsPaiement(mode, montant, ref || d.commande_id);
+      }
       document.getElementById('pion-montant').value = '';
       if(document.getElementById('pion-mode-paiement')) document.getElementById('pion-mode-paiement').value = '';
       if(document.getElementById('pion-ref-paiement')) document.getElementById('pion-ref-paiement').value = '';
@@ -3920,6 +3923,7 @@ async function commanderPionsJoueur(){
   var mode = document.getElementById('joueur-pion-mode').value;
   var ref = document.getElementById('joueur-pion-ref').value.trim();
   if(!mode){ alert('Choisissez votre mode de paiement'); return; }
+  if(!ref) ref = 'TUKEA-' + Date.now().toString().slice(-6);
   
   var commission = Math.round(montant * 0.20);
   var valeurRecue = montant - commission;
@@ -3964,7 +3968,9 @@ async function commanderPionsJoueur(){
     const d = await r.json();
     if(d.ok){
       document.getElementById('joueur-pion-result').innerHTML = 
-        '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399;margin-top:6px">✅ Commande envoyée ! Vos pions seront crédités après vérification.</div>';
+        '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399;margin-top:6px">✅ Commande envoyée ! Réf : ' + ref + ' — effectuez maintenant votre virement.</div>';
+      // Afficher OU PAYER : RIB + reference + montant
+      afficherInstructionsPaiement(mode, montant, ref);
       document.getElementById('joueur-pion-montant').value = '';
       document.getElementById('joueur-pion-calcul').style.display = 'none';
       document.getElementById('joueur-pion-mode').value = '';
@@ -4723,6 +4729,42 @@ async function basculerMaintenance(){
 
 verifierMaintenance();
 setInterval(verifierMaintenance, 30000);
+
+// === INSTRUCTIONS DE PAIEMENT (affichees apres une commande CCP/Deblock) ===
+function afficherInstructionsPaiement(mode, montant, ref){
+  var m = Number(montant).toLocaleString('fr-FR');
+  var bloc = '';
+  if(mode === 'CCP'){
+    bloc = "<div style='background:rgba(99,102,241,.1);border-radius:10px;padding:14px;margin-bottom:12px'>"
+      + "<div style='font-size:13px;font-weight:700;color:#818cf8;margin-bottom:8px'>🏦 CCP Papeete</div>"
+      + "<div style='font-size:13px;color:rgba(255,255,255,.85);line-height:2'>"
+      + "IBAN : <b style='color:#fff'>FR76 14168 00001 10002580501 50</b><br>"
+      + "BIC : OFTPPFT1XXX<br>"
+      + "Bénéficiaire : EI TUKEA IMPORT<br>"
+      + "Référence à indiquer : <b style='color:#fbbf24'>" + ref + "</b></div></div>";
+  } else {
+    bloc = "<div style='background:rgba(99,102,241,.1);border-radius:10px;padding:14px;margin-bottom:12px'>"
+      + "<div style='font-size:13px;font-weight:700;color:#818cf8;margin-bottom:8px'>📱 Deblock</div>"
+      + "<div style='font-size:13px;color:rgba(255,255,255,.85);line-height:2'>"
+      + "Bénéficiaire : <b style='color:#fff'>Maeva MIALHE</b><br>"
+      + "Tag Deblock : <b style='color:#fff'>@maeva99</b> — Tél : <b style='color:#fff'>89 22 23 05</b><br>"
+      + "IBAN : <b style='color:#fff'>FR85 1774 8019 84YV 2AJQ KDHA 561</b><br>"
+      + "BIC : DBLKFR22XXX<br>"
+      + "Référence à indiquer : <b style='color:#fbbf24'>" + ref + "</b></div></div>";
+  }
+  var overlay = document.createElement('div');
+  overlay.id = 'instructions-paiement-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.88);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto';
+  overlay.innerHTML = "<div style='background:#111218;border:1px solid #6366f1;border-radius:16px;padding:24px;max-width:420px;width:100%'>"
+    + "<div style='font-size:18px;font-weight:700;color:#fff;text-align:center;margin-bottom:4px'>⚠️ Dernière étape : le paiement !</div>"
+    + "<div style='font-size:13px;color:rgba(255,255,255,.6);text-align:center;margin-bottom:14px'>Votre commande ne sera validée qu'après réception de votre virement</div>"
+    + "<div style='font-size:24px;font-weight:800;color:#fbbf24;text-align:center;margin-bottom:16px'>" + m + " XPF</div>"
+    + bloc
+    + "<div style='font-size:12px;color:rgba(255,255,255,.5);text-align:center;margin-bottom:16px'>📸 Gardez une capture de votre virement comme preuve<br>Vos pions seront crédités après vérification (sous 24h)</div>"
+    + "<button onclick=\"document.getElementById('instructions-paiement-overlay').remove()\" style='width:100%;padding:12px;background:#10b981;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700'>J'ai noté, je fais le virement</button>"
+    + "</div>";
+  document.body.appendChild(overlay);
+}
 
 async function etatDonnees(){
   var res = document.getElementById('donnees-result');
