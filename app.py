@@ -1860,6 +1860,70 @@ def stripe_crediter():
         print(f"[STRIPE CREDIT ERR] {e}")
         return jsonify({"ok": False, "msg": str(e)}), 500
 
+@app.route("/api/admin/recreer-tickets", methods=["POST"])
+def recreer_tickets_masse():
+    """ADMIN — Recree des tickets en masse apres un reset.
+    Une ligne = un code existant (reutilise) OU +Nom (nouveau code genere)."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    d = request.json
+    lignes = [l.strip() for l in (d.get("lignes") or "").split("\n") if l.strip()]
+    code_org = d.get("code_org", "").upper().strip() or "ADMIN"
+    jeu = d.get("jeu", "").strip()
+    if not lignes:
+        return jsonify({"ok": False, "msg": "Liste vide"}), 400
+    if len(lignes) > 100:
+        return jsonify({"ok": False, "msg": "Maximum 100 lignes"}), 400
+    resultats = []
+    for ligne in lignes:
+        try:
+            if ligne.startswith("+"):
+                # Nouvelle joueuse : nouveau code genere
+                nom = ligne[1:].strip() or "Joueuse"
+                code = gen_code(6)
+                while code in DB.get("tickets_acheteurs", {}) or any(t.get("code_acheteur") == code for t in DB["tickets"]):
+                    code = gen_code(6)
+                statut = "nouveau"
+            else:
+                code = ligne.upper()
+                if not (4 <= len(code) <= 8) or not code.isalnum():
+                    resultats.append({"ligne": ligne, "code": "", "statut": "erreur : code invalide"})
+                    continue
+                deja = next((t for t in DB["tickets"] if t.get("code_acheteur", "").upper() == code), None)
+                if deja:
+                    resultats.append({"ligne": ligne, "code": code, "statut": "déjà actif — ignoré"})
+                    continue
+                nom = "Joueuse " + code
+                statut = "réactivé"
+            ticket = {
+                "id": hashlib.md5(f"{nom}{code}{datetime.datetime.now()}".encode()).hexdigest()[:8],
+                "acheteur": nom,
+                "jeu": jeu,
+                "serie": "-",
+                "prix": 0,
+                "photo_url": None,
+                "pdf_url": None,
+                "page_debut": None,
+                "page_fin": None,
+                "code_acheteur": code,
+                "email": "",
+                "code_org": code_org,
+                "date": datetime.datetime.now().isoformat()
+            }
+            DB["tickets"].insert(0, ticket)
+            if "tickets_acheteurs" not in DB:
+                DB["tickets_acheteurs"] = {}
+            DB["tickets_acheteurs"][code] = ticket["id"]
+            resultats.append({"ligne": ligne, "code": code, "statut": statut})
+        except Exception as e:
+            resultats.append({"ligne": ligne, "code": "", "statut": f"erreur : {e}"})
+    save_data()
+    return jsonify({"ok": True, "resultats": resultats})
+
 @app.route("/api/admin/crediter-masse", methods=["POST"])
 def crediter_masse():
     """ADMIN — Credite plusieurs codes d'un coup (dedommagement, transferts en serie)"""
