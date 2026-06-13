@@ -1543,6 +1543,23 @@ function buildOrgSpace(){
   // Jouer
   document.getElementById("tab-org-jouer").innerHTML = `
     <div id="toast-j"></div>
+
+    <!-- ANNONCER UN JEU -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.1));border:1px solid rgba(16,185,129,.3);margin-bottom:14px">
+      <div class="ct" style="margin-bottom:10px">📢 Annoncer un jeu aux joueurs</div>
+      <div class="lbl">Jeu à annoncer</div>
+      <select class="sel-jeu-generateur" id="annonce-jeu" style="margin-bottom:8px">
+        <option value="">Choisir un jeu...</option>
+        <!-- options chargees automatiquement depuis les generateurs installes -->
+      </select>
+      <div class="lbl">Prix du ticket (XPF)</div>
+      <input id="annonce-prix" type="number" placeholder="Ex: 100" min="1" style="margin-bottom:8px"/>
+      <div class="lbl">Description (optionnel)</div>
+      <input id="annonce-desc" placeholder="Ex: Jackpot 50 000 XPF !" style="margin-bottom:12px"/>
+      <button onclick="annoncerJeu()" style="width:100%;padding:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📢 Annoncer ce jeu !</button>
+      <button onclick="supprimerAnnonce()" style="width:100%;padding:8px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:8px;cursor:pointer;font-size:12px;margin-top:6px">🗑️ Supprimer l'annonce</button>
+    </div>
+
     <div class="card">
       <div class="ct">🎮 Jouer mon ticket</div>
       <div class="lbl">Entrez votre code ticket</div>
@@ -1628,22 +1645,6 @@ function buildOrgSpace(){
         </div>
       </div>
       <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">🔒 Stripe sécurisé ou virement CCP/Deblock</div>
-    </div>
-
-    <!-- ANNONCER UN JEU -->
-    <div class="card" style="background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.1));border:1px solid rgba(16,185,129,.3);margin-bottom:14px">
-      <div class="ct" style="margin-bottom:10px">📢 Annoncer un jeu aux joueurs</div>
-      <div class="lbl">Jeu à annoncer</div>
-      <select class="sel-jeu-generateur" id="annonce-jeu" style="margin-bottom:8px">
-        <option value="">Choisir un jeu...</option>
-        <!-- options chargees automatiquement depuis les generateurs installes -->
-      </select>
-      <div class="lbl">Prix du ticket (XPF)</div>
-      <input id="annonce-prix" type="number" placeholder="Ex: 100" min="1" style="margin-bottom:8px"/>
-      <div class="lbl">Description (optionnel)</div>
-      <input id="annonce-desc" placeholder="Ex: Jackpot 50 000 XPF !" style="margin-bottom:12px"/>
-      <button onclick="annoncerJeu()" style="width:100%;padding:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📢 Annoncer ce jeu !</button>
-      <button onclick="supprimerAnnonce()" style="width:100%;padding:8px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:8px;cursor:pointer;font-size:12px;margin-top:6px">🗑️ Supprimer l'annonce</button>
     </div>
 
     <!-- GUIDE DE L'ORGANISATEUR -->
