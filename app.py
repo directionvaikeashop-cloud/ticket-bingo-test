@@ -1018,6 +1018,31 @@ def reset_donnees_admin():
     save_data()
     print("[RESET ADMIN] Toutes les données remises à zéro")
     return jsonify({"ok": True})
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+TICKET BINGO — Système de monétisation
+
+IMPORTANT — DEUX CIRCUITS DISTINCTS :
+
+1️⃣ PIONS : AUTOMATIQUE ✅
+   - Client achète des pions → Reçoit immédiatement (code fait tout)
+   - Paiement Stripe/CCP/Deblock → Pions crédités auto
+   - Commission 15% prélevée EN SILENCE
+   - Bonus pions créés EN SILENCE
+   - C'est 100% automatisé
+
+2️⃣ TICKETS : MANUEL (base historique) 📋
+   - Org commande des tickets pré-imprimés
+   - Admin/Maeva valide MANUELLEMENT
+   - Commission 15% prélevée EN SILENCE
+   - Bonus tickets créés EN SILENCE
+   - C'est du travail MANUEL (validation requise)
+
+NE PAS MÉLANGER : PIONS ≠ TICKETS
+"""
+
+
 
 @app.route("/api/commande/passer", methods=["POST"])
 def passer_commande():
