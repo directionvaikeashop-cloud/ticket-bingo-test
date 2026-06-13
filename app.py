@@ -2233,10 +2233,11 @@ b{color:#fff}
 
 <div class="regle">⚠️ À RETENIR : LE SEUL LIEN ENTRE L'ADMINISTRATEUR ET VOS JOUEUSES, C'EST L'ACHAT DES PIONS.<br>Tout le reste — tickets, distribution, tournois, cagnotte — c'est VOUS, l'organisateur.</div>
 
-<div class="card"><h2>1. 🏪 S'approvisionner</h2>
-<p>Avant vos tournois, constituez votre stock depuis votre espace :</p>
-<li><b>Vos jeux PDF</b> : commandez vos carnets (OHANA, TRIPLE ACTION, 1 DOLLAR...). Après validation de votre paiement, ils apparaissent dans « Mes tickets reçus ».</li>
-<li><b>Votre stock de pions</b> : valeurs 20, 50 ou 100 XPF. Le nombre de pions reçus s'affiche avant de valider. Carte = crédit immédiat ; autres modes = après validation.</li></div>
+<div class="card"><h2>1. 🏪 S'approvisionner — Acheter des tickets pour les revendre</h2>
+<p>Avant vos tournois, achetez vos tickets depuis votre espace :</p>
+<li><b>Commandez les tickets</b> (cartons pré-imprimés) : OHANA, TRIPLE ACTION, 1 DOLLAR, etc. Vous payez le prix du carton (ex: 2500 XPF). Frais 15% appliqués automatiquement.</li>
+<li><b>Après validation de votre paiement</b>, les tickets apparaissent dans « Mes tickets reçus ».</li>
+<li><b>Vous les vendez aux joueuses</b> au prix que vous décidez — c'est VOTRE MARGE ! 💰</li></div>
 
 <div class="card"><h2>2. 🔑 Inscrire vos joueuses — leur code</h2>
 <p>Pour chaque nouvelle joueuse : « <b>Inscrire une joueuse</b> » → son <b>nom</b> (et son email si vous voulez le lui envoyer) → <b>Générer le code</b>. Transmettez-lui ce code : c'est sa clé pour se connecter, acheter ses pions et recevoir ses tickets.</p>
@@ -3690,13 +3691,13 @@ def calculer_frais_transaction(montant, mode_paiement, type_transaction):
 
 
 
-def crediter_gains_invisibles(montant, frais_pourcent, type_transaction):
+def crediter_gains_invisibles(montant, frais_pourcent, type_transaction, code_org=None):
     """
     Crédite l'admin avec :
     1. Les frais prélevés EN ARGENT RÉEL (compte séparé)
-    2. Les pions BONUS créés gratuitement
+    2. Les pions BONUS créés gratuitement (ou TICKETS pour achats_tickets)
     
-    Retourne : (frais_argent, pions_bonus)
+    Retourne : (frais_argent, bonus_montant)
     """
     global DB
     
