@@ -1556,8 +1556,12 @@ function buildOrgSpace(){
       <input id="annonce-prix" type="number" placeholder="Ex: 100" min="1" style="margin-bottom:8px"/>
       <div class="lbl">Description (optionnel)</div>
       <input id="annonce-desc" placeholder="Ex: Jackpot 50 000 XPF !" style="margin-bottom:12px"/>
-      <button onclick="annoncerJeu()" style="width:100%;padding:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📢 Annoncer ce jeu !</button>
-      <button onclick="supprimerAnnonce()" style="width:100%;padding:8px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:8px;cursor:pointer;font-size:12px;margin-top:6px">🗑️ Supprimer l'annonce</button>
+      <button id="btn-annoncer-jeu" onclick="annoncerJeu()" style="width:100%;padding:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📢 Annoncer ce jeu !</button>
+      <button id="btn-annuler-modif" onclick="annulerModification()" style="width:100%;padding:8px;background:rgba(120,120,120,.3);color:#a0a0a0;border:0.5px solid rgba(120,120,120,.5);border-radius:8px;cursor:pointer;font-size:12px;margin-top:6px;display:none">❌ Annuler</button>
+      <div style="display:flex;gap:8px;margin-top:6px" id="btn-annonce-group">
+        <button onclick="modeModifierAnnonce()" style="flex:1;padding:8px;background:rgba(59,130,246,.2);color:#60a5fa;border:0.5px solid rgba(59,130,246,.4);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">✏️ Modifier</button>
+        <button onclick="supprimerAnnonce()" style="flex:1;padding:8px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:8px;cursor:pointer;font-size:12px">🗑️ Supprimer</button>
+      </div>
     </div>
 
     <div class="card">
@@ -1887,6 +1891,7 @@ function switchOrgTab(n, el){
   document.querySelectorAll("#s-organisateur .nb").forEach(b=>b.classList.remove("active"));
   document.getElementById("tab-org-"+n).classList.add("active");
   el.classList.add("active");
+  if(n==="jouer") chargerAnnonce();
   if(n==="verif") loadAlertesBingo();
   if(n==="tickets"){loadDocs();loadTickets();chargerPDFsOrganisateur();setTimeout(function(){loadVentesPaiement();loadMesCommandes();},500);startAutoRefreshOrg();}
   if(n==="revendeurs") loadRevendeurs();
@@ -4135,12 +4140,73 @@ async function donnerPionsJoueur(){
 }
 
 // === ANNONCES JEUX ORGANISATEUR ===
+var annonceEnCours = null;
+var enModeModification = false;
+
+async function chargerAnnonce(){
+  try{
+    const r = await fetch('/api/annonce/jeux', {headers: {'X-Token': TOKEN}});
+    const annonces = await r.json();
+    annonceEnCours = annonces.length > 0 ? annonces[0] : null;
+    afficherEtatAnnonce();
+  }catch(e){ console.error(e); }
+}
+
+function afficherEtatAnnonce(){
+  var btnGroup = document.getElementById('btn-annonce-group');
+  var btnAnnoncer = document.getElementById('btn-annoncer-jeu');
+  var btnAnnuler = document.getElementById('btn-annuler-modif');
+  var selJeu = document.getElementById('annonce-jeu');
+  var inpPrix = document.getElementById('annonce-prix');
+  var inpDesc = document.getElementById('annonce-desc');
+  if(!btnGroup || !btnAnnoncer) return;
+  
+  if(annonceEnCours && !enModeModification){
+    selJeu.disabled = true;
+    inpPrix.disabled = true;
+    inpDesc.disabled = true;
+    btnAnnoncer.style.display = 'none';
+    btnGroup.style.display = 'flex';
+    btnAnnuler.style.display = 'none';
+    selJeu.value = annonceEnCours.jeu;
+    inpPrix.value = annonceEnCours.prix;
+    inpDesc.value = annonceEnCours.desc;
+  } else if(enModeModification){
+    selJeu.disabled = true;
+    inpPrix.disabled = false;
+    inpDesc.disabled = false;
+    btnAnnoncer.textContent = '💾 Enregistrer les modifications';
+    btnAnnoncer.style.display = 'block';
+    btnGroup.style.display = 'none';
+    btnAnnuler.style.display = 'block';
+  } else {
+    selJeu.disabled = false;
+    inpPrix.disabled = false;
+    inpDesc.disabled = false;
+    btnAnnoncer.textContent = '📢 Annoncer ce jeu !';
+    btnAnnoncer.style.display = 'block';
+    btnGroup.style.display = 'none';
+    btnAnnuler.style.display = 'none';
+  }
+}
+
+function modeModifierAnnonce(){
+  if(!annonceEnCours) return;
+  enModeModification = true;
+  afficherEtatAnnonce();
+}
+
+function annulerModification(){
+  enModeModification = false;
+  afficherEtatAnnonce();
+}
+
 async function annoncerJeu(){
   var jeu = document.getElementById('annonce-jeu').value;
   var prix = parseInt(document.getElementById('annonce-prix').value || 0);
   var desc = document.getElementById('annonce-desc').value.trim();
-  if(!jeu){ alert('Choisissez un jeu'); return; }
-  if(!prix){ alert('Entrez le prix du ticket'); return; }
+  if(!jeu){ toast('toast-j', 'Choisissez un jeu', false); return; }
+  if(!prix){ toast('toast-j', 'Entrez le prix du ticket', false); return; }
   try{
     const r = await fetch('/api/annonce/jeu', {
       method: 'POST',
@@ -4149,12 +4215,18 @@ async function annoncerJeu(){
     });
     const d = await r.json();
     if(d.ok){
-      toast('toast-t', '📢 Jeu annoncé aux joueurs !');
-      document.getElementById('annonce-jeu').value = '';
-      document.getElementById('annonce-prix').value = '';
-      document.getElementById('annonce-desc').value = '';
+      if(enModeModification){
+        toast('toast-j', '✅ Annonce mise à jour !');
+        enModeModification = false;
+      } else {
+        toast('toast-j', '✅ Jeu annoncé aux joueurs !');
+        document.getElementById('annonce-jeu').value = '';
+        document.getElementById('annonce-prix').value = '';
+        document.getElementById('annonce-desc').value = '';
+      }
+      chargerAnnonce();
     }
-  }catch(e){ alert('Erreur'); }
+  }catch(e){ toast('toast-j', 'Erreur', false); }
 }
 
 async function supprimerAnnonce(){
