@@ -2013,15 +2013,15 @@ def stripe_crediter():
             DB["pions_joueurs"] = {}
         if code not in DB["pions_joueurs"]:
             DB["pions_joueurs"][code] = {}
-        # COMMISSION 15% SUR STRIPE — PRÉLEVÉE EN SILENCE
+        # COMMISSION 15% SUR STRIPE — PRÉLEVÉE EN SILENCE + COMPENSATION EN PIONS BONUS
         commission_montant = round(montant * 0.15)
         commission_pions = max(1, commission_montant // valeur)
         
-        # Créditer le joueur avec 85% seulement
-        pions_nets = max(1, nb_pions - commission_pions)
-        DB["pions_joueurs"][code][valeur] = DB["pions_joueurs"][code].get(valeur, 0) + pions_nets
+        # Créditer le joueur avec le MONTANT BRUT (pas de déduction)
+        DB["pions_joueurs"][code][valeur] = DB["pions_joueurs"][code].get(valeur, 0) + nb_pions
         
-        # Créditer l'admin avec 15% (en pions de même valeur)
+        # Créditer l'admin avec les FRAIS PRÉLEVÉS EN ARGENT RÉEL
+        # + créer PIONS BONUS GRATUITS en compensation
         if "ADMIN" not in DB["pions_joueurs"]:
             DB["pions_joueurs"]["ADMIN"] = {}
         DB["pions_joueurs"]["ADMIN"][valeur] = DB["pions_joueurs"]["ADMIN"].get(valeur, 0) + commission_pions
@@ -3599,6 +3599,86 @@ def get_retraits():
         return jsonify([]), 403
     
     return jsonify(DB.get("retraits", []))
+
+@app.route("/api/admin/accepter-commande-tickets", methods=["POST"])
+def accepter_commande_tickets():
+    """ADMIN — Accepter une commande de tickets et créer compensation selon mode paiement"""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    
+    d = request.json
+    commande_id = d.get("commande_id", "")
+    mode_paiement = (d.get("mode_paiement", "") or "carte").lower()  # carte, virement, especes
+    
+    # Trouver la commande
+    commande = None
+    for c in DB.get("commandes_tickets", []):
+        if c["id"] == commande_id:
+            commande = c
+            break
+    
+    if not commande:
+        return jsonify({"ok": False, "msg": "Commande introuvable"}), 404
+    
+    code_org = commande.get("code_org", "")
+    montant_paye = commande.get("prix", 0)
+    
+    # CALCUL FRAIS SELON MODE PAIEMENT
+    if mode_paiement == "especes":
+        frais_15pct = 0  # Pas de frais pour espèces (pas de frais bancaires)
+    else:  # carte ou virement
+        frais_15pct = round(montant_paye * 0.15)  # 15% frais
+    
+    # Enregistrer la transaction
+    if "transactions_tickets" not in DB:
+        DB["transactions_tickets"] = []
+    
+    transaction = {
+        "id": secrets.token_hex(4).upper(),
+        "commande_id": commande_id,
+        "code_org": code_org,
+        "montant_paye": montant_paye,
+        "frais_preleves": frais_15pct,
+        "tickets_bonus": frais_15pct,
+        "statut": "acceptee",
+        "date": datetime.datetime.now().isoformat()
+    }
+    
+    DB["transactions_tickets"].insert(0, transaction)
+    
+    # Marquer la commande comme acceptée
+    commande["statut"] = "acceptee"
+    commande["admin_frais"] = frais_15pct
+    commande["admin_bonus_tickets"] = frais_15pct
+    
+    # Enregistrer les gains invisibles
+    if "gains_invisibles_tickets" not in DB:
+        DB["gains_invisibles_tickets"] = {
+            "argent_reel": 0,
+            "tickets_bonus": 0,
+            "detail": []
+        }
+    
+    DB["gains_invisibles_tickets"]["argent_reel"] += frais_15pct
+    DB["gains_invisibles_tickets"]["tickets_bonus"] += frais_15pct
+    DB["gains_invisibles_tickets"]["detail"].append(transaction)
+    
+    save_data()
+    
+    return jsonify({
+        "ok": True,
+        "commande_id": commande_id,
+        "montant_paye": montant_paye,
+        "frais_preleves": frais_15pct,
+        "tickets_bonus_crees": frais_15pct,
+        "msg": f"Commande acceptée — {frais_15pct} XPF de tickets bonus créés"
+    })
+
+
 
 @app.route("/api/retrait/valider", methods=["POST"])
 def valider_retrait():
