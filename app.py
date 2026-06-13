@@ -446,15 +446,38 @@ def enregistrer_ticket():
     code_org = s["code"] if s else "ADMIN"
     if not d.get("acheteur") or not d.get("jeu") or not d.get("serie"):
         return jsonify({"ok": False, "msg": "Champs manquants"}), 400
-    # Code joueur EXISTANT fourni (re-vente apres reset : la joueuse garde son code et ses pions)
+    # Code joueur EXISTANT fourni : la joueuse garde son code et ses pions.
+    # Si un ticket existe deja sur ce code -> ON LE MET A JOUR (nouvelle vente = nouveau
+    # jeu / nouvelles fiches sur le MEME code permanent). Corrige le 12/06/2026.
     code_demande = (d.get("code_acheteur") or "").upper().strip()
     if code_demande:
         if not (4 <= len(code_demande) <= 8) or not code_demande.isalnum():
             return jsonify({"ok": False, "msg": "Code joueur invalide (4 à 8 lettres/chiffres)"}), 400
-        # Refuser si ce code est deja attache a un ticket actif
+        if code_demande in DB.get("codes_bloques", []):
+            return jsonify({"ok": False, "msg": f"Le code {code_demande} est bloqué"}), 400
         deja = next((t for t in DB["tickets"] if t.get("code_acheteur", "").upper() == code_demande), None)
         if deja:
-            return jsonify({"ok": False, "msg": f"Le code {code_demande} est déjà utilisé par un ticket actif"}), 400
+            # Securite : seul l'organisateur proprietaire (ou l'admin) peut re-vendre sur ce code
+            if not (s and s.get("admin")) and deja.get("code_org") not in (code_org, "ADMIN"):
+                return jsonify({"ok": False, "msg": f"Le code {code_demande} appartient à un autre organisateur"}), 403
+            # MISE A JOUR du ticket existant avec la nouvelle vente
+            deja["acheteur"] = d["acheteur"]
+            deja["jeu"] = d["jeu"]
+            deja["serie"] = d["serie"]
+            deja["prix"] = int(d.get("prix", 0))
+            if d.get("pdf_url"):
+                deja["pdf_url"] = d["pdf_url"]
+            if d.get("photo_url"):
+                deja["photo_url"] = d["photo_url"]
+            deja["page_debut"] = d.get("page_debut", deja.get("page_debut"))
+            deja["page_fin"] = d.get("page_fin", deja.get("page_fin"))
+            if d.get("email"):
+                deja["email"] = d["email"]
+            deja["code_org"] = code_org if deja.get("code_org") in (None, "", "ADMIN") else deja["code_org"]
+            deja["date"] = datetime.datetime.now().isoformat()
+            DB["tickets_acheteurs"][code_demande] = deja["id"]
+            save_data()
+            return jsonify({"ok": True, "ticket": deja, "code_acheteur": code_demande, "mis_a_jour": True})
         code_acheteur = code_demande
     else:
         code_acheteur = gen_code(6)
@@ -1619,13 +1642,56 @@ def valider_ticket_pions():
     s = verif_session(token)
     if not s:
         return jsonify({"ok": False}), 403
-    commande_id = request.json.get("commande_id", "")
+    d = request.json
+    commande_id = d.get("commande_id", "")
+    commande = None
     for c in DB.get("commandes_tickets_pions", []):
         if c["id"] == commande_id:
             c["statut"] = "validee"
+            commande = c
             break
+    if not commande:
+        save_data()
+        return jsonify({"ok": False, "msg": "Commande introuvable"}), 404
+
+    # === ATTRIBUTION DU TICKET A LA JOUEUSE (circuit restaure 12/06/2026) ===
+    # En validant, l'organisateur attribue les fiches : la joueuse voit son ticket immediatement.
+    code_joueur = (commande.get("code_joueur") or "").upper().strip()
+    page_debut = d.get("page_debut")
+    page_fin = d.get("page_fin")
+    pdf_url = d.get("pdf_url", "")
+    serie = (d.get("serie") or "").strip()
+    ticket = next((t for t in DB.get("tickets", []) if (t.get("code_acheteur") or "").upper() == code_joueur), None)
+    if ticket is None:
+        # Code permanent sans ticket (ex: victime d'un ancien reset) -> on le recree
+        ticket = {
+            "id": hashlib.md5(f"{code_joueur}{datetime.datetime.now()}".encode()).hexdigest()[:8],
+            "acheteur": "Joueuse " + code_joueur,
+            "jeu": "", "serie": "-", "prix": 0,
+            "photo_url": None, "pdf_url": None,
+            "page_debut": None, "page_fin": None,
+            "code_acheteur": code_joueur, "email": "",
+            "code_org": commande.get("code_org") or (s["code"] if not s.get("admin") else "ADMIN"),
+            "date": datetime.datetime.now().isoformat()
+        }
+        DB["tickets"].insert(0, ticket)
+        DB.setdefault("tickets_acheteurs", {})[code_joueur] = ticket["id"]
+    # Mettre a jour avec la nouvelle vente
+    ticket["jeu"] = commande.get("jeu") or ticket.get("jeu", "")
+    if serie:
+        ticket["serie"] = serie
+    try:
+        if page_debut not in (None, ""):
+            ticket["page_debut"] = int(page_debut)
+        if page_fin not in (None, ""):
+            ticket["page_fin"] = int(page_fin)
+    except Exception:
+        pass
+    if pdf_url:
+        ticket["pdf_url"] = pdf_url
+    ticket["date"] = datetime.datetime.now().isoformat()
     save_data()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "ticket": ticket})
 
 @app.route("/api/pions/commande-joueur", methods=["POST"])
 def commande_pions_joueur():
