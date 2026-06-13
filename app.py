@@ -2337,7 +2337,19 @@ b{color:#fff}
 <div class="astuce">💡 En arrivant : touche ton écran une fois (ça active le son) et garde l'application affichée pendant tout le tournoi. Mets ton téléphone en charge pour les longues soirées !</div></div>
 
 <div class="card"><h2>5. 🏆 BINGO !</h2>
-<p>Ta ligne est complète ? Appuie sur le bouton <b>BINGO</b> ! Ton organisateur reçoit l'alerte avec ton ticket, vérifie tes numéros, et valide ta victoire. C'est lui qui te remet tes gains. 🎉</p></div>
+<p>Ta ligne est complète ? Appuie sur le bouton <b>BINGO</b> ! Ton organisateur reçoit l'alerte avec ton ticket, vérifie tes numéros, et valide ta victoire. C'est lui qui te remet tes gains <b>EN PIONS</b>. 🎉</p></div>
+
+<div class="card"><h2>6. 💰 Retirer tes pions en argent</h2>
+<p>Après le tournoi, tu as reçu tes gains <b>EN PIONS</b>. Tu peux les convertir en argent réel !</p>
+<p>Bouton <b>« 💰 Retirer mes pions en argent »</b> dans ton espace :</p>
+<li><b>Entre le montant</b> que tu veux retirer (ex: 650 XPF)</li>
+<li><b>Choisis comment le recevoir :</b><br>
+🏦 <b>Virement</b> (CCP, BT, Deblock) — frais 15%<br>
+💵 <b>Espèces</b> chez l'admin — frais 5%</li>
+<li><b>Rentre tes coordonnées</b> (numéro CCP, IBAN, etc. ou lieu de récupération)</li>
+<li><b>Demande le retrait</b> — l'admin traite et tu reçois ton argent ! 💸</li>
+<div class="astuce">💡 Les frais couvrent les frais bancaires. Si tu retires par espèces, c'est moins cher (5% au lieu de 15%).</div>
+<p><b>Ton solde de pions</b> s'affiche toujours dans ton espace, mis à jour en temps réel.</p></div>
 
 <a class="cta" href="https://ticket-bingo-production.up.railway.app">🎱 Jouer maintenant sur Ticket Bingo</a>
 <div class="pied">Ticket Bingo — L'application des tournois de bingo en Polynésie 🌺<br>Bonne chance, et que les boules soient avec toi !</div>
