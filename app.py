@@ -3647,6 +3647,36 @@ def montant_net_apres_commission(montant_brut, mode, type_operation):
     return montant_brut - commission
 
 
+
+def calculer_frais_transaction(montant, mode_paiement, type_transaction):
+    """
+    Calcule les frais selon le mode et le type de transaction
+    
+    type_transaction : "achat_pions", "achat_tickets", "retrait"
+    mode_paiement : "stripe", "ccp", "bt", "deblock", "especes"
+    
+    Retourne : (montant_net, frais)
+    """
+    frais = 0
+    
+    # ACHATS PIONS ET TICKETS : 15% si carte/virement, 0% si espèces
+    if type_transaction in ["achat_pions", "achat_tickets"]:
+        if mode_paiement in ["stripe", "ccp", "bt", "deblock"]:
+            frais = round(montant * 0.15)  # 15% frais
+        elif mode_paiement == "especes":
+            frais = 0  # Pas de frais en espèces
+    
+    # RETRAITS : 15% si virement, 5% si espèces
+    elif type_transaction == "retrait":
+        if mode_paiement in ["ccp", "bt", "deblock", "stripe"]:
+            frais = round(montant * 0.15)  # 15% frais virement
+        elif mode_paiement == "especes":
+            frais = round(montant * 0.05)  # 5% frais espèces
+    
+    montant_net = montant - frais
+    return montant_net, frais
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
