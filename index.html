@@ -2559,14 +2559,25 @@ function selectionnerPDFExistant(url, el){
 }
 
 // === TICKETS ===
+function _valVisible(id){
+  // Parmi les doublons d'un meme id, prend le champ REELLEMENT visible (rempli par l'organisateur)
+  var els = document.querySelectorAll('[id="' + id + '"]');
+  for(var i=0;i<els.length;i++){
+    var e = els[i];
+    if(e.offsetParent !== null && (e.value||'').trim() !== '') return e.value.trim();
+  }
+  // sinon, le premier visible (meme vide)
+  for(var k=0;k<els.length;k++){ if(els[k].offsetParent !== null) return (els[k].value||'').trim(); }
+  return '';
+}
 async function regTicket(){
-  const a=document.getElementById("t-acheteur").value.trim();
-  const j=document.getElementById("t-jeu")?document.getElementById("t-jeu").value:"";
-  const s=document.getElementById("t-serie")?document.getElementById("t-serie").value.trim():"";
-  const p=document.getElementById("t-prix")?(parseInt(document.getElementById("t-prix").value)||0):0;
-  const pageDebut=document.getElementById("t-page-debut")?(parseInt(document.getElementById("t-page-debut").value)||null):null;
-  const pageFin=document.getElementById("t-page-fin")?(parseInt(document.getElementById("t-page-fin").value)||null):null;
-  let codeExist="";document.querySelectorAll('.t-code-existant').forEach(function(ch){ if(ch.value.trim()) codeExist=ch.value.trim(); });
+  const a=_valVisible("t-acheteur");
+  const j=_valVisible("t-jeu");
+  const s=_valVisible("t-serie");
+  const p=parseInt(_valVisible("t-prix"))||0;
+  const pageDebut=parseInt(_valVisible("t-page-debut"))||null;
+  const pageFin=parseInt(_valVisible("t-page-fin"))||null;
+  let codeExist="";document.querySelectorAll('.t-code-existant').forEach(function(ch){ if(ch.offsetParent!==null && ch.value.trim()) codeExist=ch.value.trim(); });
   if(!a){toast("toast-t","Entrez le nom de la joueuse",false);return;}
   toast("toast-t","Création du code...");
   let photo_url=null,pdf_url=null;
@@ -2579,18 +2590,18 @@ async function regTicket(){
     else pdf_url=url;
   }
   try{
-    const emailJoueur = document.getElementById("t-email") ? document.getElementById("t-email").value.trim() : "";
-    let codeExistant = "";
-    document.querySelectorAll('.t-code-existant').forEach(function(ch){ if(ch.value.trim()) codeExistant = ch.value.trim().toUpperCase(); });
+    const emailJoueur = _valVisible("t-email");
+    let codeExistant = codeExist ? codeExist.toUpperCase() : "";
     const r=await fetch("/api/ticket",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({acheteur:a,jeu:j,serie:s,prix:p,photo_url,pdf_url,page_debut:pageDebut,page_fin:pageFin,email:emailJoueur,code_acheteur:codeExistant})});
     const d=await r.json();
     if(d.ok){
-      document.getElementById("t-code-result").innerHTML=`
+      var resHtml = `
         <div class="code-box" style="margin-top:12px">
           <div style="font-size:12px;color:var(--mu);margin-bottom:8px">Code pour <strong>${a}</strong></div>
           <div class="code-val">${d.code_acheteur}</div>
-          <div style="font-size:11px;color:var(--mu);margin-top:8px">Envoyez ce code à votre client<br/>Il l'utilise dans l'onglet 🎮 Jouer</div>
+          <div style="font-size:11px;color:var(--mu);margin-top:8px">Transmettez ce code à la joueuse<br/>Elle l'utilise dans l'Espace Joueur</div>
         </div>`;
+      document.querySelectorAll('[id="t-code-result"]').forEach(function(el){ el.innerHTML = resHtml; });
       ["t-acheteur","t-serie","t-prix"].forEach(id=>{var el=document.getElementById(id);if(el)el.value="";});
       if(document.getElementById("t-jeu"))document.getElementById("t-jeu").value="";
       if(document.getElementById("t-email"))document.getElementById("t-email").value="";
