@@ -142,104 +142,6 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
 </div>
 
 <!-- ECRAN DEMANDE ACCES -->
-<div id="s-demande" class="screen">
-  <div style="flex:1;display:flex;flex-direction:column;background:linear-gradient(180deg,#1a1040,#0d0d1a);min-height:100vh;padding:24px">
-    
-    <div style="display:flex;align-items:center;margin-bottom:24px">
-      <button onclick="show('s-login')" style="background:transparent;border:none;color:#818cf8;cursor:pointer;font-size:14px;padding:0">← Retour</button>
-    </div>
-
-    <div style="text-align:center;margin-bottom:24px">
-      <div style="font-size:40px;margin-bottom:8px">🎪</div>
-      <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:#fff">Devenir Organisateur</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:6px">Choisissez votre formule</div>
-    </div>
-
-    <!-- FORMULES -->
-    <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:24px">
-      
-      <div onclick="selFormule('lancement',this)" class="formule-card" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:12px;padding:16px;cursor:pointer">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-size:15px;font-weight:600;color:#fff">🎯 1er mois — Offre de lancement</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:2px">Engagement 1 an — À partir du 2ème mois : 9 990 XPF/mois</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:20px;font-weight:800;color:#fbbf24">4 990 XPF</div>
-          </div>
-        </div>
-      </div>
-
-      <div onclick="selFormule('mensuel',this)" class="formule-card" style="background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:12px;padding:16px;cursor:pointer">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-size:15px;font-weight:600;color:#fff">📅 Mensuel</div>
-            <div style="font-size:12px;color:rgba(255,255,255,.4);margin-top:2px">Toutes les fonctionnalités incluses</div>
-          </div>
-          <div style="text-align:right">
-            <div style="font-size:20px;font-weight:800;color:#818cf8">9 990 XPF</div>
-            <div style="font-size:11px;color:rgba(255,255,255,.4)">/mois</div>
-          </div>
-        </div>
-      </div>
-
-    </div>
-
-    <!-- FORMULAIRE -->
-    <div id="formulaire-demande" style="display:none">
-      <div style="background:rgba(255,255,255,.05);border-radius:12px;padding:16px;margin-bottom:16px">
-        <div style="font-size:13px;color:rgba(255,255,255,.6);margin-bottom:12px">Vos informations</div>
-        <input id="dem-nom" placeholder="Votre nom complet" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff;margin-bottom:10px"/>
-        <input id="dem-email" type="email" placeholder="Votre email" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff;margin-bottom:10px"/>
-        <input id="dem-tel" type="tel" placeholder="Votre téléphone" style="background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.2);color:#fff;margin-bottom:0"/>
-      </div>
-
-      <button onclick="envoyerDemande()" style="width:100%;padding:14px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:600;margin-bottom:16px">📋 Envoyer ma demande</button>
-
-      <div id="toast-demande"></div>
-    </div>
-
-    <!-- PAIEMENT INFO (après demande) -->
-    <div id="paiement-info" style="display:none">
-      <div style="background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);border-radius:12px;padding:16px;margin-bottom:16px">
-        <div style="font-size:14px;color:#34d399;font-weight:600;margin-bottom:12px;text-align:center">✅ Demande envoyée !</div>
-        <div style="font-size:13px;color:rgba(255,255,255,.7);margin-bottom:12px">Procédez maintenant au paiement :</div>
-
-        <!-- VIREMENT -->
-        <div style="background:rgba(255,255,255,.05);border-radius:8px;padding:12px;margin-bottom:10px">
-          <div style="font-size:12px;color:#818cf8;font-weight:600;margin-bottom:8px">🏦 Virement bancaire</div>
-          <div style="font-size:12px;color:rgba(255,255,255,.8);line-height:1.8">
-            <b style="color:#fff">Banque de Tahiti</b><br/>
-            Titulaire : MIALHE MAEVA-CARINE<br/>
-            IBAN : FR76 1223 9000 0141 2566 0100 071<br/>
-            BIC : CEPAPFTPXXX
-          </div>
-          <div style="font-size:12px;color:rgba(255,255,255,.8);line-height:1.8;margin-top:8px">
-            <b style="color:#fff">CCP Papeete</b><br/>
-            IBAN : FR76 14168 00001 10002580501 50<br/>
-            BIC : OFTPPFT1XXX
-          </div>
-        </div>
-
-        <!-- ESPECES -->
-        <div style="background:rgba(255,255,255,.05);border-radius:8px;padding:12px">
-          <div style="font-size:12px;color:#fbbf24;font-weight:600;margin-bottom:8px">🏪 Paiement en espèces</div>
-          <div style="font-size:12px;color:rgba(255,255,255,.8);line-height:1.8">
-            <b style="color:#fff">Papeete</b> — 5 Rue Ahnne, Immeuble Levy<br/>
-            <b style="color:#fff">Raiatea</b> — Immeuble Lachaux, 1er étage, Uturoa<br/>
-            📞 89 22 23 05
-          </div>
-        </div>
-      </div>
-
-      <div style="font-size:12px;color:rgba(255,255,255,.4);text-align:center">
-        Une fois le paiement effectué, vous recevrez votre code d'accès par email sous 24h.
-      </div>
-    </div>
-
-  </div>
-</div>
-
 <!-- ECRAN ORGANISATEUR -->
 <div id="s-organisateur" class="screen">
   <div class="hdr">
@@ -1373,8 +1275,9 @@ function selFormule(formule, el){
   document.querySelectorAll('.formule-card').forEach(c => {
     c.style.border = '1px solid rgba(99,102,241,.3)';
   });
-  el.style.border = '2px solid #6366f1';
-  document.getElementById('formulaire-demande').style.display = 'block';
+  if(el) el.style.border = '2px solid #6366f1';
+  var f = document.getElementById('formulaire-demande');
+  if(f) f.style.display = 'block';
 }
 
 async function envoyerDemande(){
@@ -1399,12 +1302,43 @@ async function envoyerDemande(){
     });
     const d = await r.json();
     if(d.ok){
-      document.getElementById('formulaire-demande').style.display = 'none';
-      document.getElementById('paiement-info').style.display = 'block';
+      // Demande enregistree (email envoye a l'admin). On propose le paiement immediat par carte.
+      var montants = {lancement: 4990, mensuel: 9990};
+      var montant = montants[formuleSelectionnee] || 9990;
+      lancerPaiementAbonnement(montant);
     } else {
       alert('Erreur : ' + (d.msg||'Réessayez'));
     }
   }catch(e){alert('Erreur de connexion');}
+}
+
+async function lancerPaiementAbonnement(montant){
+  var zone = document.getElementById('demande-toast');
+  if(zone){ zone.innerHTML = '<div style="background:rgba(16,185,129,.15);border:1px solid #10b981;border-radius:8px;padding:10px;color:#34d399;font-size:13px;text-align:center">✅ Demande reçue ! Redirection vers le paiement sécurisé...</div>'; }
+  try{
+    const r = await fetch('/api/paiement/abonnement', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({code_org: '', montant: montant})
+    });
+    const d = await r.json();
+    if(d.ok && d.url){
+      window.location.href = d.url;  // Redirection vers la page de paiement Stripe
+    } else {
+      // Paiement carte indisponible : afficher les coordonnees de virement
+      if(zone){
+        zone.innerHTML = '<div style="background:rgba(99,102,241,.12);border:1px solid rgba(99,102,241,.4);border-radius:10px;padding:14px;color:#fff;font-size:13px;line-height:1.7">' +
+          '<div style="font-weight:700;color:#818cf8;margin-bottom:8px">✅ Demande bien reçue !</div>' +
+          'Pour finaliser, réglez par virement :<br>' +
+          '<b>CCP</b> : FR76 14168 00001 10002580501 50<br>' +
+          '<b>Deblock</b> : @maeva99<br>' +
+          'Indiquez votre <b>nom + email</b> dans le libellé.<br>' +
+          'Vous recevrez votre code d\'accès par email sous 24h après réception. 🌺</div>';
+      }
+    }
+  }catch(e){
+    if(zone){ zone.innerHTML = '<div style="color:#f87171;font-size:13px">Erreur — réessayez ou contactez le 89 22 23 05</div>'; }
+  }
 }
 
 // === ACCES ORGANISATEUR ===
