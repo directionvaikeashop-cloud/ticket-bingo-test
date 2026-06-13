@@ -3797,13 +3797,26 @@ function checkCommandesTicketsPions(){
             '<div style="font-size:12px;color:#fbbf24">' + c.nb_tickets + ' ticket(s) ' + c.jeu + '</div>' +
             '<div style="font-size:11px;color:rgba(255,255,255,.5)">' + (c.total_pions||0).toLocaleString('fr-FR') + ' XPF de pions débités</div></div>' +
             '<div style="font-size:12px;font-weight:600;color:#34d399">✅ Pions reçus</div></div>';
+          // Champs d'attribution : fiches (pages) + serie + PDF
+          var champs = document.createElement('div');
+          champs.innerHTML =
+            '<div style="display:flex;gap:6px;margin-bottom:6px">' +
+              '<input id="tp-deb-' + c.id + '" type="number" min="1" placeholder="Page début" style="flex:1;padding:7px;background:var(--s2);border:1px solid var(--bd);border-radius:6px;color:#fff;font-size:12px">' +
+              '<input id="tp-fin-' + c.id + '" type="number" min="1" placeholder="Page fin" style="flex:1;padding:7px;background:var(--s2);border:1px solid var(--bd);border-radius:6px;color:#fff;font-size:12px">' +
+              '<input id="tp-serie-' + c.id + '" placeholder="Série" style="flex:1;padding:7px;background:var(--s2);border:1px solid var(--bd);border-radius:6px;color:#fff;font-size:12px">' +
+            '</div>' +
+            '<select id="tp-pdf-' + c.id + '" class="sel-pdf-org" style="width:100%;padding:7px;background:var(--s2);border:1px solid var(--bd);border-radius:6px;color:#fff;font-size:12px;margin-bottom:6px">' +
+              '<option value="">📄 Choisir le PDF du jeu...</option>' +
+            '</select>';
+          div.appendChild(champs);
           var btn = document.createElement('button');
           btn.style.cssText = 'width:100%;padding:8px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600';
-          btn.textContent = '🎫 Valider — Donner le ticket au joueur';
+          btn.textContent = '🎫 Valider — Attribuer les fiches au joueur';
           (function(cid){ btn.onclick = function(){ validerTicketPions(cid); }; })(c.id);
           div.appendChild(btn);
           liste.appendChild(div);
         });
+        remplirSelectsPdfOrg();
       }
     } else {
       card.style.display = 'none';
@@ -3812,17 +3825,46 @@ function checkCommandesTicketsPions(){
   .catch(function(){});
 }
 
+function remplirSelectsPdfOrg(){
+  fetch('/api/ventes', {headers: {'X-Token': TOKEN}})
+  .then(function(r){ return r.json(); })
+  .then(function(ventes){
+    if(!Array.isArray(ventes)) return;
+    document.querySelectorAll('.sel-pdf-org').forEach(function(sel){
+      if(sel.options.length > 1) return;
+      ventes.forEach(function(v){
+        if(!v.pdf_url) return;
+        var opt = document.createElement('option');
+        opt.value = v.pdf_url;
+        opt.textContent = '📄 ' + (v.jeu || 'Jeu') + ' — série ' + (v.serie || '?') + ' (' + (v.total_feuilles || '?') + ' feuilles)';
+        sel.appendChild(opt);
+      });
+    });
+  })
+  .catch(function(){});
+}
+
 async function validerTicketPions(commandeId){
   try{
+    var deb = document.getElementById('tp-deb-' + commandeId);
+    var fin = document.getElementById('tp-fin-' + commandeId);
+    var ser = document.getElementById('tp-serie-' + commandeId);
+    var pdf = document.getElementById('tp-pdf-' + commandeId);
     const r = await fetch('/api/commande/ticket-pions/valider', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
-      body: JSON.stringify({commande_id: commandeId})
+      body: JSON.stringify({
+        commande_id: commandeId,
+        page_debut: deb ? deb.value : '',
+        page_fin: fin ? fin.value : '',
+        serie: ser ? ser.value : '',
+        pdf_url: pdf ? pdf.value : ''
+      })
     });
     const d = await r.json();
     if(d.ok){
       checkCommandesTicketsPions();
-      toast('toast-pions', '✅ Ticket validé — donnez le ticket au joueur !');
+      toast('toast-pions', '✅ Ticket attribué — le joueur voit ses fiches !');
     }
   }catch(e){}
 }
