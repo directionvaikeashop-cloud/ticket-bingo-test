@@ -444,8 +444,10 @@ def enregistrer_ticket():
     token = request.headers.get("X-Token", "")
     s = verif_session(token)
     code_org = s["code"] if s else "ADMIN"
-    if not d.get("acheteur") or not d.get("jeu") or not d.get("serie"):
-        return jsonify({"ok": False, "msg": "Champs manquants"}), 400
+    # Inscription simple : seul le nom est obligatoire (le jeu/serie seront attribues
+    # plus tard lors de l'annonce + validation de la commande en pions). Corrige 12/06/2026.
+    if not d.get("acheteur"):
+        return jsonify({"ok": False, "msg": "Le nom de la joueuse est obligatoire"}), 400
     # Code joueur EXISTANT fourni : la joueuse garde son code et ses pions.
     # Si un ticket existe deja sur ce code -> ON LE MET A JOUR (nouvelle vente = nouveau
     # jeu / nouvelles fiches sur le MEME code permanent). Corrige le 12/06/2026.
@@ -2224,11 +2226,10 @@ b{color:#fff}
 <li><b>Vos jeux PDF</b> : commandez vos carnets (OHANA, TRIPLE ACTION, 1 DOLLAR...). Après validation de votre paiement, ils apparaissent dans « Mes tickets reçus ».</li>
 <li><b>Votre stock de pions</b> : valeurs 20, 50 ou 100 XPF. Le nombre de pions reçus s'affiche avant de valider. Carte = crédit immédiat ; autres modes = après validation.</li></div>
 
-<div class="card"><h2>2. 👥 Gérer vos joueuses — « Mes joueurs »</h2>
-<p>Votre tableau de bord : chaque joueuse avec son <b>code personnel</b>, son jeu, ses pages, son PDF et son <b>solde de pions</b> en temps réel.</p>
+<div class="card"><h2>2. 🔑 Inscrire vos joueuses — leur code</h2>
+<p>Pour chaque nouvelle joueuse : « <b>Inscrire une joueuse</b> » → son <b>nom</b> (et son email si vous voulez le lui envoyer) → <b>Générer le code</b>. Transmettez-lui ce code : c'est sa clé pour se connecter, acheter ses pions et recevoir ses tickets.</p>
 <div class="astuce">⭐ RÈGLE D'OR : le code d'une joueuse est PERMANENT. Même code à vie, ses pions y restent attachés. Ne créez jamais deux codes pour la même personne.</div>
-<p><b>Nouvelle joueuse ?</b> « Vendre un ticket », champ « Code joueur existant » <b>vide</b> → nouveau code créé.</p>
-<p><b>Joueuse qui a déjà un code ?</b> Mettez son code dans ce champ → elle garde tout.</p></div>
+<p>Le tableau « <b>Mes joueurs</b> » liste ensuite toutes vos joueuses avec leur code et leur solde de pions en temps réel.</p></div>
 
 <div class="card"><h2>3. 📢 Annoncer le jeu — les joueuses commandent et paient</h2>
 <p>« Annoncer ce jeu » : jeu, prix du ticket, description (« Jackpot 50 000 XPF ! »). L'annonce s'affiche chez toutes vos joueuses.</p>
