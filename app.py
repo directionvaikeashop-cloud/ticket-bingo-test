@@ -2264,7 +2264,7 @@ b{color:#fff}
 <li><b>Pointage automatique</b> : les tickets se cochent tout seuls</li>
 <li><b>Alertes BINGO</b> : l'alerte arrive avec le ticket de la joueuse — vous vérifiez et validez</li>
 <div class="astuce">💡 Demandez aux joueuses de toucher leur écran en arrivant (débloque le son) et de garder l'application affichée.</div>
-<p><b>La cagnotte</b> : 80 % des mises pour la gagnante, 20 % pour vous, l'organisateur.</p></div>
+<p><b>La cagnotte</b> : 80 % des mises pour la gagnante (payée <b>EN PIONS</b>), 20 % pour vous, l'organisateur. Après le tournoi, elle peut retirer ses pions en argent directement auprès de l'administrateur (frais 15% virement ou 5% espèces).</p></div>
 
 <div class="card"><h2>6. 🔄 Après le tournoi</h2>
 <p>Rien d'obligatoire ! Repartez de l'étape 3 : annoncez, encaissez, redistribuez. Le « Reset tournoi » efface tirage et alertes si besoin — <b>les codes et les pions de vos joueuses ne sont jamais touchés</b>.</p></div>
