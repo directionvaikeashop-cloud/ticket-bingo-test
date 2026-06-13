@@ -3493,6 +3493,115 @@ def get_gains_finaux():
         return jsonify({"ok": False}), 403
     return jsonify(DB.get("gains_finaux", []))
 
+
+@app.route("/api/retrait/demander", methods=["POST"])
+def demander_retrait():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    
+    d = request.json
+    montant = int(d.get("montant", 0))
+    mode = d.get("mode", "virement")  # virement ou especes
+    coordonnees = d.get("coordonnees", "")  # CCP/Deblock ou lieu/horaire
+    pions_detail = d.get("pions", [])  # [{valeur, nombre}, ...]
+    
+    if montant <= 0 or not mode or not coordonnees:
+        return jsonify({"ok": False, "msg": "Données invalides"}), 400
+    
+    # Vérifier solde
+    solde = 0
+    for p in DB.get("pions_joueurs", []):
+        if p.get("code_joueur") == s["code"]:
+            solde += p.get("solde_20", 0) * 20 + p.get("solde_50", 0) * 50 + p.get("solde_100", 0) * 100
+    
+    if solde < montant:
+        return jsonify({"ok": False, "msg": "Solde insuffisant"}), 400
+    
+    if "retraits" not in DB:
+        DB["retraits"] = []
+    
+    retrait = {
+        "id": secrets.token_hex(4).upper(),
+        "code_joueur": s["code"],
+        "nom_joueur": s.get("nom", s["code"]),
+        "montant": montant,
+        "mode": mode,
+        "coordonnees": coordonnees,
+        "pions_detail": pions_detail,
+        "statut": "en_attente",
+        "date_demande": datetime.datetime.now().isoformat()
+    }
+    DB["retraits"].append(retrait)
+    save_data()
+    return jsonify({"ok": True, "retrait_id": retrait["id"]})
+
+@app.route("/api/retraits/liste")
+def get_retraits():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or s.get("role") != "admin":
+        return jsonify([]), 403
+    
+    return jsonify(DB.get("retraits", []))
+
+@app.route("/api/retrait/valider", methods=["POST"])
+def valider_retrait():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or s.get("role") != "admin":
+        return jsonify({"ok": False}), 403
+    
+    retrait_id = request.json.get("retrait_id", "")
+    retrait = next((r for r in DB.get("retraits", []) if r.get("id") == retrait_id), None)
+    if not retrait:
+        return jsonify({"ok": False, "msg": "Retrait non trouvé"}), 404
+    
+    # Débiter les pions
+    for p in DB.get("pions_joueurs", []):
+        if p.get("code_joueur") == retrait["code_joueur"]:
+            for detail in retrait.get("pions_detail", []):
+                valeur = detail.get("valeur")
+                nombre = detail.get("nombre")
+                if valeur == 20:
+                    p["solde_20"] = max(0, p.get("solde_20", 0) - nombre)
+                elif valeur == 50:
+                    p["solde_50"] = max(0, p.get("solde_50", 0) - nombre)
+                elif valeur == 100:
+                    p["solde_100"] = max(0, p.get("solde_100", 0) - nombre)
+            break
+    
+    retrait["statut"] = "validé"
+    retrait["date_validation"] = datetime.datetime.now().isoformat()
+    save_data()
+    return jsonify({"ok": True})
+
+@app.route("/api/retrait/refuser", methods=["POST"])
+def refuser_retrait():
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or s.get("role") != "admin":
+        return jsonify({"ok": False}), 403
+    
+    retrait_id = request.json.get("retrait_id", "")
+    retrait = next((r for r in DB.get("retraits", []) if r.get("id") == retrait_id), None)
+    if not retrait:
+        return jsonify({"ok": False, "msg": "Retrait non trouvé"}), 404
+    
+    retrait["statut"] = "refusé"
+    save_data()
+    return jsonify({"ok": True})
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
