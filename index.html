@@ -6262,6 +6262,30 @@ async function refuserRetrait(retraitId){
 }
 
 
+
+async function chargerGainsInvisibles(){
+  try{
+    const r = await fetch('/api/admin/gains-invisibles', {
+      headers: {'X-Token': TOKEN}
+    });
+    const d = await r.json();
+    if(d.ok){
+      document.getElementById('gains-argent').textContent = d.argent_réel_total + ' XPF';
+      document.getElementById('gains-pions').textContent = d.pions_virtuels_total + ' pions';
+      
+      var detail = document.getElementById('gains-detail');
+      if(d.détail && d.détail.length > 0){
+        detail.style.display = 'block';
+        detail.innerHTML = '<strong>Dernières transactions :</strong><br>' + 
+          d.détail.slice(-10).map(function(item){
+            return item.date.substring(0,16) + ' — ' + item.type + ' : ' + item.frais + ' XPF + ' + item.pions + ' pions';
+          }).join('<br>');
+      }
+    }
+  }catch(e){ console.log('Erreur:', e); }
+}
+
+
 </script>
 </body>
 </html>
