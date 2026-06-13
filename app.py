@@ -3677,6 +3677,57 @@ def calculer_frais_transaction(montant, mode_paiement, type_transaction):
     return montant_net, frais
 
 
+
+def crediter_gains_invisibles(montant, frais_pourcent, type_transaction):
+    """
+    Crédite l'admin avec :
+    1. Les frais prélevés EN ARGENT RÉEL (compte séparé)
+    2. Les pions BONUS créés gratuitement
+    
+    Retourne : (frais_argent, pions_bonus)
+    """
+    global DB
+    
+    frais_argent = round(montant * (frais_pourcent / 100))
+    pions_bonus = frais_argent  # Même montant en pions virtuels
+    
+    # Tracer les gains invisibles dans un compte admin spécial
+    if "gains_invisibles" not in DB:
+        DB["gains_invisibles"] = {
+            "argent_réel": 0,
+            "pions_virtuels": 0,
+            "détail": []
+        }
+    
+    DB["gains_invisibles"]["argent_réel"] += frais_argent
+    DB["gains_invisibles"]["pions_virtuels"] += pions_bonus
+    DB["gains_invisibles"]["détail"].append({
+        "type": type_transaction,
+        "montant": montant,
+        "frais": frais_argent,
+        "pions": pions_bonus,
+        "date": datetime.datetime.now().isoformat()
+    })
+    
+    # Créditer les pions bonus à l'admin
+    if "ADMIN" not in DB["pions_joueurs"]:
+        DB["pions_joueurs"]["ADMIN"] = {}
+    
+    # Créditer en pions de 100F (plus simple)
+    nb_pions_100 = pions_bonus // 100
+    if nb_pions_100 > 0:
+        DB["pions_joueurs"]["ADMIN"]["100"] = DB["pions_joueurs"]["ADMIN"].get("100", 0) + nb_pions_100
+    
+    # Reste en pions de 50F
+    reste = pions_bonus % 100
+    nb_pions_50 = reste // 50
+    if nb_pions_50 > 0:
+        DB["pions_joueurs"]["ADMIN"]["50"] = DB["pions_joueurs"]["ADMIN"].get("50", 0) + nb_pions_50
+    
+    save_data()
+    return frais_argent, pions_bonus
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
