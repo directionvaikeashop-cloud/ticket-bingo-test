@@ -1510,13 +1510,13 @@ function buildOrgSpace(){
       <div class="ct">🔑 Inscrire une joueuse — générer son code</div>
       <div style="font-size:12px;color:var(--mu);margin-bottom:12px;line-height:1.5">Créez le code personnel d'une nouvelle joueuse. Elle l'utilisera pour se connecter, acheter ses pions et recevoir ses tickets quand vous annoncez un jeu.</div>
       <div class="lbl">Nom de la joueuse</div>
-      <input id="t-acheteur" placeholder="Ex: Vaiana Tema" style="margin-bottom:10px"/>
+      <input id="insc-nom" placeholder="Ex: Vaiana Tema" style="margin-bottom:10px"/>
       <div class="lbl">📧 Email (optionnel — pour lui envoyer son code)</div>
-      <input id="t-email" type="email" placeholder="joueuse@email.com" style="margin-bottom:10px"/>
+      <input id="insc-email" type="email" placeholder="joueuse@email.com" style="margin-bottom:10px"/>
       <div class="lbl">Code existant (optionnel — si elle a déjà un code, pour le retrouver)</div>
-      <input class="t-code-existant" placeholder="Vide = nouveau code généré" style="margin-bottom:10px;text-transform:uppercase"/>
-      <button class="btn btn-p" onclick="regTicket()">🔑 Générer le code de la joueuse</button>
-      <div id="t-code-result"></div>
+      <input id="insc-code-existant" placeholder="Vide = nouveau code généré" style="margin-bottom:10px;text-transform:uppercase"/>
+      <button class="btn btn-p" onclick="inscrireJoueuse()">🔑 Générer le code de la joueuse</button>
+      <div id="insc-result"></div>
 
       <!-- ANCIEN MODULE COMPLET — conserve en secours (masque). Pour reactiver : retirer display:none -->
       <div style="display:none">
@@ -2559,17 +2559,62 @@ function selectionnerPDFExistant(url, el){
 }
 
 // === TICKETS ===
-function _valVisible(id){
-  // Parmi les doublons d'un meme id, prend le champ REELLEMENT visible (rempli par l'organisateur)
-  var els = document.querySelectorAll('[id="' + id + '"]');
-  for(var i=0;i<els.length;i++){
-    var e = els[i];
-    if(e.offsetParent !== null && (e.value||'').trim() !== '') return e.value.trim();
+function _estVisible(e){
+  if(!e) return false;
+  if(e.getClientRects().length === 0) return false;
+  var st = window.getComputedStyle(e);
+  if(st.display === 'none' || st.visibility === 'hidden') return false;
+  // verifier qu'aucun parent n'est cache
+  var p = e;
+  while(p){
+    var ps = window.getComputedStyle(p);
+    if(ps.display === 'none') return false;
+    p = p.parentElement;
   }
-  // sinon, le premier visible (meme vide)
-  for(var k=0;k<els.length;k++){ if(els[k].offsetParent !== null) return (els[k].value||'').trim(); }
+  return true;
+}
+function _valVisible(id){
+  var els = document.querySelectorAll('[id="' + id + '"]');
+  // 1) un champ visible ET rempli
+  for(var i=0;i<els.length;i++){ if(_estVisible(els[i]) && (els[i].value||'').trim() !== '') return els[i].value.trim(); }
+  // 2) sinon le premier visible meme vide
+  for(var k=0;k<els.length;k++){ if(_estVisible(els[k])) return (els[k].value||'').trim(); }
+  // 3) dernier recours : n'importe lequel rempli
+  for(var m=0;m<els.length;m++){ if((els[m].value||'').trim() !== '') return els[m].value.trim(); }
   return '';
 }
+async function inscrireJoueuse(){
+  var nom = (document.getElementById("insc-nom").value || "").trim();
+  var email = (document.getElementById("insc-email").value || "").trim();
+  var codeExist = (document.getElementById("insc-code-existant").value || "").trim().toUpperCase();
+  var res = document.getElementById("insc-result");
+  if(!nom){ res.innerHTML = '<div style="color:#f87171;font-size:13px;margin-top:8px">Entrez le nom de la joueuse</div>'; return; }
+  res.innerHTML = '<div style="color:#60a5fa;font-size:13px;margin-top:8px">Création du code...</div>';
+  try{
+    var r = await fetch("/api/ticket", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "X-Token": TOKEN},
+      body: JSON.stringify({acheteur: nom, jeu: "", serie: "", prix: 0, email: email, code_acheteur: codeExist})
+    });
+    var d = await r.json();
+    if(d.ok){
+      res.innerHTML = '<div class="code-box" style="margin-top:12px">' +
+        '<div style="font-size:12px;color:var(--mu);margin-bottom:8px">Code pour <strong>' + nom + '</strong></div>' +
+        '<div class="code-val">' + d.code_acheteur + '</div>' +
+        '<div style="font-size:11px;color:var(--mu);margin-top:8px">' + (email ? "Envoyé par email à la joueuse !<br/>" : "") + "Transmettez ce code à la joueuse — Espace Joueur</div>" +
+        '</div>';
+      document.getElementById("insc-nom").value = "";
+      document.getElementById("insc-email").value = "";
+      document.getElementById("insc-code-existant").value = "";
+      try{ loadTickets(); }catch(e){}
+    } else {
+      res.innerHTML = '<div style="color:#f87171;font-size:13px;margin-top:8px">' + (d.msg || "Erreur") + '</div>';
+    }
+  }catch(e){
+    res.innerHTML = '<div style="color:#f87171;font-size:13px;margin-top:8px">Erreur de connexion</div>';
+  }
+}
+
 async function regTicket(){
   const a=_valVisible("t-acheteur");
   const j=_valVisible("t-jeu");
