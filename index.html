@@ -1532,10 +1532,10 @@ function buildOrgSpace(){
       </div>
     </div>
     <div class="card">
-      <div class="ct">📊 Tickets vendus</div>
+      <div class="ct">👥 Mes joueuses inscrites</div>
       <div class="g2" style="margin-bottom:12px">
-        <div class="stat"><div class="stat-v" id="cnb">0</div><div class="stat-l">Tickets vendus</div></div>
-        <div class="stat"><div class="stat-v" id="cca">0 XPF</div><div class="stat-l">Chiffre d'affaires</div></div>
+        <div class="stat"><div class="stat-v" id="cnb">0</div><div class="stat-l">Joueuses inscrites</div></div>
+        <div class="stat"><div class="stat-v" id="cca">0</div><div class="stat-l">Avec des pions</div></div>
       </div>
       <div id="t-liste"></div>
     </div>`;
@@ -2666,21 +2666,24 @@ async function regTicket(){
 
 async function loadTickets(){try{const r=await fetch("/api/tickets",{headers:{"X-Token":TOKEN}});tickets=await r.json();renderTickets();}catch(e){}}
 function renderTickets(){
-  const ca=tickets.reduce((s,t)=>s+t.prix,0);
   document.getElementById("cnb").textContent=tickets.length;
-  document.getElementById("cca").textContent=ca.toLocaleString()+" XPF";
+  // Nombre de joueuses qui ont un jeu attribue (= tournoi en cours)
+  var avecJeu = tickets.filter(function(t){ return t.jeu && t.jeu.trim() !== "" && t.serie && t.serie !== "-"; }).length;
+  document.getElementById("cca").textContent = avecJeu;
   const el=document.getElementById("t-liste");
-  if(!tickets.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun ticket vendu</div>';return;}
-  el.innerHTML=tickets.map(t=>`<div class="row" style="flex-direction:column;align-items:stretch">
-    <div style="display:flex;justify-content:space-between">
-      <div><div style="font-size:13px;font-weight:500">${t.acheteur}</div>
-      <div style="font-size:12px;color:var(--mu)">${t.jeu} · Série ${t.serie}</div>
-      ${t.code_acheteur?`<div style="font-size:11px;color:var(--ac2);margin-top:3px">Code: <strong>${t.code_acheteur}</strong></div>`:""}
+  if(!tickets.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucune joueuse inscrite</div>';return;}
+  el.innerHTML=tickets.map(t=>{
+    var jeuInfo = (t.jeu && t.jeu.trim() && t.serie && t.serie!=="-") ? (t.jeu + " · Série " + t.serie) : "Pas encore de jeu attribué";
+    return `<div class="row" style="flex-direction:column;align-items:stretch">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:13px;font-weight:600">${t.acheteur||"Joueuse"}</div>
+        <div style="font-size:11px;color:var(--mu);margin-top:2px">${jeuInfo}</div>
       </div>
-      <div style="text-align:right"><div style="font-size:13px;font-weight:500">${t.prix.toLocaleString()} XPF</div></div>
+      ${t.code_acheteur?`<div style="background:rgba(99,102,241,.15);border:0.5px solid #6366f1;border-radius:8px;padding:6px 10px"><div style="font-size:10px;color:var(--mu)">CODE</div><div style="font-size:14px;font-weight:800;color:#818cf8;font-family:monospace;letter-spacing:1px">${t.code_acheteur}</div></div>`:""}
     </div>
-    ${t.pdf_url?`<a href="${t.pdf_url}" target="_blank" style="margin-top:6px;display:block;padding:6px;background:rgba(99,102,241,.15);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;font-size:12px;text-align:center;text-decoration:none">📄 Voir le PDF</a>`:""}
-  </div>`).join("");
+    ${t.pdf_url?`<a href="${t.pdf_url}" target="_blank" style="margin-top:6px;display:block;padding:6px;background:rgba(99,102,241,.1);color:#818cf8;border:0.5px solid rgba(99,102,241,.4);border-radius:6px;font-size:12px;text-align:center;text-decoration:none">📄 Voir ses fiches</a>`:""}
+  </div>`;}).join("");
 }
 
 // === JOUER ===
