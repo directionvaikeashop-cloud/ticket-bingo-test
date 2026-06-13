@@ -3177,6 +3177,7 @@ async function passerCommande(){
   var serie = document.getElementById('cmd-serie').value || '1';
   if(!jeu){ alert('Choisissez un jeu'); return; }
   if(!packCmdSelectionne.nb){ alert('Choisissez un pack'); return; }
+  // Enregistrer la commande puis proposer le paiement
   try{
     const r = await fetch('/api/commande/passer', {
       method: 'POST',
@@ -3185,19 +3186,53 @@ async function passerCommande(){
     });
     const d = await r.json();
     if(d.ok){
-      toast('toast-t', '✅ Commande envoyée ! Référence : ' + d.commande_id);
-      document.getElementById('cmd-jeu').value = '';
-      packCmdSelectionne = {nb: 0, prix: 0};
-      document.querySelectorAll('.pack-cmd').forEach(function(p){
-        p.style.borderColor = 'var(--bd)';
-        p.style.background = 'var(--s2)';
-      });
-      document.getElementById('cmd-resume').style.display = 'none';
       loadMesCommandes();
+      choisirPaiementCommande(jeu, packCmdSelectionne.nb, packCmdSelectionne.prix);
     } else {
       alert(d.msg || 'Erreur');
     }
   }catch(e){ alert('Erreur de connexion'); }
+}
+
+function choisirPaiementCommande(jeu, nbTickets, prix){
+  var m = Number(prix).toLocaleString('fr-FR');
+  var overlay = document.createElement('div');
+  overlay.id = 'paiement-cmd-overlay';
+  overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.88);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto';
+  overlay.innerHTML = "<div style='background:#111218;border:1px solid #6366f1;border-radius:16px;padding:24px;max-width:420px;width:100%'>"
+    + "<div style='font-size:18px;font-weight:700;color:#fff;text-align:center;margin-bottom:4px'>📦 Régler votre commande</div>"
+    + "<div style='font-size:13px;color:rgba(255,255,255,.6);text-align:center;margin-bottom:12px'>" + nbTickets + " tickets " + jeu + "</div>"
+    + "<div style='font-size:24px;font-weight:800;color:#fbbf24;text-align:center;margin-bottom:16px'>" + m + " XPF</div>"
+    + "<div style='background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(5,150,105,.08));border:1.5px solid #10b981;border-radius:10px;padding:14px;margin-bottom:12px;text-align:center'>"
+    + "<div style='font-size:12px;color:rgba(255,255,255,.6);margin-bottom:10px'>⚡ Le plus rapide — vos PDF générés après paiement</div>"
+    + "<button id='btn-cmd-carte' style='width:100%;padding:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700'>💳 Payer par carte maintenant</button></div>"
+    + "<div style='text-align:center;font-size:11px;color:rgba(255,255,255,.4);margin-bottom:10px'>— ou par virement —</div>"
+    + "<div style='background:rgba(99,102,241,.1);border-radius:10px;padding:12px;font-size:12px;color:rgba(255,255,255,.85);line-height:1.9'>"
+    + "<b style='color:#818cf8'>🏦 CCP Papeete</b><br>IBAN : <b>FR76 14168 00001 10002580501 50</b><br>Bénéficiaire : EI TUKEA IMPORT<br>"
+    + "<b style='color:#818cf8'>📱 Deblock</b> : @maeva99 — 89 22 23 05<br>"
+    + "<span style='color:rgba(255,255,255,.5)'>Indiquez votre code organisateur dans le libellé.</span><br>"
+    + "📧 Reçu à : <b style='color:#34d399'>directionvaikeashop@gmail.com</b></div>"
+    + "<button onclick=\"document.getElementById('paiement-cmd-overlay').remove();toast('toast-t','Commande enregistrée — réglez pour recevoir vos PDF');\" style='width:100%;padding:10px;background:rgba(255,255,255,.1);color:#fff;border:0.5px solid var(--bd);border-radius:8px;cursor:pointer;font-size:13px;margin-top:12px'>Fermer</button>"
+    + "</div>";
+  document.body.appendChild(overlay);
+  // Reinitialiser le formulaire en arriere-plan
+  document.getElementById('cmd-jeu').value = '';
+  packCmdSelectionne = {nb: 0, prix: 0};
+  document.querySelectorAll('.pack-cmd').forEach(function(p){ p.style.borderColor = 'var(--bd)'; p.style.background = 'var(--s2)'; });
+  var rez = document.getElementById('cmd-resume'); if(rez) rez.style.display = 'none';
+  // Brancher le bouton carte
+  document.getElementById('btn-cmd-carte').onclick = async function(){
+    this.disabled = true; this.textContent = '⏳ Redirection...';
+    try{
+      const r = await fetch('/api/paiement/pdf', {
+        method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+        body: JSON.stringify({nb_tickets: nbTickets, prix: prix, jeu: jeu})
+      });
+      const d = await r.json();
+      if(d.ok && d.url){ window.location.href = d.url; }
+      else { alert(d.msg || 'Paiement carte indisponible — utilisez le virement'); this.disabled=false; this.textContent='💳 Payer par carte maintenant'; }
+    }catch(e){ alert('Erreur — utilisez le virement'); this.disabled=false; this.textContent='💳 Payer par carte maintenant'; }
+  };
 }
 
 function loadMesCommandes(){
