@@ -4017,23 +4017,32 @@ def releve_download(code):
         nom = info.get("nom", code)
         
         lines = ["RELEVE DE " + str(code), "Nom: " + str(nom), ""]
+        total = 0
         
+        # Ventes de tickets
         ventes = DB.get("ventes", [])
         if isinstance(ventes, list):
             for v in ventes:
                 if isinstance(v, dict) and v.get("code_org") == code:
                     d = str(v.get("date", "?"))[:10]
                     jeu = str(v.get("jeu", "?"))
-                    total = v.get("total", 0)
-                    lines.append(d + " | Vente " + jeu + " | " + str(total) + " XPF")
+                    montant = v.get("total", 0)
+                    total += montant
+                    lines.append(d + " | Vente " + jeu + " | " + str(montant) + " XPF")
         
-        ps = DB.get("paiements_stripe", {})
-        if isinstance(ps, dict):
-            for p in ps.values():
-                if isinstance(p, dict) and p.get("code_joueur") == code and p.get("statut") == "valide":
+        # Paiements Stripe (c'est une LISTE, champ code_org et montant)
+        ps = DB.get("paiements_stripe", [])
+        if isinstance(ps, list):
+            for p in ps:
+                if isinstance(p, dict) and p.get("code_org") == code and p.get("statut") in ("paye", "valide"):
                     d = str(p.get("date", "?"))[:10]
-                    montant = p.get("montant_xpf", 0)
-                    lines.append(d + " | Paiement | " + str(montant) + " XPF")
+                    montant = p.get("montant", 0)
+                    typ = str(p.get("type", "paiement"))
+                    total += montant
+                    lines.append(d + " | Paiement " + typ + " | " + str(montant) + " XPF")
+        
+        lines.append("")
+        lines.append("TOTAL: " + str(total) + " XPF")
         
         text = "\n".join(lines)
         response = make_response(text)
