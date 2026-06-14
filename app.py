@@ -3998,11 +3998,12 @@ def releves_all():
 
 
 
-@app.route("/releve/<code>/pdf")
-def releve_pdf(code):
-    from reportlab.lib.pagesizes import A4
-    from reportlab.pdfgen import canvas
-    from io import BytesIO
+
+
+@app.route("/releve/<code>/csv")
+def releve_csv(code):
+    import csv
+    from io import StringIO
     
     global DB
     DB = load_data()
@@ -4016,43 +4017,28 @@ def releve_pdf(code):
     transactions = []
     for v in DB.get("ventes", []):
         if v.get("code_org") == code:
-            transactions.append((v.get("date", "?")[:10], "Vente", v.get("jeu", "?"), v.get("total", 0)))
+            transactions.append([v.get("date", "?")[:10], "Vente", v.get("jeu", "?"), v.get("total", 0), ""])
     
     for p in DB.get("paiements_stripe", {}).values():
         if p.get("code_joueur") == code and p.get("statut") == "valide":
-            transactions.append((p.get("date", "?")[:10], "Paiement", p.get("description", "?"), p.get("montant_xpf", 0)))
+            transactions.append([p.get("date", "?")[:10], "Paiement", p.get("description", "?"), p.get("montant_xpf", 0), ""])
     
     transactions.sort(reverse=True)
-    total = sum(t[3] for t in transactions)
     
-    buffer = BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(50, 750, "RELEVE DE COMPTE")
-    c.setFont("Helvetica", 12)
-    c.drawString(50, 730, f"Code: {code}")
-    c.drawString(50, 710, f"Nom: {nom}")
-    c.drawString(50, 690, f"Total: {total:,} XPF")
+    buffer = StringIO()
+    writer = csv.writer(buffer)
+    writer.writerow(["RELEVE DE COMPTE"])
+    writer.writerow(["Code", code])
+    writer.writerow(["Nom", nom])
+    writer.writerow([])
+    writer.writerow(["Date", "Type", "Description", "Montant", ""])
+    for t in transactions:
+        writer.writerow(t)
     
-    y = 660
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(50, y, "Date")
-    c.drawString(150, y, "Type")
-    c.drawString(250, y, "Description")
-    c.drawString(450, y, "Montant")
-    
-    y -= 20
-    c.setFont("Helvetica", 9)
-    for date, typ, desc, montant in transactions:
-        c.drawString(50, y, str(date))
-        c.drawString(150, y, typ)
-        c.drawString(250, y, desc[:30])
-        c.drawString(450, y, f"{montant:,}")
-        y -= 15
-        if y < 50:
-            c.showPage()
-            y = 750
-    
-    c.save()
-    buffer.seek(0)
-    return send_file(buffer, mimetype="application/pdf", as_attachment=True, attachment_filename=f"releve_{code}.pdf")
+    output = buffer.getvalue()
+    return send_file(
+        BytesIO(output.encode('utf-8')),
+        mimetype="text/csv",
+        as_attachment=True,
+        attachment_filename=f"releve_{code}.csv"
+    )
