@@ -2288,7 +2288,7 @@ b{color:#fff}
 <li><b>Pointage automatique</b> : les tickets se cochent tout seuls</li>
 <li><b>Alertes BINGO</b> : l'alerte arrive avec le ticket de la joueuse — vous vérifiez et validez</li>
 <div class="astuce">💡 Demandez aux joueuses de toucher leur écran en arrivant (débloque le son) et de garder l'application affichée.</div>
-<p><b>La cagnotte</b> : 80 % des mises pour la gagnante (payée <b>EN PIONS</b>), 20 % pour vous, l'organisateur. Après le tournoi, elle peut retirer ses pions en argent directement auprès de l'administrateur.</p></div>
+<p><b>La cagnotte</b> : 80 % des mises pour la gagnante (payée <b>EN PIONS</b>), 20 % pour vous, l'organisateur. La gagnante peut rejouer ses pions sur les prochains tournois.</p></div>
 
 <div class="card"><h2>6. 🔄 Après le tournoi</h2>
 <p>Rien d'obligatoire ! Repartez de l'étape 3 : annoncez, encaissez, redistribuez. Le « Reset tournoi » efface tirage et alertes si besoin — <b>les codes et les pions de vos joueuses ne sont jamais touchés</b>.</p></div>
@@ -2362,18 +2362,6 @@ b{color:#fff}
 
 <div class="card"><h2>5. 🏆 BINGO !</h2>
 <p>Ta ligne est complète ? Appuie sur le bouton <b>BINGO</b> ! Ton organisateur reçoit l'alerte avec ton ticket, vérifie tes numéros, et valide ta victoire. C'est lui qui te remet tes gains <b>EN PIONS</b>. 🎉</p></div>
-
-<div class="card"><h2>6. 💰 Retirer tes pions en argent</h2>
-<p>Après le tournoi, tu as reçu tes gains <b>EN PIONS</b>. Tu peux les convertir en argent réel !</p>
-<p>Bouton <b>« 💰 Retirer mes pions en argent »</b> dans ton espace :</p>
-<li><b>Entre le montant</b> que tu veux retirer (ex: 650 XPF)</li>
-<li><b>Choisis comment le recevoir :</b><br>
-🏦 <b>Virement</b> (CCP, BT, Deblock)<br>
-💵 <b>Espèces</b> chez l'admin</li>
-<li><b>Rentre tes coordonnées</b> (numéro CCP, IBAN, etc. ou lieu de récupération)</li>
-<li><b>Demande le retrait</b> — l'admin traite et tu reçois ton argent ! 💸</li>
-<div class="astuce">💡 Les frais de retrait sont de 5%, que tu choisisses espèces ou virement.</div>
-<p><b>Ton solde de pions</b> s'affiche toujours dans ton espace, mis à jour en temps réel.</p></div>
 
 <a class="cta" href="https://ticket-bingo-production.up.railway.app">🎱 Jouer maintenant sur Ticket Bingo</a>
 <div class="pied">Ticket Bingo — L'application des tournois de bingo en Polynésie 🌺<br>Bonne chance, et que les boules soient avec toi !</div>
@@ -3540,186 +3528,6 @@ def get_gains_finaux():
     if not s or not s.get("admin"):
         return jsonify({"ok": False}), 403
     return jsonify(DB.get("gains_finaux", []))
-
-
-@app.route("/api/retrait/demander", methods=["POST"])
-def demander_retrait():
-    global DB
-    DB = load_data()
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s:
-        return jsonify({"ok": False}), 403
-    
-    d = request.json
-    montant = int(d.get("montant", 0))
-    mode = d.get("mode", "virement")  # virement ou especes
-    coordonnees = d.get("coordonnees", "")  # CCP/Deblock ou lieu/horaire
-    pions_detail = d.get("pions", [])  # [{valeur, nombre}, ...]
-    
-    if montant <= 0 or not mode or not coordonnees:
-        return jsonify({"ok": False, "msg": "Données invalides"}), 400
-    
-    # Vérifier solde
-    solde = 0
-    for p in DB.get("pions_joueurs", []):
-        if p.get("code_joueur") == s["code"]:
-            solde += p.get("solde_20", 0) * 20 + p.get("solde_50", 0) * 50 + p.get("solde_100", 0) * 100
-    
-    if solde < montant:
-        return jsonify({"ok": False, "msg": "Solde insuffisant"}), 400
-    
-    if "retraits" not in DB:
-        DB["retraits"] = []
-    
-    retrait = {
-        "id": secrets.token_hex(4).upper(),
-        "code_joueur": s["code"],
-        "nom_joueur": s.get("nom", s["code"]),
-        "montant": montant,
-        "mode": mode,
-        "coordonnees": coordonnees,
-        "pions_detail": pions_detail,
-        "statut": "en_attente",
-        "date_demande": datetime.datetime.now().isoformat()
-    }
-    DB["retraits"].append(retrait)
-    save_data()
-    return jsonify({"ok": True, "retrait_id": retrait["id"]})
-
-@app.route("/api/retraits/liste")
-def get_retraits():
-    global DB
-    DB = load_data()
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s or s.get("role") != "admin":
-        return jsonify([]), 403
-    
-    return jsonify(DB.get("retraits", []))
-
-@app.route("/api/admin/accepter-commande-tickets", methods=["POST"])
-def accepter_commande_tickets():
-    """ADMIN — Accepter une commande de tickets et créer compensation selon mode paiement"""
-    global DB
-    DB = load_data()
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s or not s.get("admin"):
-        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
-    
-    d = request.json
-    commande_id = d.get("commande_id", "")
-    mode_paiement = (d.get("mode_paiement", "") or "carte").lower()  # carte, virement, especes
-    
-    # Trouver la commande
-    commande = None
-    for c in DB.get("commandes_tickets", []):
-        if c["id"] == commande_id:
-            commande = c
-            break
-    
-    if not commande:
-        return jsonify({"ok": False, "msg": "Commande introuvable"}), 404
-    
-    code_org = commande.get("code_org", "")
-    montant_paye = commande.get("prix", 0)
-
-    # FRAIS DE SERVICE 5% — DÉDUITS ET AFFICHÉS (rien n'est créé de rien)
-    if mode_paiement == "especes":
-        frais_service = 0  # Pas de frais en espèces
-    else:  # carte ou virement
-        frais_service = round(montant_paye * 0.05)  # 5% de frais de service
-
-    montant_net = montant_paye - frais_service
-
-    # Enregistrer la transaction (clair et traçable)
-    if "transactions_tickets" not in DB:
-        DB["transactions_tickets"] = []
-
-    transaction = {
-        "id": secrets.token_hex(4).upper(),
-        "commande_id": commande_id,
-        "code_org": code_org,
-        "montant_paye": montant_paye,
-        "frais_service": frais_service,
-        "montant_net": montant_net,
-        "statut": "acceptee",
-        "date": datetime.datetime.now().isoformat()
-    }
-
-    DB["transactions_tickets"].insert(0, transaction)
-
-    # Marquer la commande comme acceptée
-    commande["statut"] = "acceptee"
-    commande["frais_service"] = frais_service
-    commande["montant_net"] = montant_net
-
-    save_data()
-
-    return jsonify({
-        "ok": True,
-        "commande_id": commande_id,
-        "montant_paye": montant_paye,
-        "frais_service": frais_service,
-        "montant_net": montant_net,
-        "msg": f"Commande acceptée — frais de service {frais_service} XPF (5%)"
-    })
-
-
-
-@app.route("/api/retrait/valider", methods=["POST"])
-def valider_retrait():
-    global DB
-    DB = load_data()
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s or s.get("role") != "admin":
-        return jsonify({"ok": False}), 403
-    
-    retrait_id = request.json.get("retrait_id", "")
-    retrait = next((r for r in DB.get("retraits", []) if r.get("id") == retrait_id), None)
-    if not retrait:
-        return jsonify({"ok": False, "msg": "Retrait non trouvé"}), 404
-    
-    # Débiter les pions
-    for p in DB.get("pions_joueurs", []):
-        if p.get("code_joueur") == retrait["code_joueur"]:
-            for detail in retrait.get("pions_detail", []):
-                valeur = detail.get("valeur")
-                nombre = detail.get("nombre")
-                if valeur == 20:
-                    p["solde_20"] = max(0, p.get("solde_20", 0) - nombre)
-                elif valeur == 50:
-                    p["solde_50"] = max(0, p.get("solde_50", 0) - nombre)
-                elif valeur == 100:
-                    p["solde_100"] = max(0, p.get("solde_100", 0) - nombre)
-            break
-    
-    retrait["statut"] = "validé"
-    retrait["date_validation"] = datetime.datetime.now().isoformat()
-    save_data()
-    return jsonify({"ok": True})
-
-@app.route("/api/retrait/refuser", methods=["POST"])
-def refuser_retrait():
-    global DB
-    DB = load_data()
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s or s.get("role") != "admin":
-        return jsonify({"ok": False}), 403
-    
-    retrait_id = request.json.get("retrait_id", "")
-    retrait = next((r for r in DB.get("retraits", []) if r.get("id") == retrait_id), None)
-    if not retrait:
-        return jsonify({"ok": False, "msg": "Retrait non trouvé"}), 404
-    
-    retrait["statut"] = "refusé"
-    save_data()
-    return jsonify({"ok": True})
-
-
 
 
 if __name__ == "__main__":
