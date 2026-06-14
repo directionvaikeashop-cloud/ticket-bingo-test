@@ -3960,7 +3960,21 @@ def releve_code(code):
     else:
         html += "<p style='color:#8b949e;margin-top:20px'>Aucune transaction</p>"
     
-    html += "</body></html>"
+    html += f"""<br><br><button onclick="telecharger()" style="padding:10px 20px;background:#58a6ff;color:#0d1117;border:none;border-radius:4px;cursor:pointer;font-weight:bold">Telecharger en TXT</button>
+<script>
+function telecharger() {{
+    let text = `Code: {code}
+Nom: {nom_code}
+
+` + Array.from(document.querySelectorAll(\'table tr\')).map(r => r.innerText).join("\n");
+    let blob = new Blob([text], {{type: "text/plain"}});
+    let url = URL.createObjectURL(blob);
+    let a = document.createElement("a");
+    a.href = url;
+    a.download = "releve_{code}.txt";
+    a.click();
+}}
+</script></body></html>"""
     return html
 
 
