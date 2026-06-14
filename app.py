@@ -2367,6 +2367,94 @@ b{color:#fff}
 <div class="pied">Ticket Bingo — L'application des tournois de bingo en Polynésie 🌺<br>Bonne chance, et que les boules soient avec toi !</div>
 </div></body></html>"""
 
+@app.route("/confidentialite")
+def politique_confidentialite():
+    """Page publique : politique de confidentialité (requise pour le Play Store)"""
+    return """<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Politique de confidentialité — Ticket Bingo</title>
+<style>
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; max-width: 800px; margin: 0 auto; padding: 24px; line-height: 1.7; color: #1a1a1a; background: #fff; }
+  h1 { color: #0a6e82; font-size: 26px; border-bottom: 3px solid #1098ad; padding-bottom: 10px; }
+  h2 { color: #0a6e82; font-size: 19px; margin-top: 32px; }
+  p, li { font-size: 15px; }
+  .date { color: #666; font-size: 14px; font-style: italic; }
+  .contact { background: #f0f9fb; border: 1px solid #1098ad; border-radius: 8px; padding: 16px; margin-top: 24px; }
+  a { color: #1098ad; }
+</style>
+</head>
+<body>
+
+<h1>Politique de confidentialité — Ticket Bingo</h1>
+<p class="date">Dernière mise à jour : 14 juin 2026</p>
+
+<p>La présente politique de confidentialité décrit comment l'application <strong>Ticket Bingo</strong>, éditée par <strong>TUKEA IMPORT</strong> (Papeete, Polynésie française), collecte, utilise et protège les informations des personnes qui l'utilisent. En utilisant l'application, vous acceptez les pratiques décrites ci-dessous.</p>
+
+<h2>1. Responsable du traitement</h2>
+<p>Le responsable du traitement des données est :</p>
+<p><strong>TUKEA IMPORT</strong><br>
+Papeete, Polynésie française<br>
+Adresse de contact : <a href="mailto:directionvaikeashop@gmail.com">directionvaikeashop@gmail.com</a></p>
+
+<h2>2. Données que nous collectons</h2>
+<p>Nous collectons uniquement les données nécessaires au fonctionnement de l'application :</p>
+<ul>
+<li><strong>Adresse email</strong> : demandée lors de l'inscription, pour créer et identifier votre compte et vous envoyer les informations liées à votre participation.</li>
+<li><strong>Nom ou pseudonyme</strong> : pour vous identifier au sein des tournois.</li>
+<li><strong>Données de jeu</strong> : votre solde de pions, vos participations aux tournois, vos tickets et l'historique de vos parties.</li>
+<li><strong>Données techniques</strong> : informations de connexion nécessaires au bon fonctionnement et à la sécurité du service.</li>
+</ul>
+
+<h2>3. Utilisation des données</h2>
+<p>Vos données sont utilisées exclusivement pour :</p>
+<ul>
+<li>Créer et gérer votre compte ;</li>
+<li>Vous permettre de participer aux tournois de bingo ;</li>
+<li>Gérer votre solde de pions et vos tickets ;</li>
+<li>Vous contacter au sujet de votre participation ;</li>
+<li>Assurer la sécurité et le bon fonctionnement de l'application.</li>
+</ul>
+<p>Nous ne vendons, ne louons et ne cédons jamais vos données personnelles à des tiers à des fins commerciales.</p>
+
+<h2>4. Paiements</h2>
+<p>Les paiements en ligne sont traités par des prestataires de paiement sécurisés (notamment Stripe). Vos coordonnées bancaires complètes ne sont pas stockées par Ticket Bingo : elles sont traitées directement par le prestataire de paiement, qui applique ses propres normes de sécurité.</p>
+
+<h2>5. Conservation des données</h2>
+<p>Vos données sont conservées tant que votre compte est actif. Vous pouvez demander la suppression de votre compte et de vos données personnelles à tout moment en nous écrivant à l'adresse de contact ci-dessous.</p>
+
+<h2>6. Partage des données</h2>
+<p>Vos données peuvent être partagées uniquement avec :</p>
+<ul>
+<li>Les prestataires techniques qui hébergent et font fonctionner l'application ;</li>
+<li>Le prestataire de paiement, pour traiter les transactions ;</li>
+<li>Les autorités compétentes, si la loi l'exige.</li>
+</ul>
+
+<h2>7. Sécurité</h2>
+<p>Nous mettons en œuvre des mesures techniques et organisationnelles raisonnables pour protéger vos données contre tout accès, modification ou divulgation non autorisés.</p>
+
+<h2>8. Vos droits</h2>
+<p>Conformément à la réglementation applicable, vous disposez d'un droit d'accès, de rectification et de suppression de vos données personnelles. Pour exercer ces droits, contactez-nous à l'adresse indiquée ci-dessous.</p>
+
+<h2>9. Mineurs</h2>
+<p>L'application est réservée aux personnes majeures. Nous ne collectons pas sciemment de données concernant des mineurs.</p>
+
+<h2>10. Modifications de cette politique</h2>
+<p>Nous pouvons mettre à jour cette politique de confidentialité. Toute modification sera publiée sur cette page avec une nouvelle date de mise à jour.</p>
+
+<div class="contact">
+<h2 style="margin-top:0">Nous contacter</h2>
+<p style="margin-bottom:0">Pour toute question concernant cette politique de confidentialité ou vos données personnelles :<br>
+<strong>TUKEA IMPORT</strong><br>
+<a href="mailto:directionvaikeashop@gmail.com">directionvaikeashop@gmail.com</a></p>
+</div>
+
+</body>
+</html>"""
+
 @app.route("/api/organisateur/mes-joueurs")
 def mes_joueurs():
     """ORGANISATEUR — Ses joueurs avec codes, tickets et soldes de pions"""
