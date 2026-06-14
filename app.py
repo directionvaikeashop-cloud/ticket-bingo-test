@@ -1,6 +1,6 @@
 import hashlib, datetime, os, secrets, string, json, base64
 import urllib.request, urllib.parse
-from flask import Flask, request, jsonify, send_from_directory, Response, send_file, g
+from flask import Flask, request, jsonify, send_from_directory, Response, send_file, g, make_response
 try:
     from flask_sock import Sock
     HAS_WEBSOCKET = True
