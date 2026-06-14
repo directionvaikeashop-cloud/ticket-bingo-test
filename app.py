@@ -3962,3 +3962,35 @@ def releve_code(code):
     
     html += "</body></html>"
     return html
+
+
+
+
+@app.route("/releves-all")
+def releves_all():
+    global DB
+    DB = load_data()
+    
+    codes = sorted(DB.get("codes", {}).items(), key=lambda x: x[1].get("nom", ""))
+    
+    html = '''<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Releves</title><style>
+    body{font-family:Arial,sans-serif;background:#0d1117;color:#e6edf3;padding:20px}
+    h1{color:#58a6ff;text-align:center}
+    .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;max-width:1200px;margin:0 auto}
+    .card{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px}
+    .card:hover{border-color:#58a6ff;background:#21262d}
+    .nom{color:#58a6ff;font-weight:bold;font-size:15px;margin-bottom:8px}
+    .code{color:#8b949e;font-family:monospace;font-size:12px;margin-bottom:12px}
+    .badge{display:inline-block;padding:4px 8px;border-radius:4px;font-size:11px;background:#0d1117;color:#3fb950}
+    .link{display:block;margin-top:12px;padding:10px;background:#58a6ff;color:#0d1117;text-decoration:none;border-radius:4px;text-align:center;font-weight:bold}
+    </style></head><body>
+    <h1>Tous les releves</h1>
+    <div class="grid">'''
+    
+    for code, info in codes:
+        nom = info.get("nom", code)
+        badge = "Admin" if info.get("admin") else "Code"
+        html += f'<div class="card"><div class="nom">{nom}</div><div class="code">{code}</div><div class="badge">{badge}</div><a href="/releve/{code}" class="link">Voir</a></div>'
+    
+    html += '</div></body></html>'
+    return html
