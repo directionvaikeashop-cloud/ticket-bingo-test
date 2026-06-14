@@ -211,6 +211,29 @@ def index():
 def manifest():
     return app.send_static_file("manifest.json")
 
+@app.route("/sw.js")
+def service_worker():
+    """Service worker servi directement (rend l'appli installable pour le Play Store)"""
+    sw_code = """// Service Worker — Ticket Bingo
+const CACHE_NOM = 'ticket-bingo-v1';
+self.addEventListener('install', function(event) { self.skipWaiting(); });
+self.addEventListener('activate', function(event) {
+  event.waitUntil(caches.keys().then(function(noms) {
+    return Promise.all(noms.filter(function(nom) { return nom !== CACHE_NOM; })
+      .map(function(nom) { return caches.delete(nom); }));
+  }));
+  self.clients.claim();
+});
+self.addEventListener('fetch', function(event) {
+  if (event.request.url.indexOf('/api/') !== -1) { return; }
+  event.respondWith(
+    fetch(event.request).then(function(reponse) { return reponse; })
+      .catch(function() { return caches.match(event.request); })
+  );
+});
+"""
+    return Response(sw_code, mimetype="application/javascript")
+
 @app.route("/icon-192.png")
 def icon192():
     return app.send_static_file("icon-192.png")
