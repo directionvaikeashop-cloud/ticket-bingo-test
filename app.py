@@ -4003,7 +4003,7 @@ def releves_all():
 @app.route("/releve/<code>/csv")
 def releve_csv(code):
     import csv
-    from io import StringIO
+    from io import StringIO, BytesIO
     
     global DB
     DB = load_data()
