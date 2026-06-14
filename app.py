@@ -3994,3 +3994,141 @@ def releves_all():
     
     html += '</div></body></html>'
     return html
+
+
+@app.route("/releve/<code>/pdf")
+def releve_pdf(code):
+    from reportlab.lib.pagesizes import letter, A4
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from io import BytesIO
+    
+    global DB
+    DB = load_data()
+    
+    if code not in DB.get("codes", {}):
+        return "Code introuvable", 404
+    
+    info_code = DB["codes"][code]
+    nom_code = info_code.get("nom", code)
+    
+    transactions = []
+    
+    try:
+        for pid, p in DB.get("paiements_stripe", {}).items():
+            if isinstance(p, dict) and p.get("code_joueur") == code and p.get("statut") == "valide":
+                transactions.append({
+                    "date": p.get("date", "?")[:10],
+                    "type": "Paiement",
+                    "description": p.get("description", "?"),
+                    "entree": p.get("montant_xpf", 0),
+                    "sortie": 0
+                })
+    except:
+        pass
+    
+    try:
+        for v in DB.get("ventes", []):
+            if isinstance(v, dict) and v.get("code_org") == code:
+                transactions.append({
+                    "date": v.get("date", "?")[:10],
+                    "type": "Vente tickets",
+                    "description": f"{v.get('jeu', '?')} - {v.get('pack', '?')} cartes",
+                    "entree": v.get("total", 0),
+                    "sortie": 0
+                })
+    except:
+        pass
+    
+    try:
+        for cpo in DB.get("commandes_pions_joueurs", []):
+            if isinstance(cpo, dict) and cpo.get("code_joueur") == code:
+                transactions.append({
+                    "date": cpo.get("date", "?")[:10],
+                    "type": "Achat pions",
+                    "description": f"Pack {cpo.get('pack_type', '?')}",
+                    "entree": cpo.get("montant_total_xpf", 0),
+                    "sortie": 0
+                })
+    except:
+        pass
+    
+    transactions.sort(key=lambda x: x["date"], reverse=True)
+    
+    total_e = sum(t["entree"] for t in transactions)
+    total_s = sum(t["sortie"] for t in transactions)
+    solde = total_e - total_s
+    
+    # Creer le PDF
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+    
+    styles = getSampleStyleSheet()
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#58a6ff'),
+        spaceAfter=12,
+        alignment=1
+    )
+    
+    elements = []
+    
+    # Titre
+    elements.append(Paragraph(f"Releve de compte - {code}", title_style))
+    elements.append(Paragraph(f"<b>{nom_code}</b>", styles['Normal']))
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Totaux
+    totaux_data = [
+        ["Entrees", "Sorties", "Solde"],
+        [f"+{total_e:,} XPF", f"-{total_s:,} XPF", f"{solde:,} XPF"]
+    ]
+    totaux_table = Table(totaux_data, colWidths=[2*inch, 2*inch, 2*inch])
+    totaux_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#161b22')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#8b949e')),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, 1), colors.HexColor('#0d1117')),
+        ('TEXTCOLOR', (0, 1), (-1, 1), colors.HexColor('#e6edf3')),
+        ('FONTNAME', (0, 1), (-1, 1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 1), (-1, 1), 11),
+        ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#30363d')),
+    ]))
+    elements.append(totaux_table)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # Transactions
+    if transactions:
+        data = [["Date", "Type", "Description", "Entree", "Sortie"]]
+        for t in transactions:
+            e = f"{t['entree']:,}" if t['entree'] > 0 else ""
+            s = f"{t['sortie']:,}" if t['sortie'] > 0 else ""
+            data.append([t['date'], t['type'], t['description'][:30], e, s])
+        
+        table = Table(data, colWidths=[1.2*inch, 1.2*inch, 2*inch, 1*inch, 1*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#161b22')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#8b949e')),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 8),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 8),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.HexColor('#0d1117')),
+            ('TEXTCOLOR', (0, 1), (-1, -1), colors.HexColor('#e6edf3')),
+            ('FONTSIZE', (0, 1), (-1, -1), 7),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#30363d')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.HexColor('#0d1117'), colors.HexColor('#161b22')]),
+        ]))
+        elements.append(table)
+    
+    doc.build(elements)
+    buffer.seek(0)
+    
+    return send_file(buffer, mimetype='application/pdf', as_attachment=True, download_name=f"releve_{code}.pdf")
