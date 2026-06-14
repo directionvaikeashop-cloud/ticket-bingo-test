@@ -4006,27 +4006,39 @@ def releves_all():
 
 @app.route("/releve/<code>/download")
 def releve_download(code):
-    global DB
-    DB = load_data()
-    
-    if code not in DB.get("codes", {}):
-        return "Code introuvable", 404
-    
-    info = DB["codes"][code]
-    nom = info.get("nom", code)
-    
-    lines = [f"RELEVE DE {code}", f"Nom: {nom}", ""]
-    
-    for v in DB.get("ventes", []):
-        if v.get("code_org") == code:
-            lines.append(f"{v.get('date', '?')[:10]} | Vente {v.get('jeu', '?')} | {v.get('total', 0)} XPF")
-    
-    for p in DB.get("paiements_stripe", {}).values():
-        if p.get("code_joueur") == code and p.get("statut") == "valide":
-            lines.append(f"{p.get('date', '?')[:10]} | Paiement | {p.get('montant_xpf', 0)} XPF")
-    
-    text = "\n".join(lines)
-    response = make_response(text)
-    response.headers["Content-Disposition"] = f"attachment; filename=releve_{code}.txt"
-    response.headers["Content-Type"] = "text/plain; charset=utf-8"
-    return response
+    try:
+        global DB
+        DB = load_data()
+        
+        if code not in DB.get("codes", {}):
+            return "Code introuvable", 404
+        
+        info = DB["codes"][code]
+        nom = info.get("nom", code)
+        
+        lines = ["RELEVE DE " + str(code), "Nom: " + str(nom), ""]
+        
+        ventes = DB.get("ventes", [])
+        if isinstance(ventes, list):
+            for v in ventes:
+                if isinstance(v, dict) and v.get("code_org") == code:
+                    d = str(v.get("date", "?"))[:10]
+                    jeu = str(v.get("jeu", "?"))
+                    total = v.get("total", 0)
+                    lines.append(d + " | Vente " + jeu + " | " + str(total) + " XPF")
+        
+        ps = DB.get("paiements_stripe", {})
+        if isinstance(ps, dict):
+            for p in ps.values():
+                if isinstance(p, dict) and p.get("code_joueur") == code and p.get("statut") == "valide":
+                    d = str(p.get("date", "?"))[:10]
+                    montant = p.get("montant_xpf", 0)
+                    lines.append(d + " | Paiement | " + str(montant) + " XPF")
+        
+        text = "\n".join(lines)
+        response = make_response(text)
+        response.headers["Content-Disposition"] = "attachment; filename=releve_" + str(code) + ".txt"
+        response.headers["Content-Type"] = "text/plain; charset=utf-8"
+        return response
+    except Exception as e:
+        return "Erreur: " + str(e), 500
