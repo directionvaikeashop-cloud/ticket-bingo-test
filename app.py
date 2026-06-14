@@ -213,8 +213,9 @@ ICONE_512_B64 = "iVBORw0KGgoAAAANSUhEUgAAAgAAAAIACAIAAAB7GkOtAAAvt0lEQVR4nO3deZw
 
 @app.route("/manifest.json")
 def manifest():
-    """Manifest avec icones integrees en data URL (lisibles par PWABuilder)"""
+    """Manifest leger : icones servies separement via URL absolue"""
     import json as _json
+    base = "https://ticket-bingo-production.up.railway.app"
     data = {
         "name": "Ticket Bingo",
         "short_name": "Ticket Bingo",
@@ -226,10 +227,10 @@ def manifest():
         "theme_color": "#08090d",
         "lang": "fr",
         "icons": [
-            {"src": "data:image/png;base64," + ICONE_192_B64, "sizes": "192x192", "type": "image/png", "purpose": "any"},
-            {"src": "data:image/png;base64," + ICONE_512_B64, "sizes": "512x512", "type": "image/png", "purpose": "any"},
-            {"src": "data:image/png;base64," + ICONE_192_B64, "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
-            {"src": "data:image/png;base64," + ICONE_512_B64, "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+            {"src": base + "/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+            {"src": base + "/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+            {"src": base + "/icone-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable"},
+            {"src": base + "/icone-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
         ]
     }
     return Response(_json.dumps(data), mimetype="application/manifest+json")
