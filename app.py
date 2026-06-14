@@ -4004,53 +4004,6 @@ def releves_all():
 
 
 
-@app.route("/releve/<code>/txt")
-def releve_txt(code):
-    global DB
-    DB = load_data()
-    
-    if code not in DB.get("codes", {}):
-        return "Code introuvable", 404
-    
-    info_code = DB["codes"][code]
-    nom = info_code.get("nom", code)
-    
-    transactions = []
-    for v in DB.get("ventes", []):
-        if v.get("code_org") == code:
-            transactions.append((v.get("date", "?")[:10], "Vente", v.get("jeu", "?"), v.get("total", 0)))
-    
-    for p in DB.get("paiements_stripe", {}).values():
-        if p.get("code_joueur") == code and p.get("statut") == "valide":
-            transactions.append((p.get("date", "?")[:10], "Paiement", p.get("description", "?"), p.get("montant_xpf", 0)))
-    
-    transactions.sort(reverse=True)
-    total = sum(t[3] for t in transactions)
-    
-    lines = [
-        "RELEVE DE COMPTE",
-        "================",
-        f"Code: {code}",
-        f"Nom: {nom}",
-        f"Total: {total:,} XPF",
-        "",
-        "Date       | Type     | Description            | Montant",
-        "-" * 60
-    ]
-    
-    for date, typ, desc, montant in transactions:
-        lines.append(f"{date} | {typ:8} | {desc[:22]:22} | {montant:,}")
-    
-    text = "\n".join(lines)
-    return send_file(
-        BytesIO(text.encode('utf-8')),
-        mimetype="text/plain",
-        as_attachment=True,
-        attachment_filename=f"releve_{code}.txt"
-    )
-
-
-
 @app.route("/releve/<code>/download")
 def releve_download(code):
     global DB
