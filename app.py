@@ -3960,7 +3960,7 @@ def releve_code(code):
     else:
         html += "<p style='color:#8b949e;margin-top:20px'>Aucune transaction</p>"
     
-    html += f"""<br><br><button style="padding:10px 20px;background:#58a6ff;color:#0d1117;border:none;border-radius:4px;cursor:pointer;font-weight:bold" onclick="let t=document.body.innerText; let b=new Blob([t],{{type:'text/plain'}}); let u=URL.createObjectURL(b); let a=document.createElement('a'); a.href=u; a.download='releve_{code}.txt'; a.click();">Telecharger en TXT</button></body></html>"""
+    html += f"""<br><br><a href="/releve/{code}/download" style="padding:10px 20px;background:#58a6ff;color:#0d1117;border:none;border-radius:4px;cursor:pointer;font-weight:bold;text-decoration:none;display:inline-block">Telecharger en TXT</a></body></html>"""
     return html
 
     return html
@@ -4048,3 +4048,32 @@ def releve_txt(code):
         as_attachment=True,
         attachment_filename=f"releve_{code}.txt"
     )
+
+
+
+@app.route("/releve/<code>/download")
+def releve_download(code):
+    global DB
+    DB = load_data()
+    
+    if code not in DB.get("codes", {}):
+        return "Code introuvable", 404
+    
+    info = DB["codes"][code]
+    nom = info.get("nom", code)
+    
+    lines = [f"RELEVE DE {code}", f"Nom: {nom}", ""]
+    
+    for v in DB.get("ventes", []):
+        if v.get("code_org") == code:
+            lines.append(f"{v.get('date', '?')[:10]} | Vente {v.get('jeu', '?')} | {v.get('total', 0)} XPF")
+    
+    for p in DB.get("paiements_stripe", {}).values():
+        if p.get("code_joueur") == code and p.get("statut") == "valide":
+            lines.append(f"{p.get('date', '?')[:10]} | Paiement | {p.get('montant_xpf', 0)} XPF")
+    
+    text = "\n".join(lines)
+    response = make_response(text)
+    response.headers["Content-Disposition"] = f"attachment; filename=releve_{code}.txt"
+    response.headers["Content-Type"] = "text/plain; charset=utf-8"
+    return response
