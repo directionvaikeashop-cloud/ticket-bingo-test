@@ -3871,140 +3871,94 @@ def releve_code(code):
     DB = load_data()
     
     # Vérifier que le code existe
-    info_code = DB.get("codes", {}).get(code)
-    if not info_code:
+    if code not in DB.get("codes", {}):
         return "<h1>Code introuvable</h1>", 404
     
+    info_code = DB["codes"][code]
     nom_code = info_code.get("nom", code)
     
     transactions = []
     
-    # Paiements Stripe pour ce code
-    for pid, p in DB.get("paiements_stripe", {}).items():
-        if p.get("code_joueur") == code and p.get("statut") == "valide":
-            transactions.append({
-                "date": p.get("date", "?"),
-                "type": "Paiement Stripe",
-                "description": p.get("description", "?"),
-                "montant_entree": p.get("montant_xpf", 0),
-                "montant_sortie": 0
-            })
+    try:
+        # Paiements Stripe
+        for pid, p in DB.get("paiements_stripe", {}).items():
+            if isinstance(p, dict) and p.get("code_joueur") == code and p.get("statut") == "valide":
+                transactions.append({
+                    "date": p.get("date", "?"),
+                    "type": "Paiement",
+                    "description": p.get("description", "?"),
+                    "entree": p.get("montant_xpf", 0),
+                    "sortie": 0
+                })
+    except:
+        pass
     
-    # Ventes de tickets pour ce code organisateur
-    for v in DB.get("ventes", []):
-        if v.get("code_org") == code:
-            transactions.append({
-                "date": v.get("date", "?"),
-                "type": "Vente de tickets",
-                "description": f"{v.get('jeu', '?')} - Pack {v.get('pack', '?')} cartes",
-                "montant_entree": v.get("total", 0),
-                "montant_sortie": 0
-            })
+    try:
+        # Ventes de tickets
+        for v in DB.get("ventes", []):
+            if isinstance(v, dict) and v.get("code_org") == code:
+                transactions.append({
+                    "date": v.get("date", "?"),
+                    "type": "Vente tickets",
+                    "description": f"{v.get('jeu', '?')} - {v.get('pack', '?')} cartes",
+                    "entree": v.get("total", 0),
+                    "sortie": 0
+                })
+    except:
+        pass
     
-    # Commandes de pions pour ce joueur
-    for cpo in DB.get("commandes_pions_joueurs", []):
-        if cpo.get("code_joueur") == code:
-            transactions.append({
-                "date": cpo.get("date", "?"),
-                "type": "Achat de pions",
-                "description": f"Pack {cpo.get('pack_type', '?')}",
-                "montant_entree": cpo.get("montant_total_xpf", 0),
-                "montant_sortie": 0
-            })
+    try:
+        # Commandes pions
+        for cpo in DB.get("commandes_pions_joueurs", []):
+            if isinstance(cpo, dict) and cpo.get("code_joueur") == code:
+                transactions.append({
+                    "date": cpo.get("date", "?"),
+                    "type": "Achat pions",
+                    "description": f"Pack {cpo.get('pack_type', '?')}",
+                    "entree": cpo.get("montant_total_xpf", 0),
+                    "sortie": 0
+                })
+    except:
+        pass
     
-    # Transactions pions pour ce joueur
-    for tp in DB.get("transactions_pions", []):
-        if tp.get("code_joueur") == code:
-            montant = tp.get("montant", 0)
-            transactions.append({
-                "date": tp.get("date", "?"),
-                "type": "Crédit/Débit pions",
-                "description": f"{montant} XPF - {tp.get('raison', '?')}",
-                "montant_entree": montant if tp.get("type") == "achat" else 0,
-                "montant_sortie": montant if tp.get("type") == "retrait" else 0
-            })
-    
-    # Trier par date (plus récent d'abord)
     transactions.sort(key=lambda x: x["date"], reverse=True)
     
-    # Calculer les totaux
-    total_entrees = sum(t["montant_entree"] for t in transactions)
-    total_sorties = sum(t["montant_sortie"] for t in transactions)
-    solde = total_entrees - total_sorties
+    total_e = sum(t["entree"] for t in transactions)
+    total_s = sum(t["sortie"] for t in transactions)
+    solde = total_e - total_s
     
-    # Générer HTML
-    html = f"""<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Relevé {code}</title><style>
-    body{{font-family:'Courier New',monospace;background:#0d1117;color:#e6edf3;padding:20px}}
+    html = f"""<!DOCTYPE html><html><head><meta charset='utf-8'><title>Relevé {code}</title><style>
+    body{{font-family:monospace;background:#0d1117;color:#e6edf3;padding:20px}}
     h1{{color:#58a6ff}}
-    .subtitle{{color:#8b949e;margin:10px 0 30px 0}}
-    .resume{{background:#161b22;border:2px solid #30363d;border-radius:10px;padding:16px;margin:20px 0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center}}
-    .resume-item h3{{color:#3fb950;margin:0;font-size:14px;color:#8b949e}}
-    .resume-item .montant{{font-size:24px;font-weight:bold;font-family:monospace}}
-    .entrees{{color:#3fb950}}
-    .sorties{{color:#f85149}}
-    .solde{{color:#58a6ff}}
-    table{{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;margin-top:20px}}
-    th{{background:#0d1117;border:1px solid #30363d;padding:12px;text-align:left;color:#8b949e;font-weight:bold;font-size:12px}}
-    td{{border:1px solid #30363d;padding:12px;font-size:13px}}
-    tr:nth-child(even){{background:#161b22}}
+    .info{{color:#8b949e;margin:10px 0 30px 0}}
+    .totaux{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin:20px 0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center}}
+    .montant{{font-size:20px;font-weight:bold}}
+    .vert{{color:#3fb950}}
+    .rouge{{color:#f85149}}
+    .bleu{{color:#58a6ff}}
+    table{{width:100%;border-collapse:collapse;margin-top:20px}}
+    th{{background:#0d1117;border:1px solid #30363d;padding:10px;text-align:left;color:#8b949e}}
+    td{{border:1px solid #30363d;padding:10px}}
     tr:hover{{background:#21262d}}
-    .date{{color:#8b949e;width:180px}}
-    .type{{color:#58a6ff;font-weight:bold;width:120px}}
-    .description{{color:#e6edf3}}
-    .montant-entree{{color:#3fb950;text-align:right;width:100px;font-weight:bold}}
-    .montant-sortie{{color:#f85149;text-align:right;width:100px;font-weight:bold}}
     </style></head><body>
-    <h1>📊 Relevé de compte</h1>
-    <div class='subtitle'>Code: <strong>{code}</strong> | Nom: <strong>{nom_code}</strong></div>
-    <div class='resume'>
-        <div class='resume-item'>
-            <h3>Entrées</h3>
-            <div class='montant entrees'>+{total_entrees:,} XPF</div>
-        </div>
-        <div class='resume-item'>
-            <h3>Sorties</h3>
-            <div class='montant sorties'>-{total_sorties:,} XPF</div>
-        </div>
-        <div class='resume-item'>
-            <h3>Solde</h3>
-            <div class='montant solde'>{solde:,} XPF</div>
-        </div>
+    <h1>Relevé de {code}</h1>
+    <div class='info'>{nom_code}</div>
+    <div class='totaux'>
+        <div><strong>Entrées</strong><br><span class='montant vert'>+{total_e:,} XPF</span></div>
+        <div><strong>Sorties</strong><br><span class='montant rouge'>-{total_s:,} XPF</span></div>
+        <div><strong>Solde</strong><br><span class='montant bleu'>{solde:,} XPF</span></div>
     </div>
     """
     
     if transactions:
-        html += """<table>
-            <thead>
-                <tr>
-                    <th class='date'>Date</th>
-                    <th class='type'>Type</th>
-                    <th class='description'>Description</th>
-                    <th class='montant-entree'>+ Entrée</th>
-                    <th class='montant-sortie'>- Sortie</th>
-                </tr>
-            </thead>
-            <tbody>
-        """
-        
+        html += "<table><tr><th>Date</th><th>Type</th><th>Description</th><th>Entrée</th><th>Sortie</th></tr>"
         for t in transactions:
-            e = f"{t['montant_entree']:,}" if t['montant_entree'] > 0 else ""
-            s = f"{t['montant_sortie']:,}" if t['montant_sortie'] > 0 else ""
-            html += f"""<tr>
-                <td class='date'>{t['date'][:16]}</td>
-                <td class='type'>{t['type']}</td>
-                <td class='description'>{t['description']}</td>
-                <td class='montant-entree'>{e}</td>
-                <td class='montant-sortie'>{s}</td>
-            </tr>"""
-        
-        html += """</tbody></table>"""
+            e = f"{t['entree']:,}" if t['entree'] > 0 else ""
+            s = f"{t['sortie']:,}" if t['sortie'] > 0 else ""
+            html += f"<tr><td>{t['date'][:16]}</td><td>{t['type']}</td><td>{t['description']}</td><td>{e}</td><td>{s}</td></tr>"
+        html += "</table>"
     else:
-        html += "<p style='color:#8b949e;margin-top:20px'>Aucune transaction pour ce code.</p>"
+        html += "<p style='color:#8b949e;margin-top:20px'>Aucune transaction</p>"
     
     html += "</body></html>"
     return html
-
-
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
