@@ -2475,9 +2475,43 @@ def publier_message_admin():
     save_data()
     return jsonify({"ok": True, "actif": bool(texte)})
 
+def _code_acces_valide(code):
+    """Verifie qu'un code existe et est actif (organisateur, admin ou joueuse)."""
+    if not code:
+        return False
+    code = code.upper().strip()
+    # Code organisateur / admin / revendeur
+    info = DB.get("codes", {}).get(code)
+    if info and info.get("actif"):
+        return True
+    # Code joueuse (dans les tickets)
+    if code in DB.get("tickets_acheteurs", {}):
+        return True
+    for t in DB.get("tickets", []):
+        if t.get("code_acheteur", "").upper() == code:
+            return True
+    return False
+
+
+def _page_acces_refuse():
+    """Page affichee quand on tente d'acceder a un guide sans code valide."""
+    return """<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Acces reserve</title>
+<style>body{font-family:sans-serif;background:linear-gradient(135deg,#0d1117,#1a1f2e);color:#e6edf3;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;padding:20px}
+.box{background:#161b22;border:1px solid #30363d;border-radius:16px;padding:32px;max-width:400px;text-align:center}
+h1{color:#f59e0b;font-size:22px}p{color:#8b949e;line-height:1.6}
+.cta{display:inline-block;margin-top:16px;padding:12px 24px;background:#58a6ff;color:#0d1117;text-decoration:none;border-radius:8px;font-weight:bold}</style></head>
+<body><div class="box"><div style="font-size:48px">🔒</div><h1>Acces reserve</h1>
+<p>Ce guide est reserve aux membres de Ticket Bingo. Connectez-vous avec votre code pour y acceder.</p>
+<a class="cta" href="https://ticket-bingo-production.up.railway.app">Se connecter</a></div></body></html>"""
+
+
 @app.route("/guide")
 def guide_organisateur():
-    """Page publique : guide de l'organisateur (partageable sur Facebook)"""
+    """Guide de l'organisateur — reserve aux personnes avec un code valide."""
+    global DB
+    DB = load_data()
+    if not _code_acces_valide(request.args.get("code", "")):
+        return _page_acces_refuse()
     return """<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Guide de l'Organisateur — Ticket Bingo</title>
@@ -2566,7 +2600,11 @@ b{color:#fff}
 
 @app.route("/guide-joueur")
 def guide_joueur():
-    """Page publique : guide de la joueuse (partageable sur Facebook)"""
+    """Guide de la joueuse — reserve aux personnes avec un code valide."""
+    global DB
+    DB = load_data()
+    if not _code_acces_valide(request.args.get("code", "")):
+        return _page_acces_refuse()
     return """<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Guide du Joueur — Ticket Bingo</title>
