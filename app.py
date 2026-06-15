@@ -2413,6 +2413,13 @@ b{color:#fff}
 <div class="card"><h2>6. 🔄 Après le tournoi</h2>
 <p>Rien d'obligatoire ! Repartez de l'étape 3 : annoncez, encaissez, redistribuez. Le « Reset tournoi » efface tirage et alertes si besoin — <b>les codes et les pions de vos joueuses ne sont jamais touchés</b>.</p></div>
 
+<div class="card"><h2>7. 💵 Rembourser les pions en argent</h2>
+<p>En fin de tournoi, une joueuse peut vouloir convertir ses pions restants en argent. Elle fait sa demande depuis son espace, et vous la traitez dans votre onglet <b>🪙 Pions</b> → section <b>« Demandes de retrait des joueuses »</b>.</p>
+<p>Vous voyez pour chaque demande : la joueuse, le montant, le mode, et le net à remettre :</p>
+<p>⭕ <b>Cash</b> : vous remettez 100% du montant (0% de frais)<br>
+⭕ <b>Virement</b> : 5% de frais, vous virez le net (ses coordonnées s'affichent)</p>
+<p>⭐ <b>IMPORTANT</b> : les pions ne sont retirés de son compte <b>qu'au moment où vous cliquez « Valider »</b>. C'est votre confirmation qui déclenche le retrait — vous remettez l'argent ensuite. Tout est tracé en cas de litige.</p></div>
+
 <div class="card"><h2>✅ Check-list avant chaque tournoi</h2>
 <div class="check"><span class="num">1</span>Mon jeu PDF est commandé et reçu</div>
 <div class="check"><span class="num">2</span>Le jeu est annoncé avec le prix du ticket</div>
@@ -2482,6 +2489,14 @@ b{color:#fff}
 
 <div class="card"><h2>5. 🏆 BINGO !</h2>
 <p>Ta ligne est complète ? Appuie sur le bouton <b>BINGO</b> ! Ton organisateur reçoit l'alerte avec ton ticket, vérifie tes numéros, et valide ta victoire. C'est lui qui te remet tes gains <b>EN PIONS</b>. 🎉</p></div>
+
+<div class="card"><h2>6. 💵 Retirer tes pions en argent</h2>
+<p>En fin de tournoi, tu peux convertir tes pions en argent ! Dans ton espace <b>🪙 Pions</b>, bouton <b>« Retirer mes pions en argent »</b> :</p>
+<p>Choisis ton montant et ton mode :</p>
+<p>⭕ <b>Cash</b> : tu reçois 100% (0% de frais)<br>
+⭕ <b>Virement</b> : 5% de frais (CCP, BT ou Deblock)</p>
+<p>Tu envoies ta demande à ton organisateur. <b>Tes pions ne sont retirés qu'une fois qu'il valide</b> — ensuite il te remet ton argent. 💰</p>
+<div class="astuce">💡 Le calcul s'affiche en direct : tu vois exactement combien tu vas recevoir avant d'envoyer ta demande.</div></div>
 
 <a class="cta" href="https://ticket-bingo-production.up.railway.app">🎱 Jouer maintenant sur Ticket Bingo</a>
 <div class="pied">Ticket Bingo — L'application des tournois de bingo en Polynésie 🌺<br>Bonne chance, et que les boules soient avec toi !</div>
@@ -4622,5 +4637,3 @@ def refuser_retrait():
             save_data()
             return jsonify({"ok": True})
     return jsonify({"ok": False, "msg": "Demande introuvable"}), 404
-
-
