@@ -165,6 +165,24 @@ def save_data():
 
 DB = load_data()
 
+# ============================================
+# REGLE UNIQUE DES FRAIS DE SERVICE
+# 5% sur tout paiement electronique (carte, virement, deblock, ccp, bt)
+# 0% sur especes (cash)
+# ============================================
+def calculer_frais_service(montant, mode_paiement):
+    """Retourne le montant des frais de service selon le mode de paiement."""
+    try:
+        montant = float(montant)
+    except (ValueError, TypeError):
+        montant = 0
+    mode = str(mode_paiement or "").lower()
+    # Especes / cash = 0% de frais
+    if any(x in mode for x in ["espece", "espèce", "cash", "liquide", "comptant"]):
+        return 0
+    # Tout le reste (carte, virement, deblock, ccp, bt) = 5%
+    return round(montant * 0.05)
+
 def gen_code(n=8):
     return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(n))
 
@@ -407,13 +425,9 @@ def nouvelle_vente():
     if not d.get("client") or not d.get("jeu") or not d.get("serie"):
         return jsonify({"ok": False, "msg": "Champs manquants"}), 400
     total = int(d.get("qty", 1)) * int(d.get("prix", 0))
-    # FRAIS DE SERVICE : 5% sur Carte/Virement, 0% sur Especes (comme les pions)
+    # FRAIS DE SERVICE : 5% electronique, 0% especes (regle centrale)
     mode_paiement = str(d.get("mode_paiement", "Carte"))
-    mode_bas = mode_paiement.lower()
-    if any(x in mode_bas for x in ["espece", "espèce", "cash", "liquide"]):
-        frais_service = 0
-    else:
-        frais_service = round(total * 0.05)
+    frais_service = calculer_frais_service(total, mode_paiement)
     montant_net = total - frais_service
     token_doc = secrets.token_hex(16)
     tournoi_id = d.get("tournoi_id", "")
@@ -1128,12 +1142,18 @@ def passer_commande():
     pack = int(d.get("pack", 0))
     prix = int(d.get("prix", 0))
     serie = d.get("serie", "1")
+    mode_paiement = str(d.get("mode_paiement", "Carte"))
     
     if not jeu or not pack:
         return jsonify({"ok": False, "msg": "Champs manquants"}), 400
     
     if "commandes_tickets" not in DB:
         DB["commandes_tickets"] = []
+    
+    # FRAIS DE SERVICE : 5% electronique, 0% especes
+    total_commande = prix * pack if prix else 0
+    frais_service = calculer_frais_service(total_commande, mode_paiement)
+    montant_net = total_commande - frais_service
     
     commande = {
         "id": secrets.token_hex(4).upper(),
@@ -1143,6 +1163,10 @@ def passer_commande():
         "pack": pack,
         "prix": prix,
         "serie": serie,
+        "mode_paiement": mode_paiement,
+        "total": total_commande,
+        "frais_service": frais_service,
+        "montant_net": montant_net,
         "statut": "en_attente",
         "date": datetime.datetime.now().isoformat()
     }
@@ -4110,4 +4134,3 @@ def releve_download(code):
         return response
     except Exception as e:
         return "Erreur: " + str(e), 500
-
