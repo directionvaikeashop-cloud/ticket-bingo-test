@@ -395,6 +395,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       <select id="joueur-pion-mode" style="margin-bottom:8px">
         <option value="">Choisir le mode de paiement...</option>
         <option value="CCP">CCP Papeete</option>
+        <option value="BT">BT — Banque de Tahiti</option>
         <option value="Deblock">Deblock</option>
         <option value="Especes Papeete">Espèces — Boutique Papeete</option>
         <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
@@ -916,6 +917,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       <select id="joueur-pion-mode" style="margin-bottom:8px">
         <option value="">Choisir...</option>
         <option value="CCP">CCP Papeete</option>
+        <option value="BT">BT — Banque de Tahiti</option>
         <option value="Deblock">Deblock</option>
         <option value="Especes Papeete">Espèces — Boutique Papeete</option>
         <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
@@ -1830,6 +1832,7 @@ function buildOrgSpace(){
       <select id="pion-mode-paiement" style="margin-bottom:8px">
         <option value="">Choisir le mode de paiement...</option>
         <option value="CCP">CCP Papeete</option>
+        <option value="BT">BT — Banque de Tahiti</option>
         <option value="Deblock">Deblock</option>
         <option value="Especes Papeete">Espèces — Boutique Papeete</option>
         <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
@@ -4354,7 +4357,10 @@ function selValeurPionJoueur(val, el){
 
 // Taux de commission : 2% par CARTE, 20% pour les autres modes
 function tauxCommissionPions(mode){
-  return (mode === 'Carte') ? 0.02 : 0.20;
+  var m = (mode || '').toLowerCase();
+  // Espèces (boutique) = 0%, tout paiement électronique (Carte, CCP, Deblock, BT) = 5%
+  if(m.indexOf('espece') >= 0 || m.indexOf('espèce') >= 0 || m.indexOf('cash') >= 0) return 0;
+  return 0.05;
 }
 
 function calcPionsJoueur(){
