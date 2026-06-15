@@ -4637,3 +4637,66 @@ def refuser_retrait():
             save_data()
             return jsonify({"ok": True})
     return jsonify({"ok": False, "msg": "Demande introuvable"}), 404
+
+
+
+@app.route("/api/admin/fusionner-codes", methods=["POST"])
+def fusionner_codes():
+    """ADMIN — Fusionne deux codes organisateur : transfere TOUT du code source vers le code cible."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    
+    d = request.json
+    source = (d.get("source") or "").upper().strip()
+    cible = (d.get("cible") or "").upper().strip()
+    
+    if not source or not cible:
+        return jsonify({"ok": False, "msg": "Codes manquants"}), 400
+    if source == cible:
+        return jsonify({"ok": False, "msg": "Les deux codes sont identiques"}), 400
+    
+    rapport = {"pions_org": 0, "transactions": 0}
+    
+    # 1. Transferer le STOCK DE PIONS de l'organisateur (pions_org)
+    if source in DB.get("pions_org", {}):
+        DB.setdefault("pions_org", {})
+        DB["pions_org"].setdefault(cible, {})
+        for valeur, nb in DB["pions_org"][source].items():
+            DB["pions_org"][cible][valeur] = DB["pions_org"][cible].get(valeur, 0) + nb
+            rapport["pions_org"] += nb
+        del DB["pions_org"][source]
+    
+    # 2. Transferer les pions legacy (DB["pions"]) si present
+    if source in DB.get("pions", {}):
+        DB.setdefault("pions", {})
+        try:
+            DB["pions"][cible] = DB["pions"].get(cible, 0) + DB["pions"][source]
+        except TypeError:
+            pass
+        del DB["pions"][source]
+    
+    # 3. Remplacer code_org == source par cible dans TOUTES les collections (listes de dicts)
+    for cle, valeur in DB.items():
+        if isinstance(valeur, list):
+            for item in valeur:
+                if isinstance(item, dict) and item.get("code_org") == source:
+                    item["code_org"] = cible
+                    rapport["transactions"] += 1
+    
+    # 4. Desactiver l'ancien code (on le garde pour l'historique mais inaccessible)
+    if source in DB.get("codes", {}):
+        DB["codes"][source]["actif"] = False
+        DB["codes"][source]["fusionne_vers"] = cible
+    
+    save_data()
+    return jsonify({
+        "ok": True,
+        "msg": f"Fusion réussie : {rapport['pions_org']} pions et {rapport['transactions']} opérations transférés de {source} vers {cible}. L'ancien code {source} a été désactivé.",
+        "rapport": rapport
+    })
+
+
