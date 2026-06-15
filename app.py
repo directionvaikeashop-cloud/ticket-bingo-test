@@ -5439,3 +5439,116 @@ def diagnostic_stripe():
     
     html += "</body></html>"
     return html
+
+
+
+@app.route("/api/admin/stripe-auto-credit", methods=["POST"])
+def stripe_auto_credit():
+    """ADMIN — Credite AUTOMATIQUEMENT tous les paiements Stripe en attente (joueurs + organisateurs).
+    Idempotent : ne credite jamais deux fois. Se declenche au chargement de l'admin."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False}), 403
+    if not stripe or not STRIPE_SECRET_KEY:
+        return jsonify({"ok": False, "msg": "Stripe non configuré"}), 503
+    
+    try:
+        if "stripe_credites" not in DB:
+            DB["stripe_credites"] = []
+        deja = set(DB["stripe_credites"])
+        # Refs deja enregistrees par le webhook (eviter doublons)
+        refs_webhook = set()
+        for c in DB.get("commandes_pions_joueurs", []):
+            if c.get("ref_paiement"):
+                refs_webhook.add(str(c["ref_paiement"]))
+        for c in DB.get("commandes_pions", []):
+            if c.get("ref_paiement"):
+                refs_webhook.add(str(c["ref_paiement"]))
+        
+        reponse = stripe.checkout.Session.list(limit=100)
+        try:
+            sessions = list(reponse.auto_paging_iter())
+        except Exception:
+            sessions = list(getattr(reponse, "data", []) or [])
+        
+        credites = []
+        for sess in sessions:
+            try:
+                if hasattr(sess, "to_dict_recursive"):
+                    d = sess.to_dict_recursive()
+                elif hasattr(sess, "to_dict"):
+                    d = sess.to_dict()
+                else:
+                    d = dict(sess)
+                if d.get("payment_status") != "paid":
+                    continue
+                meta = d.get("metadata") or {}
+                if not isinstance(meta, dict):
+                    meta = dict(meta)
+                type_p = meta.get("type", "")
+                if type_p not in ["pions", "pions_joueur", "pions_org"]:
+                    continue
+                sid = str(d.get("id", ""))
+                # Anti-doublon
+                if sid in deja or sid[:24] in refs_webhook:
+                    continue
+                
+                code = str(meta.get("code") or meta.get("code_org") or "").upper().strip()
+                montant = int(d.get("amount_total") or 0)
+                nb_pions_meta = int(meta.get("nb_pions", 0) or 0)
+                valeur = _deduire_valeur_pion(montant, nb_pions_meta, meta.get("valeur_pion"))
+                if not code or montant <= 0:
+                    continue
+                
+                # Calcul 5% de frais de service
+                frais = round(montant * 0.05)
+                net = montant - frais
+                pions_credites = max(1, net // int(valeur))
+                valeur_str = str(valeur)
+                
+                # Crediter selon le type
+                if type_p == "pions_org":
+                    DB.setdefault("pions_org", {})
+                    DB["pions_org"].setdefault(code, {})
+                    DB["pions_org"][code][valeur_str] = DB["pions_org"][code].get(valeur_str, 0) + pions_credites
+                    DB.setdefault("commandes_pions", [])
+                    DB["commandes_pions"].insert(0, {
+                        "id": secrets.token_hex(4).upper(), "code_org": code, "nom_org": code,
+                        "valeur_pion": int(valeur), "montant_paye": montant, "frais_service": frais,
+                        "montant_net": net, "nb_pions": pions_credites,
+                        "mode_paiement": "Carte (Stripe) — auto", "ref_paiement": sid[:24],
+                        "statut": "validee", "date": datetime.datetime.now().isoformat()
+                    })
+                else:
+                    DB.setdefault("pions_joueurs", {})
+                    DB["pions_joueurs"].setdefault(code, {})
+                    DB["pions_joueurs"][code][valeur_str] = DB["pions_joueurs"][code].get(valeur_str, 0) + pions_credites
+                    DB.setdefault("commandes_pions_joueurs", [])
+                    DB["commandes_pions_joueurs"].insert(0, {
+                        "id": secrets.token_hex(4).upper(), "code_joueur": code,
+                        "valeur_pion": int(valeur), "montant_paye": montant, "frais_service": frais,
+                        "montant_net": net, "pions_credites": pions_credites,
+                        "mode_paiement": "Carte (Stripe) — auto", "ref_paiement": sid[:24],
+                        "statut": "validee", "date": datetime.datetime.now().isoformat()
+                    })
+                
+                DB["stripe_credites"].append(sid)
+                credites.append({"code": code, "pions": pions_credites, "valeur": int(valeur), "montant": montant})
+                # Email accuse de reception
+                _notifier_admin_stripe(f"Pions crédités (auto) — {code}",
+                    f"{pions_credites} pions de {valeur} XPF crédités automatiquement", montant)
+            except Exception as e_item:
+                print(f"[AUTO-CREDIT ITEM ERR] {e_item}")
+                continue
+        
+        if credites:
+            save_data()
+        return jsonify({"ok": True, "credites": credites, "nb": len(credites)})
+    except Exception as e:
+        print(f"[AUTO-CREDIT ERR] {e}")
+        return jsonify({"ok": False, "msg": str(e)}), 500
+
+
