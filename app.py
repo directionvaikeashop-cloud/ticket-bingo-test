@@ -5439,5 +5439,3 @@ def diagnostic_stripe():
     
     html += "</body></html>"
     return html
-
-
