@@ -5630,5 +5630,3 @@ def supprimer_tournoi_programme():
         save_data()
         return jsonify({"ok": True})
     return jsonify({"ok": False, "msg": "Tournoi introuvable"}), 404
-
-
