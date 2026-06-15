@@ -5100,3 +5100,115 @@ def page_journal_connexions():
     return html
 
 
+
+@app.route("/tous-les-codes")
+def page_tous_les_codes():
+    """Page admin : liste COMPLETE de tous les codes (admin, organisateurs, revendeurs, joueuses)."""
+    global DB
+    DB = load_data()
+    
+    admins = []
+    organisateurs = []
+    revendeurs = []
+    for code, info in DB.get("codes", {}).items():
+        if not isinstance(info, dict):
+            continue
+        actif = info.get("actif", False)
+        ligne = {
+            "code": code,
+            "nom": info.get("nom", "?"),
+            "email": info.get("email", ""),
+            "actif": actif,
+            "fusionne": info.get("fusionne_vers", "")
+        }
+        if info.get("admin"):
+            admins.append(ligne)
+        elif info.get("role") == "revendeur":
+            ligne["code_org"] = info.get("code_org", "")
+            revendeurs.append(ligne)
+        else:
+            organisateurs.append(ligne)
+    
+    # Joueuses : depuis les tickets (uniques par code_acheteur)
+    joueuses = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict):
+            cj = t.get("code_acheteur", "")
+            if cj and cj not in joueuses:
+                pj = DB.get("pions_joueurs", {}).get(cj, {})
+                solde = 0
+                for v, nb in pj.items():
+                    try:
+                        solde += int(v) * nb
+                    except (ValueError, TypeError):
+                        pass
+                bloque = cj in DB.get("codes_bloques", [])
+                joueuses[cj] = {
+                    "code": cj,
+                    "nom": t.get("acheteur", "Joueuse"),
+                    "org": t.get("code_org", ""),
+                    "solde": solde,
+                    "bloque": bloque
+                }
+    liste_joueuses = sorted(joueuses.values(), key=lambda x: str(x["nom"]))
+    
+    def badge(actif, bloque=False, fusionne=""):
+        if bloque:
+            return "<span style='color:#f59e0b'>🚫 Bloqué</span>"
+        if fusionne:
+            return "<span style='color:#8b949e'>🔗 Fusionné → " + fusionne + "</span>"
+        return "<span style='color:#3fb950'>✅ Actif</span>" if actif else "<span style='color:#f85149'>❌ Inactif</span>"
+    
+    html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Tous les codes</title><style>"
+    html += "body{font-family:monospace;background:#0d1117;color:#e6edf3;padding:20px}h1{color:#58a6ff}h2{color:#818cf8;margin-top:30px;border-bottom:1px solid #30363d;padding-bottom:6px}"
+    html += ".totaux{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin:20px 0;display:grid;grid-template-columns:repeat(4,1fr);gap:12px;text-align:center}"
+    html += ".m{font-size:22px;font-weight:bold;color:#3fb950}"
+    html += "table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}"
+    html += "th{background:#0d1117;border:1px solid #30363d;padding:8px;text-align:left;color:#8b949e}"
+    html += "td{border:1px solid #30363d;padding:8px}tr:hover{background:#21262d}"
+    html += ".code{color:#818cf8;font-weight:bold}</style></head><body>"
+    html += "<h1>📋 Tous les codes</h1>"
+    html += "<div class='totaux'>"
+    html += "<div><strong>Admin</strong><br><span class='m'>" + str(len(admins)) + "</span></div>"
+    html += "<div><strong>Organisateurs</strong><br><span class='m'>" + str(len(organisateurs)) + "</span></div>"
+    html += "<div><strong>Revendeurs</strong><br><span class='m'>" + str(len(revendeurs)) + "</span></div>"
+    html += "<div><strong>Joueuses</strong><br><span class='m'>" + str(len(liste_joueuses)) + "</span></div>"
+    html += "</div>"
+    
+    # ADMIN
+    html += "<h2>🔑 Administrateur</h2><table><tr><th>Code</th><th>Nom</th><th>Statut</th></tr>"
+    for a in admins:
+        html += "<tr><td class='code'>" + a["code"] + "</td><td>" + str(a["nom"]) + "</td><td>" + badge(a["actif"]) + "</td></tr>"
+    html += "</table>"
+    
+    # ORGANISATEURS
+    html += "<h2>🎪 Organisateurs</h2>"
+    if organisateurs:
+        html += "<table><tr><th>Code</th><th>Nom</th><th>Email</th><th>Statut</th></tr>"
+        for o in organisateurs:
+            html += "<tr><td class='code'>" + o["code"] + "</td><td>" + str(o["nom"]) + "</td><td>" + str(o["email"] or "-") + "</td><td>" + badge(o["actif"], False, o["fusionne"]) + "</td></tr>"
+        html += "</table>"
+    else:
+        html += "<p style='color:#8b949e'>Aucun organisateur.</p>"
+    
+    # REVENDEURS
+    if revendeurs:
+        html += "<h2>🛒 Revendeurs</h2><table><tr><th>Code</th><th>Nom</th><th>Organisateur</th><th>Statut</th></tr>"
+        for r in revendeurs:
+            html += "<tr><td class='code'>" + r["code"] + "</td><td>" + str(r["nom"]) + "</td><td>" + str(r.get("code_org", "-")) + "</td><td>" + badge(r["actif"]) + "</td></tr>"
+        html += "</table>"
+    
+    # JOUEUSES
+    html += "<h2>🎮 Joueuses</h2>"
+    if liste_joueuses:
+        html += "<table><tr><th>Code</th><th>Nom</th><th>Organisateur</th><th>Solde pions</th><th>Statut</th></tr>"
+        for j in liste_joueuses:
+            html += "<tr><td class='code'>" + j["code"] + "</td><td>" + str(j["nom"]) + "</td><td>" + str(j["org"] or "-") + "</td><td>" + format(j["solde"], ",") + " XPF</td><td>" + badge(True, j["bloque"]) + "</td></tr>"
+        html += "</table>"
+    else:
+        html += "<p style='color:#8b949e'>Aucune joueuse.</p>"
+    
+    html += "</body></html>"
+    return html
+
+
