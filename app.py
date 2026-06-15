@@ -5552,3 +5552,83 @@ def stripe_auto_credit():
         return jsonify({"ok": False, "msg": str(e)}), 500
 
 
+
+# ============================================
+# MODE TOURNOI PROGRAMME (date + heure + compte a rebours)
+# ============================================
+
+@app.route("/api/tournoi-programme/creer", methods=["POST"])
+def creer_tournoi_programme():
+    """L'organisateur programme un tournoi a l'avance (date + heure)."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    d = request.json
+    nom = str(d.get("nom", "")).strip()
+    jeu = str(d.get("jeu", "")).strip()
+    date_heure = str(d.get("date_heure", "")).strip()
+    if not nom or not date_heure:
+        return jsonify({"ok": False, "msg": "Nom et date/heure obligatoires"}), 400
+    
+    if "tournois_programmes" not in DB:
+        DB["tournois_programmes"] = []
+    
+    tournoi = {
+        "id": secrets.token_hex(4).upper(),
+        "code_org": s["code"],
+        "nom_org": s.get("nom", s["code"]),
+        "nom": nom,
+        "jeu": jeu,
+        "date_heure": date_heure,
+        "created": datetime.datetime.now().isoformat()
+    }
+    DB["tournois_programmes"].insert(0, tournoi)
+    save_data()
+    return jsonify({"ok": True, "tournoi": tournoi})
+
+
+@app.route("/api/tournois-programmes")
+def get_tournois_programmes():
+    """Liste les tournois programmes a venir (tous organisateurs). Nettoie les tournois passes depuis +6h."""
+    global DB
+    DB = load_data()
+    maintenant = datetime.datetime.now()
+    limite = maintenant - datetime.timedelta(hours=6)
+    a_venir = []
+    for t in DB.get("tournois_programmes", []):
+        if not isinstance(t, dict):
+            continue
+        try:
+            dt = datetime.datetime.fromisoformat(t.get("date_heure", "").replace("Z", ""))
+            # Garder si le tournoi n'est pas termine depuis plus de 6h
+            if dt > limite:
+                a_venir.append(t)
+        except (ValueError, TypeError):
+            a_venir.append(t)  # Si date illisible, on garde par securite
+    # Trier par date (le plus proche en premier)
+    a_venir.sort(key=lambda x: str(x.get("date_heure", "")))
+    return jsonify(a_venir)
+
+
+@app.route("/api/tournoi-programme/supprimer", methods=["POST"])
+def supprimer_tournoi_programme():
+    """L'organisateur (ou admin) supprime un tournoi programme."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    tid = request.json.get("id", "")
+    avant = len(DB.get("tournois_programmes", []))
+    DB["tournois_programmes"] = [t for t in DB.get("tournois_programmes", [])
+                                  if not (t.get("id") == tid and (s.get("admin") or t.get("code_org") == s["code"]))]
+    if len(DB["tournois_programmes"]) < avant:
+        save_data()
+        return jsonify({"ok": True})
+    return jsonify({"ok": False, "msg": "Tournoi introuvable"}), 404
+
+
