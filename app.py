@@ -4774,3 +4774,83 @@ def ventes_tickets_org(code):
     
     html += "</body></html>"
     return html
+
+
+
+@app.route("/codes-emis/<code_org>")
+def codes_emis_org(code_org):
+    """Releve de controle : tous les codes joueurs crees par un organisateur, avec dates.
+    Permet de verifier en cas de conflit si un organisateur dit la verite."""
+    global DB
+    DB = load_data()
+    code_org = code_org.upper().strip()
+    
+    nom_org = code_org
+    if code_org in DB.get("codes", {}):
+        nom_org = DB["codes"][code_org].get("nom", code_org)
+    
+    # Regrouper par code joueur (un code peut avoir plusieurs tickets)
+    joueurs = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_org") == code_org:
+            cj = t.get("code_acheteur", "?")
+            if not cj:
+                continue
+            date = t.get("date", "?")
+            if cj not in joueurs:
+                joueurs[cj] = {
+                    "code": cj,
+                    "nom": t.get("acheteur", "Joueuse"),
+                    "email": t.get("email", ""),
+                    "date_creation": date,
+                    "nb_tickets": 0
+                }
+            joueurs[cj]["nb_tickets"] += 1
+            # Garder la date la plus ancienne (creation)
+            if str(date) < str(joueurs[cj]["date_creation"]):
+                joueurs[cj]["date_creation"] = date
+    
+    liste = list(joueurs.values())
+    liste.sort(key=lambda x: str(x["date_creation"]), reverse=True)
+    
+    # Solde de pions actuel de chaque joueuse
+    for j in liste:
+        pj = DB.get("pions_joueurs", {}).get(j["code"], {})
+        solde = 0
+        for v, nb in pj.items():
+            try:
+                solde += int(v) * nb
+            except (ValueError, TypeError):
+                pass
+        j["solde"] = solde
+    
+    html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Codes emis</title><style>"
+    html += "body{font-family:monospace;background:#0d1117;color:#e6edf3;padding:20px}h1{color:#58a6ff}"
+    html += ".sub{color:#8b949e;margin-bottom:20px}"
+    html += ".totaux{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin:20px 0;text-align:center}"
+    html += ".m{font-size:24px;font-weight:bold;color:#3fb950}"
+    html += "table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}"
+    html += "th{background:#0d1117;border:1px solid #30363d;padding:10px;text-align:left;color:#8b949e}"
+    html += "td{border:1px solid #30363d;padding:8px}tr:hover{background:#21262d}"
+    html += ".code{color:#818cf8;font-weight:bold}.date{color:#f59e0b}</style></head><body>"
+    html += "<h1>Codes joueurs emis</h1>"
+    html += "<div class='sub'>Par " + str(nom_org) + " (" + code_org + ") &mdash; controle anti-conflit</div>"
+    html += "<div class='totaux'><strong>Codes joueurs crees par cet organisateur</strong><br><span class='m'>" + str(len(liste)) + "</span></div>"
+    
+    if liste:
+        html += "<table><tr><th>Code joueuse</th><th>Nom</th><th>Date de creation</th><th>Tickets</th><th>Solde pions</th></tr>"
+        for j in liste:
+            html += "<tr><td class='code'>" + str(j["code"]) + "</td>"
+            html += "<td>" + str(j["nom"]) + "</td>"
+            html += "<td class='date'>" + str(j["date_creation"])[:16].replace("T", " ") + "</td>"
+            html += "<td>" + str(j["nb_tickets"]) + "</td>"
+            html += "<td>" + format(j["solde"], ",") + " XPF</td></tr>"
+        html += "</table>"
+        html += "<p style='color:#8b949e;font-size:12px;margin-top:16px'>Ce releve liste UNIQUEMENT les codes reellement crees par cet organisateur dans le systeme, avec leur date exacte. En cas de litige, c'est la preuve de ce qui a ete emis.</p>"
+    else:
+        html += "<p style='color:#8b949e;margin-top:20px'>Cet organisateur n'a cree aucun code joueur.</p>"
+    
+    html += "</body></html>"
+    return html
+
+
