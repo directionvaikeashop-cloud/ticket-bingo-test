@@ -1900,6 +1900,7 @@ function buildOrgSpace(){
       <button onclick="donnerPionsJoueur()" style="width:100%;padding:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🎁 Donner les pions</button>
       <button onclick="voirMonCircuit()" style="width:100%;padding:10px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:8px">📋 Voir mon circuit de traçage</button>
       <button onclick="voirMonReleveFinancier()" style="width:100%;padding:10px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;margin-top:8px">💰 Mon relevé financier (entrées / dépenses)</button>
+      <button onclick="voirMesVentesTickets()" style="width:100%;padding:10px;background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;margin-top:8px">🎫 Mes ventes de tickets</button>
       <div id="pions-don-result" style="margin-top:8px"></div>
     </div>
     <div class="card" style="background:linear-gradient(135deg,rgba(245,158,11,.12),rgba(217,119,6,.08));border:1px solid rgba(245,158,11,.3)">
@@ -4189,6 +4190,12 @@ function voirMonReleveFinancier(){
   var code = (CODE_ORG || '');
   if(!code){ alert('Code organisateur introuvable'); return; }
   window.open('/releve-financier/' + encodeURIComponent(code), '_blank');
+}
+
+function voirMesVentesTickets(){
+  var code = (ADMIN ? '' : (CODE_ORG || ''));
+  if(!code){ alert('Code organisateur introuvable'); return; }
+  window.open('/ventes-tickets/' + encodeURIComponent(code), '_blank');
 }
 
 async function loadRetraits(){
