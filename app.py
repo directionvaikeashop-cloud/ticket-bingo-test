@@ -4156,15 +4156,24 @@ def releve_download(code):
 
 @app.route("/circuit-pions")
 def circuit_pions():
-    """Circuit de tracage de toutes les transactions de pions joueur<->organisateur"""
+    """Circuit de tracage des pions joueur<->organisateur.
+    Admin (ADMIN2024) voit tout. Un organisateur voit uniquement ses transactions.
+    Filtre via ?code=XXXX"""
     global DB
     DB = load_data()
+    
+    code_filtre = request.args.get("code", "").upper().strip()
+    est_admin = (code_filtre == "ADMIN2024" or code_filtre == "")
+    # Si un code organisateur est fourni (pas admin), on filtre sur ce code
+    filtrer_org = code_filtre and code_filtre != "ADMIN2024"
     
     transactions = []
     
     # 1. Transactions joueur<->organisateur (stock org : virement/deblock/especes, 0%)
     for t in DB.get("transactions_joueur_org", []):
         if isinstance(t, dict):
+            if filtrer_org and t.get("code_org") != code_filtre:
+                continue
             transactions.append({
                 "date": t.get("date", "?"),
                 "joueur": t.get("code_joueur", "?"),
@@ -4173,56 +4182,70 @@ def circuit_pions():
                 "pions": str(t.get("nb_pions", "?")) + " x " + str(t.get("valeur_pion", "?")),
                 "mode": t.get("mode_paiement", "?"),
                 "frais": t.get("frais_service", 0),
-                "source": "Stock organisateur"
             })
     
-    # 2. Paiements carte des joueurs (via Stripe, 5% pour nous)
-    for c in DB.get("commandes_pions_joueurs", []):
-        if isinstance(c, dict) and c.get("statut") == "validee":
-            mode = str(c.get("mode_paiement", ""))
-            if "carte" in mode.lower() or "stripe" in mode.lower():
-                transactions.append({
-                    "date": c.get("date", "?"),
-                    "joueur": c.get("code_joueur", "?"),
-                    "org": "ADMIN (carte)",
-                    "montant": c.get("montant_paye", c.get("montant_total", 0)),
-                    "pions": str(c.get("nb_pions", c.get("pions_credites", "?"))) + " x " + str(c.get("valeur_pion", "?")),
-                    "mode": "Carte (notre systeme)",
-                    "frais": c.get("frais_service", c.get("commission", 0)),
-                    "source": "Carte 5%"
-                })
+    # 2. Paiements carte des joueurs (via Stripe, 5% pour nous) - admin uniquement
+    if not filtrer_org:
+        for c in DB.get("commandes_pions_joueurs", []):
+            if isinstance(c, dict) and c.get("statut") == "validee":
+                mode = str(c.get("mode_paiement", ""))
+                if "carte" in mode.lower() or "stripe" in mode.lower():
+                    transactions.append({
+                        "date": c.get("date", "?"),
+                        "joueur": c.get("code_joueur", "?"),
+                        "org": "ADMIN (carte)",
+                        "montant": c.get("montant_paye", c.get("montant_total", 0)),
+                        "pions": str(c.get("nb_pions", c.get("pions_credites", "?"))) + " x " + str(c.get("valeur_pion", "?")),
+                        "mode": "Carte (notre systeme)",
+                        "frais": c.get("frais_service", c.get("commission", 0)),
+                    })
     
     transactions.sort(key=lambda x: str(x["date"]), reverse=True)
     
     total_frais = sum(t["frais"] for t in transactions)
-    total_montant = sum(t["montant"] for t in transactions)
+    
+    titre = "Circuit de tracage" if not filtrer_org else "Mon circuit de pions"
+    sous_titre = "Toutes les transactions (vue administrateur)" if not filtrer_org else ("Transactions de " + code_filtre)
     
     html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Circuit pions</title><style>"
     html += "body{font-family:monospace;background:#0d1117;color:#e6edf3;padding:20px}h1{color:#58a6ff}"
+    html += ".sub{color:#8b949e;margin-bottom:20px}"
     html += ".totaux{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin:20px 0;display:grid;grid-template-columns:1fr 1fr;gap:16px;text-align:center}"
     html += ".montant{font-size:20px;font-weight:bold;color:#3fb950}"
     html += "table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}"
     html += "th{background:#0d1117;border:1px solid #30363d;padding:10px;text-align:left;color:#8b949e}"
     html += "td{border:1px solid #30363d;padding:8px}tr:hover{background:#21262d}"
     html += ".carte{color:#3fb950;font-weight:bold}.stock{color:#f0883e}</style></head><body>"
-    html += "<h1>Circuit de tracage des pions joueur / organisateur</h1>"
-    html += "<p style='color:#8b949e'>Toutes les transactions de pions, pour tracer en cas de conflit pendant un tournoi.</p>"
+    html += "<h1>" + titre + "</h1>"
+    html += "<div class='sub'>" + sous_titre + "</div>"
     html += "<div class='totaux'>"
-    html += "<div><strong>Total transactions</strong><br><span class='montant'>" + str(len(transactions)) + "</span></div>"
-    html += "<div><strong>Total frais 5% per\u00e7us</strong><br><span class='montant'>" + format(total_frais, ",") + " XPF</span></div>"
+    html += "<div><strong>Transactions</strong><br><span class='montant'>" + str(len(transactions)) + "</span></div>"
+    if not filtrer_org:
+        html += "<div><strong>Frais 5% percus</strong><br><span class='montant'>" + format(total_frais, ",") + " XPF</span></div>"
+    else:
+        html += "<div><strong>Mode</strong><br><span class='montant' style='font-size:14px'>Vos transactions</span></div>"
     html += "</div>"
     
     if transactions:
-        html += "<table><tr><th>Date</th><th>Joueur</th><th>Organisateur</th><th>Pions</th><th>Montant</th><th>Mode</th><th>Frais</th></tr>"
+        html += "<table><tr><th>Date</th><th>Joueur</th>"
+        if not filtrer_org:
+            html += "<th>Organisateur</th>"
+        html += "<th>Pions</th><th>Montant</th><th>Mode</th>"
+        if not filtrer_org:
+            html += "<th>Frais</th>"
+        html += "</tr>"
         for t in transactions:
             cls = "carte" if t["frais"] > 0 else "stock"
             html += "<tr><td>" + str(t["date"])[:16] + "</td>"
             html += "<td>" + str(t["joueur"]) + "</td>"
-            html += "<td>" + str(t["org"]) + "</td>"
+            if not filtrer_org:
+                html += "<td>" + str(t["org"]) + "</td>"
             html += "<td>" + str(t["pions"]) + "</td>"
             html += "<td>" + format(t["montant"], ",") + " XPF</td>"
             html += "<td class='" + cls + "'>" + str(t["mode"]) + "</td>"
-            html += "<td>" + (format(t["frais"], ",") + " XPF" if t["frais"] > 0 else "-") + "</td></tr>"
+            if not filtrer_org:
+                html += "<td>" + (format(t["frais"], ",") + " XPF" if t["frais"] > 0 else "-") + "</td>"
+            html += "</tr>"
         html += "</table>"
     else:
         html += "<p style='color:#8b949e;margin-top:20px'>Aucune transaction pour le moment.</p>"
