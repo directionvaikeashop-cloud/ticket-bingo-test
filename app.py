@@ -4262,3 +4262,212 @@ def circuit_pions():
     
     html += "</body></html>"
     return html
+
+
+
+@app.route("/releve-financier/<code>")
+def releve_financier_org(code):
+    """Releve financier d'un organisateur : depenses (achats admin) et recettes (ventes joueuses)."""
+    global DB
+    DB = load_data()
+    code = code.upper().strip()
+    
+    # Nom de l'organisateur
+    nom = code
+    if code in DB.get("codes", {}):
+        nom = DB["codes"][code].get("nom", code)
+    
+    lignes = []  # {date, type, desc, depense, recette}
+    
+    # === DEPENSES : achats de tickets a l'admin ===
+    for c in DB.get("commandes_tickets", []):
+        if isinstance(c, dict) and c.get("code_org") == code:
+            montant = c.get("total", c.get("prix", 0) * c.get("pack", 0))
+            lignes.append({
+                "date": c.get("date", "?"),
+                "type": "Achat tickets",
+                "desc": str(c.get("jeu", "?")) + " (" + str(c.get("pack", "?")) + " tickets)",
+                "depense": montant,
+                "recette": 0
+            })
+    
+    # === DEPENSES : achats de pions a l'admin (stock) ===
+    for c in DB.get("commandes_pions", []):
+        if isinstance(c, dict) and c.get("code_org") == code:
+            lignes.append({
+                "date": c.get("date", "?"),
+                "type": "Achat pions (stock)",
+                "desc": str(c.get("nb_pions", "?")) + " pions x " + str(c.get("valeur_pion", "?")) + " XPF",
+                "depense": c.get("montant_paye", 0),
+                "recette": 0
+            })
+    
+    # === RECETTES : pions vendus aux joueuses ===
+    for t in DB.get("transactions_joueur_org", []):
+        if isinstance(t, dict) and t.get("code_org") == code:
+            lignes.append({
+                "date": t.get("date", "?"),
+                "type": "Vente pions joueuse",
+                "desc": "Joueuse " + str(t.get("code_joueur", "?")) + " (" + str(t.get("mode_paiement", "?")) + ")",
+                "depense": 0,
+                "recette": t.get("montant_total", 0)
+            })
+    
+    # === RECETTES : part de cagnotte (20%) ===
+    for g in DB.get("gains_finaux", []):
+        if isinstance(g, dict) and g.get("code_org") == code:
+            part = g.get("part_organisateur", 0)
+            if part:
+                lignes.append({
+                    "date": g.get("date", "?"),
+                    "type": "Part cagnotte (20%)",
+                    "desc": "Cagnotte " + format(g.get("cagnotte", 0), ",") + " XPF",
+                    "depense": 0,
+                    "recette": part
+                })
+    
+    lignes.sort(key=lambda x: str(x["date"]), reverse=True)
+    
+    total_depenses = sum(l["depense"] for l in lignes)
+    total_recettes = sum(l["recette"] for l in lignes)
+    solde = total_recettes - total_depenses
+    
+    html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Releve financier</title><style>"
+    html += "body{font-family:monospace;background:#0d1117;color:#e6edf3;padding:20px}h1{color:#58a6ff}"
+    html += ".sub{color:#8b949e;margin-bottom:20px}"
+    html += ".totaux{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin:20px 0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center}"
+    html += ".m{font-size:18px;font-weight:bold}.dep{color:#f85149}.rec{color:#3fb950}.sol{color:#58a6ff}"
+    html += "table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}"
+    html += "th{background:#0d1117;border:1px solid #30363d;padding:10px;text-align:left;color:#8b949e}"
+    html += "td{border:1px solid #30363d;padding:8px}tr:hover{background:#21262d}"
+    html += ".td-dep{color:#f85149;text-align:right}.td-rec{color:#3fb950;text-align:right}"
+    html += ".btn{padding:12px 24px;background:#58a6ff;color:#0d1117;border:none;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;margin-top:20px}</style></head><body>"
+    html += "<h1>Releve financier</h1>"
+    html += "<div class='sub'>" + str(nom) + " (" + code + ")</div>"
+    html += "<div class='totaux'>"
+    html += "<div><strong>Depenses</strong><br><span class='m dep'>-" + format(total_depenses, ",") + " XPF</span><br><span style='font-size:11px;color:#8b949e'>achats a l'admin</span></div>"
+    html += "<div><strong>Recettes</strong><br><span class='m rec'>+" + format(total_recettes, ",") + " XPF</span><br><span style='font-size:11px;color:#8b949e'>ventes joueuses</span></div>"
+    html += "<div><strong>Solde / Marge</strong><br><span class='m sol'>" + format(solde, ",") + " XPF</span></div>"
+    html += "</div>"
+    
+    if lignes:
+        html += "<table><tr><th>Date</th><th>Type</th><th>Detail</th><th>Depense</th><th>Recette</th></tr>"
+        for l in lignes:
+            dep = "-" + format(l["depense"], ",") if l["depense"] > 0 else ""
+            rec = "+" + format(l["recette"], ",") if l["recette"] > 0 else ""
+            html += "<tr><td>" + str(l["date"])[:16] + "</td>"
+            html += "<td>" + str(l["type"]) + "</td>"
+            html += "<td>" + str(l["desc"]) + "</td>"
+            html += "<td class='td-dep'>" + dep + "</td>"
+            html += "<td class='td-rec'>" + rec + "</td></tr>"
+        html += "</table>"
+    else:
+        html += "<p style='color:#8b949e;margin-top:20px'>Aucune operation pour le moment.</p>"
+    
+    html += "<br><a href='/releve/" + code + "/download' class='btn'>Telecharger en TXT</a>"
+    html += "</body></html>"
+    return html
+
+
+
+@app.route("/releve-financier-joueur/<code>")
+def releve_financier_joueur(code):
+    """Releve financier d'une joueuse : pions achetes/recus (entrees) et tickets achetes (sorties)."""
+    global DB
+    DB = load_data()
+    code = code.upper().strip()
+    
+    # Nom de la joueuse (depuis les tickets)
+    nom = "Joueuse"
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") == code and t.get("acheteur"):
+            nom = t.get("acheteur")
+            break
+    
+    lignes = []  # {date, type, desc, entree, sortie}
+    
+    # === ENTREES : achats de pions (carte/virement/especes) ===
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict) and c.get("code_joueur") == code and c.get("statut") == "validee":
+            montant = c.get("montant_paye", c.get("montant_total", 0))
+            mode = str(c.get("mode_paiement", "?"))
+            nb = c.get("nb_pions", c.get("pions_credites", "?"))
+            lignes.append({
+                "date": c.get("date", "?"),
+                "type": "Achat pions",
+                "desc": str(nb) + " pions (" + mode + ")",
+                "entree": montant,
+                "sortie": 0
+            })
+    
+    # === ENTREES : pions recus de l'organisateur ===
+    for t in DB.get("transactions_joueur_org", []):
+        if isinstance(t, dict) and t.get("code_joueur") == code:
+            lignes.append({
+                "date": t.get("date", "?"),
+                "type": "Pions recus (org)",
+                "desc": str(t.get("nb_pions", "?")) + " x " + str(t.get("valeur_pion", "?")) + " XPF (" + str(t.get("mode_paiement", "?")) + ")",
+                "entree": t.get("montant_total", 0),
+                "sortie": 0
+            })
+    
+    # === SORTIES : tickets achetes en pions ===
+    for c in DB.get("commandes_tickets_pions", []):
+        if isinstance(c, dict) and c.get("code_joueur") == code:
+            lignes.append({
+                "date": c.get("date", "?"),
+                "type": "Achat tickets",
+                "desc": str(c.get("jeu", "?")) + " (" + str(c.get("nb_tickets", "?")) + " tickets)",
+                "entree": 0,
+                "sortie": c.get("total_pions", 0)
+            })
+    
+    lignes.sort(key=lambda x: str(x["date"]), reverse=True)
+    
+    total_entrees = sum(l["entree"] for l in lignes)
+    total_sorties = sum(l["sortie"] for l in lignes)
+    
+    # Solde de pions actuel
+    pj = DB.get("pions_joueurs", {}).get(code, {})
+    solde_pions = 0
+    for v, nb in pj.items():
+        try:
+            solde_pions += int(v) * nb
+        except (ValueError, TypeError):
+            pass
+    
+    html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Mon releve</title><style>"
+    html += "body{font-family:monospace;background:#0d1117;color:#e6edf3;padding:20px}h1{color:#58a6ff}"
+    html += ".sub{color:#8b949e;margin-bottom:20px}"
+    html += ".totaux{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin:20px 0;display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center}"
+    html += ".m{font-size:18px;font-weight:bold}.ent{color:#3fb950}.sor{color:#f85149}.sol{color:#fbbf24}"
+    html += "table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}"
+    html += "th{background:#0d1117;border:1px solid #30363d;padding:10px;text-align:left;color:#8b949e}"
+    html += "td{border:1px solid #30363d;padding:8px}tr:hover{background:#21262d}"
+    html += ".td-ent{color:#3fb950;text-align:right}.td-sor{color:#f85149;text-align:right}</style></head><body>"
+    html += "<h1>Mon releve de pions</h1>"
+    html += "<div class='sub'>" + str(nom) + " (" + code + ")</div>"
+    html += "<div class='totaux'>"
+    html += "<div><strong>Pions achetes/recus</strong><br><span class='m ent'>+" + format(total_entrees, ",") + " XPF</span></div>"
+    html += "<div><strong>Pions depenses</strong><br><span class='m sor'>-" + format(total_sorties, ",") + " XPF</span><br><span style='font-size:11px;color:#8b949e'>en tickets</span></div>"
+    html += "<div><strong>Solde actuel</strong><br><span class='m sol'>" + format(solde_pions, ",") + " XPF</span><br><span style='font-size:11px;color:#8b949e'>en pions</span></div>"
+    html += "</div>"
+    
+    if lignes:
+        html += "<table><tr><th>Date</th><th>Type</th><th>Detail</th><th>Entree</th><th>Sortie</th></tr>"
+        for l in lignes:
+            ent = "+" + format(l["entree"], ",") if l["entree"] > 0 else ""
+            sor = "-" + format(l["sortie"], ",") if l["sortie"] > 0 else ""
+            html += "<tr><td>" + str(l["date"])[:16] + "</td>"
+            html += "<td>" + str(l["type"]) + "</td>"
+            html += "<td>" + str(l["desc"]) + "</td>"
+            html += "<td class='td-ent'>" + ent + "</td>"
+            html += "<td class='td-sor'>" + sor + "</td></tr>"
+        html += "</table>"
+    else:
+        html += "<p style='color:#8b949e;margin-top:20px'>Aucune operation pour le moment.</p>"
+    
+    html += "</body></html>"
+    return html
+
+
