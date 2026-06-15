@@ -407,6 +407,14 @@ def nouvelle_vente():
     if not d.get("client") or not d.get("jeu") or not d.get("serie"):
         return jsonify({"ok": False, "msg": "Champs manquants"}), 400
     total = int(d.get("qty", 1)) * int(d.get("prix", 0))
+    # FRAIS DE SERVICE : 5% sur Carte/Virement, 0% sur Especes (comme les pions)
+    mode_paiement = str(d.get("mode_paiement", "Carte"))
+    mode_bas = mode_paiement.lower()
+    if any(x in mode_bas for x in ["espece", "espèce", "cash", "liquide"]):
+        frais_service = 0
+    else:
+        frais_service = round(total * 0.05)
+    montant_net = total - frais_service
     token_doc = secrets.token_hex(16)
     tournoi_id = d.get("tournoi_id", "")
     date_expiration = None
@@ -428,6 +436,9 @@ def nouvelle_vente():
         "pack": int(d.get("pack", 25)), "qty": int(d.get("qty", 1)),
         "total_feuilles": int(d.get("qty", 1)) * int(d.get("pack", 25)),
         "serie": d["serie"], "prix": int(d.get("prix", 0)), "total": total,
+        "mode_paiement": mode_paiement,
+        "frais_service": frais_service,
+        "montant_net": montant_net,
         "photo_url": d.get("photo_url", None),
         "pdf_url": d.get("pdf_url", None),
         "token_doc": token_doc, "tournoi_id": tournoi_id,
@@ -1952,7 +1963,7 @@ def _deduire_valeur_pion(montant, nb_pions, valeur_meta):
     if valeur_meta and str(valeur_meta) in ["20", "50", "100"]:
         return str(valeur_meta)
     if nb_pions > 0:
-        approx = (montant * 0.98) / nb_pions  # commission carte 2%
+        approx = (montant * 0.95) / nb_pions  # frais de service carte 5%
         return str(min([20, 50, 100], key=lambda v: abs(v - approx)))
     return "100"
 
@@ -3111,8 +3122,8 @@ def stripe_checkout_pions():
     if not code or valeur_pion not in [20, 50, 100] or montant < 500:
         return jsonify({"ok": False, "msg": "Données invalides"}), 400
 
-    # Calcul COTE SERVEUR (anti-triche) : commission CARTE = 2%, pions sur la valeur restante
-    commission = round(montant * 0.02)
+    # Calcul COTE SERVEUR (anti-triche) : frais de service CARTE = 5%, pions sur la valeur restante
+    commission = round(montant * 0.05)
     nb_pions = int((montant - commission) // valeur_pion)
     if nb_pions <= 0:
         return jsonify({"ok": False, "msg": "Montant trop faible pour cette valeur de pion"}), 400
@@ -3598,14 +3609,10 @@ def calculer_gain_final():
     if cagnotte <= 0:
         return jsonify({"ok": False, "msg": "Montant invalide"}), 400
     
-    # TOUS LES PRÉLÈVEMENTS SUR LE GAIN FINAL (sans frais revendeurs)
-    prel_cagnotte_2 = round(cagnotte * 0.02)        # 2% cagnotte invisible
-    prel_commissions_5 = round(cagnotte * 0.05)     # 5% commissions jeux
-    prel_pions_1 = round(cagnotte * 0.01)           # 1% pions
-    prel_tournoi = 500                               # Frais fixes tournoi
-    
-    total_preleve = prel_cagnotte_2 + prel_commissions_5 + prel_pions_1 + prel_tournoi
-    gain_gagnant = round(cagnotte - total_preleve)
+    # REPARTITION SIMPLE DE LA CAGNOTTE : 80% gagnant(s) / 20% organisateur
+    gain_gagnant = round(cagnotte * 0.80)        # 80% pour les joueurs gagnants
+    part_organisateur = round(cagnotte * 0.20)   # 20% pour l'organisateur
+    total_preleve = part_organisateur
     
     # Sauvegarder dans DB
     if "gains_finaux" not in DB:
@@ -3614,12 +3621,9 @@ def calculer_gain_final():
     gain_data = {
         "id": gen_code(8),
         "cagnotte": cagnotte,
-        "prel_cagnotte_2": prel_cagnotte_2,
-        "prel_commissions_5": prel_commissions_5,
-        "prel_pions_1": prel_pions_1,
-        "prel_tournoi": prel_tournoi,
+        "gain_gagnant": gain_gagnant,            # 80% gagnant
+        "part_organisateur": part_organisateur,  # 20% organisateur
         "total_preleve": total_preleve,
-        "gain_gagnant": gain_gagnant,
         "code_org": s["code"],
         "date": datetime.datetime.now().isoformat()
     }
@@ -3629,12 +3633,9 @@ def calculer_gain_final():
     return jsonify({
         "ok": True,
         "cagnotte": cagnotte,
-        "prel_cagnotte_2": prel_cagnotte_2,
-        "prel_commissions_5": prel_commissions_5,
-        "prel_pions_1": prel_pions_1,
-        "prel_tournoi": prel_tournoi,
-        "total_preleve": total_preleve,
-        "gain_gagnant": gain_gagnant
+        "gain_gagnant": gain_gagnant,
+        "part_organisateur": part_organisateur,
+        "total_preleve": total_preleve
     })
 
 @app.route("/api/paiement/virement-gagnant", methods=["POST"])
@@ -4109,3 +4110,4 @@ def releve_download(code):
         return response
     except Exception as e:
         return "Erreur: " + str(e), 500
+
