@@ -1869,6 +1869,13 @@ function buildOrgSpace(){
       </div>
       <div class="lbl">Nombre de pions</div>
       <input id="pions-joueur-nb" type="number" placeholder="Ex: 5" min="1" style="margin-bottom:8px"/>
+      <div class="lbl">💳 Mode de paiement du joueur</div>
+      <select id="pions-don-mode" style="margin-bottom:8px">
+        <option value="Espèces">Espèces (entre vous — 0%)</option>
+        <option value="Virement">Virement (entre vous — 0%)</option>
+        <option value="Deblock">Deblock (entre vous — 0%)</option>
+      </select>
+      <div style="font-size:11px;color:var(--mu);margin-bottom:8px">💡 Pour un paiement par carte avec 5%, le joueur commande lui-même ses pions dans son espace.</div>
       <button onclick="donnerPionsJoueur()" style="width:100%;padding:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">🎁 Donner les pions</button>
       <div id="pions-don-result" style="margin-top:8px"></div>
     </div>
@@ -4128,11 +4135,12 @@ async function donnerPionsJoueur(){
   if(!code){ alert('Entrez le code du joueur'); return; }
   if(!valeurDonPion){ alert('Choisissez la valeur du pion'); return; }
   if(!nb || nb <= 0){ alert('Entrez un nombre de pions'); return; }
+  var modePaiement = document.getElementById('pions-don-mode') ? document.getElementById('pions-don-mode').value : 'Espèces';
   try{
     const r = await fetch('/api/pions/donner', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
-      body: JSON.stringify({code_joueur: code, valeur_pion: valeurDonPion, nb_pions: nb})
+      body: JSON.stringify({code_joueur: code, valeur_pion: valeurDonPion, nb_pions: nb, mode_paiement: modePaiement})
     });
     const d = await r.json();
     if(d.ok){
