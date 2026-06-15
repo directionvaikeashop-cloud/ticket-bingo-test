@@ -1050,6 +1050,7 @@ def donner_pions():
     code_joueur = d.get("code_joueur", "").upper()
     valeur_pion = str(d.get("valeur_pion", 0))
     nb_pions = int(d.get("nb_pions", 0))
+    mode_paiement = str(d.get("mode_paiement", "Espèces"))
     # Vérifier solde
     solde = DB.get("pions_org", {}).get(code_org, {}).get(valeur_pion, 0)
     if nb_pions > solde:
@@ -1062,6 +1063,23 @@ def donner_pions():
     if code_joueur not in DB["pions_joueurs"]:
         DB["pions_joueurs"][code_joueur] = {}
     DB["pions_joueurs"][code_joueur][valeur_pion] = DB["pions_joueurs"][code_joueur].get(valeur_pion, 0) + nb_pions
+    # TRACAGE : enregistrer la transaction joueur<->organisateur (virement/deblock/especes = 0% pour nous)
+    montant_total = nb_pions * int(valeur_pion)
+    if "transactions_joueur_org" not in DB:
+        DB["transactions_joueur_org"] = []
+    DB["transactions_joueur_org"].insert(0, {
+        "id": secrets.token_hex(4).upper(),
+        "code_joueur": code_joueur,
+        "code_org": code_org,
+        "nom_org": s.get("nom", code_org),
+        "valeur_pion": int(valeur_pion),
+        "nb_pions": nb_pions,
+        "montant_total": montant_total,
+        "mode_paiement": mode_paiement,
+        "frais_service": 0,
+        "source": "stock_organisateur",
+        "date": datetime.datetime.now().isoformat()
+    })
     save_data()
     return jsonify({"ok": True})
 
@@ -4134,3 +4152,82 @@ def releve_download(code):
         return response
     except Exception as e:
         return "Erreur: " + str(e), 500
+
+
+@app.route("/circuit-pions")
+def circuit_pions():
+    """Circuit de tracage de toutes les transactions de pions joueur<->organisateur"""
+    global DB
+    DB = load_data()
+    
+    transactions = []
+    
+    # 1. Transactions joueur<->organisateur (stock org : virement/deblock/especes, 0%)
+    for t in DB.get("transactions_joueur_org", []):
+        if isinstance(t, dict):
+            transactions.append({
+                "date": t.get("date", "?"),
+                "joueur": t.get("code_joueur", "?"),
+                "org": t.get("nom_org", t.get("code_org", "?")),
+                "montant": t.get("montant_total", 0),
+                "pions": str(t.get("nb_pions", "?")) + " x " + str(t.get("valeur_pion", "?")),
+                "mode": t.get("mode_paiement", "?"),
+                "frais": t.get("frais_service", 0),
+                "source": "Stock organisateur"
+            })
+    
+    # 2. Paiements carte des joueurs (via Stripe, 5% pour nous)
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict) and c.get("statut") == "validee":
+            mode = str(c.get("mode_paiement", ""))
+            if "carte" in mode.lower() or "stripe" in mode.lower():
+                transactions.append({
+                    "date": c.get("date", "?"),
+                    "joueur": c.get("code_joueur", "?"),
+                    "org": "ADMIN (carte)",
+                    "montant": c.get("montant_paye", c.get("montant_total", 0)),
+                    "pions": str(c.get("nb_pions", c.get("pions_credites", "?"))) + " x " + str(c.get("valeur_pion", "?")),
+                    "mode": "Carte (notre systeme)",
+                    "frais": c.get("frais_service", c.get("commission", 0)),
+                    "source": "Carte 5%"
+                })
+    
+    transactions.sort(key=lambda x: str(x["date"]), reverse=True)
+    
+    total_frais = sum(t["frais"] for t in transactions)
+    total_montant = sum(t["montant"] for t in transactions)
+    
+    html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Circuit pions</title><style>"
+    html += "body{font-family:monospace;background:#0d1117;color:#e6edf3;padding:20px}h1{color:#58a6ff}"
+    html += ".totaux{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin:20px 0;display:grid;grid-template-columns:1fr 1fr;gap:16px;text-align:center}"
+    html += ".montant{font-size:20px;font-weight:bold;color:#3fb950}"
+    html += "table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}"
+    html += "th{background:#0d1117;border:1px solid #30363d;padding:10px;text-align:left;color:#8b949e}"
+    html += "td{border:1px solid #30363d;padding:8px}tr:hover{background:#21262d}"
+    html += ".carte{color:#3fb950;font-weight:bold}.stock{color:#f0883e}</style></head><body>"
+    html += "<h1>Circuit de tracage des pions joueur / organisateur</h1>"
+    html += "<p style='color:#8b949e'>Toutes les transactions de pions, pour tracer en cas de conflit pendant un tournoi.</p>"
+    html += "<div class='totaux'>"
+    html += "<div><strong>Total transactions</strong><br><span class='montant'>" + str(len(transactions)) + "</span></div>"
+    html += "<div><strong>Total frais 5% per\u00e7us</strong><br><span class='montant'>" + format(total_frais, ",") + " XPF</span></div>"
+    html += "</div>"
+    
+    if transactions:
+        html += "<table><tr><th>Date</th><th>Joueur</th><th>Organisateur</th><th>Pions</th><th>Montant</th><th>Mode</th><th>Frais</th></tr>"
+        for t in transactions:
+            cls = "carte" if t["frais"] > 0 else "stock"
+            html += "<tr><td>" + str(t["date"])[:16] + "</td>"
+            html += "<td>" + str(t["joueur"]) + "</td>"
+            html += "<td>" + str(t["org"]) + "</td>"
+            html += "<td>" + str(t["pions"]) + "</td>"
+            html += "<td>" + format(t["montant"], ",") + " XPF</td>"
+            html += "<td class='" + cls + "'>" + str(t["mode"]) + "</td>"
+            html += "<td>" + (format(t["frais"], ",") + " XPF" if t["frais"] > 0 else "-") + "</td></tr>"
+        html += "</table>"
+    else:
+        html += "<p style='color:#8b949e;margin-top:20px'>Aucune transaction pour le moment.</p>"
+    
+    html += "</body></html>"
+    return html
+
+
