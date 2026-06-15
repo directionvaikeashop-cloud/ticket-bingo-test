@@ -761,6 +761,14 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div style="margin-top:8px">
           <button onclick="voirMonCircuit()" style="width:100%;padding:10px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">📋 Circuit de traçage des pions (complet)</button>
         </div>
+        <div style="margin-top:12px;padding:12px;background:rgba(245,158,11,.08);border:1px solid rgba(245,158,11,.3);border-radius:8px">
+          <div style="font-size:13px;font-weight:700;color:#f59e0b;margin-bottom:6px">🔗 Fusionner deux codes organisateur</div>
+          <div style="font-size:11px;color:var(--mu);margin-bottom:8px">Transfère TOUT (pions, joueuses, ventes...) du code source vers le code cible. ⚠️ Fais une sauvegarde avant !</div>
+          <input id="fusion-source" placeholder="Code source (ex: 5BW6MGSX)" style="width:100%;padding:8px;border-radius:6px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-bottom:6px;box-sizing:border-box"/>
+          <input id="fusion-cible" placeholder="Code cible (ex: CPFRD66H)" style="width:100%;padding:8px;border-radius:6px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-bottom:8px;box-sizing:border-box"/>
+          <button onclick="fusionnerCodes()" style="width:100%;padding:10px;background:#f59e0b;color:#0d1117;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">🔗 Fusionner les codes</button>
+          <div id="fusion-result" style="margin-top:8px"></div>
+        </div>
         <div style="margin-top:8px">
           <label style="display:block;font-size:11px;color:rgba(255,255,255,.5);margin-bottom:4px">📥 Restaurer depuis une sauvegarde (remplace TOUT) :</label>
           <input type="file" id="fichier-restauration" accept=".json" onchange="restaurerDonnees(this)" style="width:100%;font-size:12px;color:#fff">
@@ -4152,6 +4160,29 @@ function loadSoldesPions(){
 function voirMonCircuit(){
   var code = (ADMIN ? 'ADMIN2024' : (CODE_ORG || ''));
   window.open('/circuit-pions?code=' + encodeURIComponent(code), '_blank');
+}
+
+async function fusionnerCodes(){
+  var source = document.getElementById('fusion-source').value.trim().toUpperCase();
+  var cible = document.getElementById('fusion-cible').value.trim().toUpperCase();
+  if(!source || !cible){ alert('Entre les deux codes'); return; }
+  if(source === cible){ alert('Les deux codes sont identiques'); return; }
+  if(!confirm('Fusionner ' + source + ' dans ' + cible + ' ?\n\nTout (pions, joueuses, ventes) sera transféré vers ' + cible + ', et ' + source + ' sera désactivé.\n\nAs-tu fait une sauvegarde ?')) return;
+  var box = document.getElementById('fusion-result');
+  box.innerHTML = '<div style="color:var(--mu);font-size:12px">Fusion en cours...</div>';
+  try{
+    const r = await fetch('/api/admin/fusionner-codes', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({source: source, cible: cible})
+    });
+    const d = await r.json();
+    if(d.ok){
+      box.innerHTML = '<div style="background:rgba(34,197,94,.2);border:1px solid #22c55e;border-radius:8px;padding:10px;font-size:12px;color:#34d399">✅ ' + d.msg + '</div>';
+    } else {
+      box.innerHTML = '<div style="background:rgba(248,81,73,.2);border:1px solid #f85149;border-radius:8px;padding:10px;font-size:12px;color:#f85149">' + (d.msg || 'Erreur') + '</div>';
+    }
+  }catch(e){ box.innerHTML = '<div style="color:#f85149;font-size:12px">Erreur réseau</div>'; }
 }
 
 function voirMonReleveFinancier(){
