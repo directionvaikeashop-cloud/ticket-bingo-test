@@ -754,6 +754,9 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <button onclick="telechargerSauvegarde()" style="flex:1;min-width:130px;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">💾 Télécharger sauvegarde</button>
         </div>
         <div style="margin-top:8px">
+          <button onclick="voirMonCircuit()" style="width:100%;padding:10px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">📋 Circuit de traçage des pions (complet)</button>
+        </div>
+        <div style="margin-top:8px">
           <label style="display:block;font-size:11px;color:rgba(255,255,255,.5);margin-bottom:4px">📥 Restaurer depuis une sauvegarde (remplace TOUT) :</label>
           <input type="file" id="fichier-restauration" accept=".json" onchange="restaurerDonnees(this)" style="width:100%;font-size:12px;color:#fff">
         </div>
