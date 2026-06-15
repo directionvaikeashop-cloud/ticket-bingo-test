@@ -1284,9 +1284,27 @@ async function doLogin(){
       if(ADMIN){document.getElementById("nb-admin").style.display="flex";}
       // Afficher revendeur pour tous sauf joueur
       document.getElementById("nb-revendeur").style.display="flex";
-      show("s-app");loadJeux();loadVentes();loadStats();loadDocs();loadTournois();setTimeout(function(){loadCommandesAdmin();loadCommandesPionsAdmin();checkPaiementsEnAttente();checkPionsEnAttente();checkPionsJoueursEnAttente();startAutoRefreshAdmin();},1000);}
+      show("s-app");loadJeux();loadVentes();loadStats();loadDocs();loadTournois();setTimeout(function(){loadCommandesAdmin();loadCommandesPionsAdmin();checkPaiementsEnAttente();checkPionsEnAttente();checkPionsJoueursEnAttente();startAutoRefreshAdmin();if(ADMIN){autoCrediterStripe();}},1000);}
     else toast("toast-login",d.msg||"Code invalide",false);
   }catch(e){toast("toast-login","Erreur",false);}
+}
+
+async function autoCrediterStripe(){
+  try{
+    const r = await fetch('/api/admin/stripe-auto-credit', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN}
+    });
+    const d = await r.json();
+    if(d.ok && d.nb > 0){
+      var msg = '✅ ' + d.nb + ' paiement(s) crédité(s) automatiquement : ';
+      msg += d.credites.map(function(c){ return c.code + ' (' + c.pions + '×' + c.valeur + ')'; }).join(', ');
+      toast("toast-b", msg, true);
+      // Rafraichir les listes
+      if(typeof loadCommandesPionsAdmin === 'function') loadCommandesPionsAdmin();
+      if(typeof checkPionsJoueursEnAttente === 'function') checkPionsJoueursEnAttente();
+    }
+  }catch(e){ console.log('auto-credit:', e); }
 }
 
 function fermerPDF(){
