@@ -1840,9 +1840,10 @@ def commande_pions_joueur():
     code_joueur = d.get("code_joueur", "").upper()
     valeur_pion = int(d.get("valeur_pion", 0))
     montant_paye = float(d.get("montant_paye", 0))
-    commission = float(d.get("commission", 0))
-    nb_pions = int(d.get("nb_pions", 0))
     mode_paiement = d.get("mode_paiement", "")
+    # RECALCUL COTE SERVEUR (anti-triche) : 5% electronique, 0% especes
+    commission = calculer_frais_service(montant_paye, mode_paiement)
+    nb_pions = int((montant_paye - commission) // valeur_pion) if valeur_pion else 0
     ref_paiement = d.get("ref_paiement", "")
     
     if not code_joueur or not valeur_pion or montant_paye < 500:
