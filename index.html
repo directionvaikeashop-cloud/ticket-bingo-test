@@ -360,6 +360,12 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       <div style="font-size:10px;color:rgba(255,255,255,.3);text-align:center">Mis à jour automatiquement</div>
     </div>
 
+    <!-- TOURNOIS A VENIR -->
+    <div id="tournois-avenir-card" style="display:none;background:linear-gradient(135deg,rgba(168,85,247,.15),rgba(124,58,237,.1));border:1px solid rgba(168,85,247,.4);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:700;color:#c084fc;margin-bottom:10px">📅 Prochains tournois</div>
+      <div id="tournois-avenir-liste"></div>
+    </div>
+
     <!-- JEUX DISPONIBLES -->
     <div id="joueur-jeux-card" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:14px;margin-bottom:14px">
       <div style="font-size:14px;font-weight:700;color:#fbbf24;margin-bottom:6px">🎮 Jeux disponibles maintenant !</div>
@@ -1289,6 +1295,107 @@ async function doLogin(){
   }catch(e){toast("toast-login","Erreur",false);}
 }
 
+async function programmerTournoi(){
+  var nom = document.getElementById('tp-nom').value.trim();
+  var jeu = document.getElementById('tp-jeu').value.trim();
+  var date = document.getElementById('tp-date').value;
+  if(!nom || !date){ alert('Entre le nom et la date/heure du tournoi'); return; }
+  try{
+    const r = await fetch('/api/tournoi-programme/creer', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({nom: nom, jeu: jeu, date_heure: date})
+    });
+    const d = await r.json();
+    if(d.ok){
+      document.getElementById('tp-result').innerHTML = '<div style="background:rgba(34,197,94,.2);border:1px solid #22c55e;border-radius:8px;padding:8px;color:#34d399;font-size:12px">✅ Tournoi programmé ! Tes joueuses verront le compte à rebours.</div>';
+      document.getElementById('tp-nom').value = '';
+      document.getElementById('tp-jeu').value = '';
+      document.getElementById('tp-date').value = '';
+      loadTournoisProgrammes();
+    } else {
+      document.getElementById('tp-result').innerHTML = '<div style="color:#f85149;font-size:12px">' + (d.msg || 'Erreur') + '</div>';
+    }
+  }catch(e){ alert('Erreur réseau'); }
+}
+
+function formatCompteRebours(dateHeure){
+  var cible = new Date(dateHeure).getTime();
+  var maintenant = new Date().getTime();
+  var diff = cible - maintenant;
+  if(diff <= 0) return '🔴 En cours / commencé';
+  var jours = Math.floor(diff / (1000*60*60*24));
+  var heures = Math.floor((diff % (1000*60*60*24)) / (1000*60*60));
+  var minutes = Math.floor((diff % (1000*60*60)) / (1000*60));
+  if(jours > 0) return '⏳ Dans ' + jours + 'j ' + heures + 'h';
+  if(heures > 0) return '⏳ Dans ' + heures + 'h ' + minutes + 'min';
+  return '🔥 Dans ' + minutes + ' min !';
+}
+
+function formatDateTournoi(dateHeure){
+  try{
+    var d = new Date(dateHeure);
+    return d.toLocaleDateString('fr-FR', {weekday:'long', day:'numeric', month:'long'}) + ' à ' + d.toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'});
+  }catch(e){ return dateHeure; }
+}
+
+async function loadTournoisProgrammes(){
+  try{
+    const r = await fetch('/api/tournois-programmes');
+    const tournois = await r.json();
+    // Cote organisateur (liste avec bouton supprimer)
+    var boxOrg = document.getElementById('tp-liste');
+    if(boxOrg){
+      var miens = tournois.filter(function(t){ return t.code_org === CODE_ORG; });
+      if(miens.length > 0){
+        boxOrg.innerHTML = '<div style="font-size:11px;color:var(--mu);margin-bottom:4px">Mes tournois programmés :</div>' + miens.map(function(t){
+          var q = String.fromCharCode(39);
+          return '<div style="background:var(--s2);border-radius:8px;padding:8px;display:flex;justify-content:space-between;align-items:center">' +
+            '<div><div style="font-weight:700;color:#fff;font-size:13px">' + t.nom + '</div>' +
+            '<div style="font-size:11px;color:#c084fc">' + formatDateTournoi(t.date_heure) + ' — ' + formatCompteRebours(t.date_heure) + '</div></div>' +
+            '<button onclick="supprimerTournoiProgramme(' + q + t.id + q + ')" style="padding:4px 8px;background:rgba(239,68,68,.2);color:#f87171;border:none;border-radius:6px;cursor:pointer;font-size:11px">🗑️</button></div>';
+        }).join('');
+      } else {
+        boxOrg.innerHTML = '';
+      }
+    }
+    // Cote joueuse (bandeau avec compte a rebours)
+    var cardJ = document.getElementById('tournois-avenir-card');
+    var listeJ = document.getElementById('tournois-avenir-liste');
+    if(cardJ && listeJ){
+      if(tournois.length > 0){
+        cardJ.style.display = 'block';
+        listeJ.innerHTML = tournois.map(function(t){
+          return '<div style="background:rgba(255,255,255,.05);border-radius:8px;padding:10px;margin-bottom:6px">' +
+            '<div style="font-weight:700;color:#fff;font-size:14px">🎯 ' + t.nom + '</div>' +
+            (t.jeu ? '<div style="font-size:12px;color:var(--mu)">' + t.jeu + '</div>' : '') +
+            '<div style="font-size:12px;color:#c084fc;margin-top:2px">' + formatDateTournoi(t.date_heure) + '</div>' +
+            '<div style="font-size:15px;font-weight:800;color:#fbbf24;margin-top:4px">' + formatCompteRebours(t.date_heure) + '</div>' +
+            '<div style="font-size:11px;color:var(--mu)">Organisé par ' + (t.nom_org || t.code_org) + '</div></div>';
+        }).join('');
+      } else {
+        cardJ.style.display = 'none';
+      }
+    }
+  }catch(e){ console.log('tournois:', e); }
+}
+
+async function supprimerTournoiProgramme(id){
+  if(!confirm('Supprimer ce tournoi programmé ?')) return;
+  try{
+    const r = await fetch('/api/tournoi-programme/supprimer', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({id: id})
+    });
+    const d = await r.json();
+    if(d.ok){ loadTournoisProgrammes(); }
+  }catch(e){ alert('Erreur réseau'); }
+}
+
+// Rafraichir les comptes a rebours toutes les minutes
+setInterval(function(){ if(typeof loadTournoisProgrammes === 'function') loadTournoisProgrammes(); }, 60000);
+
 async function autoCrediterStripe(){
   try{
     const r = await fetch('/api/admin/stripe-auto-credit', {
@@ -1630,6 +1737,20 @@ function buildOrgSpace(){
         <button onclick="modeModifierAnnonce()" style="flex:1;padding:8px;background:rgba(59,130,246,.2);color:#60a5fa;border:0.5px solid rgba(59,130,246,.4);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">✏️ Modifier</button>
         <button onclick="supprimerAnnonce()" style="flex:1;padding:8px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:8px;cursor:pointer;font-size:12px">🗑️ Supprimer</button>
       </div>
+    </div>
+
+    <div class="card" style="background:linear-gradient(135deg,rgba(168,85,247,.12),rgba(124,58,237,.08));border:1px solid rgba(168,85,247,.3)">
+      <div class="ct" style="justify-content:space-between"><span>📅 Programmer un tournoi</span><button class="btn-sm" onclick="loadTournoisProgrammes()">↻</button></div>
+      <div style="font-size:11px;color:var(--mu);margin-bottom:8px">Annonce un tournoi à venir : tes joueuses verront un compte à rebours qui monte !</div>
+      <div class="lbl">Nom du tournoi</div>
+      <input id="tp-nom" placeholder="Ex: Grand tournoi du samedi" style="margin-bottom:8px"/>
+      <div class="lbl">Jeu (optionnel)</div>
+      <input id="tp-jeu" placeholder="Ex: OHANA 75" style="margin-bottom:8px"/>
+      <div class="lbl">Date et heure de début</div>
+      <input id="tp-date" type="datetime-local" style="margin-bottom:8px"/>
+      <button onclick="programmerTournoi()" style="width:100%;padding:12px;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📅 Programmer le tournoi</button>
+      <div id="tp-result" style="margin-top:8px"></div>
+      <div id="tp-liste" style="margin-top:12px;display:flex;flex-direction:column;gap:8px"></div>
     </div>
 
     <div class="card">
@@ -4510,6 +4631,7 @@ async function supprimerAnnonce(){
 // Charger jeux disponibles côté joueur
 var derniereAnnonceVue = '';
 function chargerJeuxDisponibles(codeJoueur){
+  if(typeof loadTournoisProgrammes === 'function') loadTournoisProgrammes();
   fetch('/api/annonce/jeux')
   .then(function(r){ return r.json(); })
   .then(function(jeux){
