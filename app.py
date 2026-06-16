@@ -3521,7 +3521,17 @@ def stripe_webhook():
     
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        metadata = session.get("metadata") if hasattr(session, "get") and callable(session.get) else session.metadata if hasattr(session, "metadata") else {}
+        # CORRECTION DÉFINITIVE : convertir en dict Python pur.
+        # Les objets Stripe ne supportent pas .get() de façon fiable -> source des crashs.
+        try:
+            session = dict(session)
+        except Exception:
+            pass
+        metadata = session.get("metadata") or {}
+        try:
+            metadata = dict(metadata)
+        except Exception:
+            pass
         type_p = metadata.get("type", "")
         code_org = metadata.get("code_org", "")
         montant = session.get("amount_total", 0)
