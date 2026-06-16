@@ -1483,15 +1483,11 @@ def valider_bingo():
     
     # Lancer le timer d'effacement automatique (3 heures = 10800 secondes)
     if statut == "valide":
-        timer = threading.Thread(
-            target=effacer_pdfs_apres_tournoi,
-            args=(code_org, 600),
-            daemon=True
-        )
-        timer.start()
-        print(f"[TIMER] Effacement PDFs programmé dans 10 minutes pour {code_org}")
+        # ⚠️ AUTO-EFFACEMENT DÉSACTIVÉ — il supprimait les cartes en plein tournoi !
+        # Les PDFs sont désormais conservés. Ils ne s'effacent QUE manuellement.
+        print(f"[INFO] Gagnant validé pour {code_org} — cartes conservées (auto-effacement désactivé)")
     
-    return jsonify({"ok": True, "message": "Gagnant validé ! PDFs effacés automatiquement dans 3 heures."})
+    return jsonify({"ok": True, "message": "Gagnant validé ! Les cartes sont conservées."})
 
 @app.route("/api/tirage", methods=["POST"])
 def sauvegarder_tirage():
