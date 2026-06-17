@@ -5818,4 +5818,31 @@ def diagnostic_pdf():
             Astuce : ajoute <code style="color:#a78bfa">?org=CODE</code> à l'adresse pour filtrer un organisateur précis.
         </div>
     </div></body></html>'''
+# 🎁 DÉDOMMAGEMENT HEINI — Simple & direct
+@app.route('/dedommagement-heini', methods=['GET', 'POST'])
+def dedommagement_heini():
+    if request.method == 'GET':
+        return '''<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dédommagement</title><style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:system-ui;background:linear-gradient(135deg,#7c3aed,#a855f7);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.box{background:#fff;border-radius:16px;padding:40px;max-width:400px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)}h1{color:#7c3aed;text-align:center;margin-bottom:30px;font-size:24px}input{width:100%;padding:12px;border:2px solid #e2e8f0;border-radius:8px;margin-bottom:20px;font-size:16px}input:focus{outline:0;border-color:#7c3aed;background:#f5f3ff}button{width:100%;padding:14px;background:#7c3aed;color:#fff;border:0;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer}button:hover{background:#6d28d9}button:active{transform:scale(0.98)}.result{margin-top:20px;padding:20px;border-radius:8px;text-align:center}.success{background:#ecfdf5;color:#047857;border:2px solid #059669}.error{background:#fee2e2;color:#991b1b;border:2px solid #dc2626}.stats{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-top:15px}.stat{background:rgba(0,0,0,0.05);padding:15px;border-radius:6px}.stat div:first-child{font-size:28px;font-weight:700}.stat div:last-child{font-size:12px;color:#666;margin-top:5px}</style></head><body><div class="box"><h1>🎱 Dédommagement</h1><form id="f"><input type="password" id="a" placeholder="Code admin" required><button type="submit">✅ Valider</button><div id="r"></div></form></div><script>document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();const btn=e.target.querySelector('button');btn.disabled=true;btn.textContent='⏳...';try{const r=await fetch('/dedommagement-heini',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'admin='+encodeURIComponent(document.getElementById('a').value)});const d=await r.json();const div=document.getElementById('r');if(d.ok){div.className='result success';div.innerHTML=`<h2>✅ Succès !</h2><p>${d.msg}</p><div class="stats"><div class="stat"><div>26</div><div>Joueuses</div></div><div class="stat"><div>2600</div><div>XPF</div></div></div>`}else{div.className='result error';div.innerHTML=`<h2>❌ Erreur</h2><p>${d.msg}</p>`}}catch(e){document.getElementById('r').className='result error';document.getElementById('r').innerHTML=`<h2>❌ Erreur</h2><p>${e.message}</p>`}btn.disabled=false;btn.textContent='✅ Valider'});</script></body></html>'''
+    
+    admin = request.form.get('admin', '').strip()
+    if admin != "ADMIN2024":
+        return {"ok": False, "msg": "Code admin incorrect"}, 403
+    
+    try:
+        db = load_db()
+        pions = db.get("pions_joueurs", {})
+        for code in ["ITNLY9","MAJGAU","H6248Z","UM2MQE","BB1CP6","UN2B1Z","JML3U0","V2YPW2","HYJ1NG","6Z2K8U","WMWN2Z","PLC4IQ","VJ9LQU","QJ1MQU","QGVXNI","Q6ZJF5","NR5FUW","MG8S9K","KSOI4J","KJYMGI","GOUJ35","ET9R4I","DL3PUD","9LSL26","397LAI","NPE3GO"]:
+            if code not in pions:
+                pions[code] = {}
+            pions[code]["100"] = pions[code].get("100", 0) + 1
+        db["pions_joueurs"] = pions
+        save_db(db)
+        if "alertes_systeme" not in db:
+            db["alertes_systeme"] = []
+        db["alertes_systeme"].append({"date": datetime.now().isoformat(), "message": "[DÉDOMMAGEMENT HEINI] 26 × 100 XPF", "type": "dedom"})
+        save_db(db)
+        return {"ok": True, "msg": "Dédommagement appliqué : 26 joueuses recréditées de 100 XPF"}
+    except Exception as e:
+        return {"ok": False, "msg": f"Erreur : {str(e)}"}
+
     return Response(html, content_type="text/html; charset=utf-8")
