@@ -4,7 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Ticket Bingo v2.1</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&amp;family=DM+Sans:wght@400;500&amp;display=swap" rel="stylesheet"/>
 <meta name="application-name" content="Ticket Bingo"/>
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate"/>
 <meta http-equiv="Pragma" content="no-cache"/>
@@ -295,12 +295,12 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <div style="font-size:11px;color:rgba(255,255,255,.6);line-height:1.8">
             <div><strong style="color:rgba(255,255,255,.8)">Boutique Papeete</strong></div>
             <div>Rue Ahnne, Immeuble Levy</div>
-            <div>📘 Facebook : 2Kea&Associé Papeete</div>
+            <div>📘 Facebook : 2Kea&amp;Associé Papeete</div>
           </div>
           <div style="font-size:11px;color:rgba(255,255,255,.6);line-height:1.8;margin-top:8px">
             <div><strong style="color:rgba(255,255,255,.8)">Boutique Raiatea</strong></div>
             <div>Immeuble Lachaux, Uturoa</div>
-            <div>📘 Facebook : 2Kea&Associé Raiatea</div>
+            <div>📘 Facebook : 2Kea&amp;Associé Raiatea</div>
           </div>
           <div style="font-size:12px;color:#fbbf24;margin-top:8px">📞 89 22 23 05</div>
         </div>
@@ -758,9 +758,9 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div id="stripe-rappro-liste" style="margin-top:10px"></div>
       </div>
 
-      <!-- DONNEES & SAUVEGARDE -->
+      <!-- DONNEES &amp; SAUVEGARDE -->
       <div style="background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(37,99,235,.08));border:1px solid rgba(59,130,246,.4);border-radius:12px;padding:14px;margin-bottom:14px">
-        <div style="font-size:14px;font-weight:700;color:#60a5fa;margin-bottom:8px">🧰 Données & sauvegarde</div>
+        <div style="font-size:14px;font-weight:700;color:#60a5fa;margin-bottom:8px">🧰 Données &amp; sauvegarde</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <button onclick="etatDonnees()" style="flex:1;min-width:130px;padding:10px;background:var(--s2);color:#60a5fa;border:1px solid rgba(59,130,246,.4);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">📊 État des données</button>
           <button onclick="telechargerSauvegarde()" style="flex:1;min-width:130px;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">💾 Télécharger sauvegarde</button>
@@ -778,7 +778,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <button onclick="window.open('/enquete-code','_blank')" style="width:100%;padding:10px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">🔎 Centre d'enquête des codes</button>
         </div>
         <div style="margin-top:8px">
-          <button onclick="window.open('/diagnostic-stripe','_blank')" style="width:100%;padding:10px;background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">🔧 Diagnostic Stripe & Email</button>
+          <button onclick="window.open('/diagnostic-stripe','_blank')" style="width:100%;padding:10px;background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">🔧 Diagnostic Stripe &amp; Email</button>
         </div>
         <div style="margin-top:12px;padding:12px;background:rgba(129,140,248,.08);border:1px solid rgba(129,140,248,.3);border-radius:8px">
           <div style="font-size:13px;font-weight:700;color:#818cf8;margin-bottom:6px">🔐 Journal des connexions (anti-mensonge)</div>
@@ -919,7 +919,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     
     <!-- PIONS JOUEUR -->
     <div class="card" style="margin-top:14px;background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(139,92,246,.1));border:1px solid rgba(99,102,241,.3)">
-      <div class="ct" style="margin-bottom:10px">🪙 Mes pions & Commander</div>
+      <div class="ct" style="margin-bottom:10px">🪙 Mes pions &amp; Commander</div>
       <div style="display:flex;gap:8px;margin-bottom:12px">
         <div style="flex:1;background:var(--s2);border-radius:8px;padding:8px;text-align:center">
           <div style="font-size:10px;color:rgba(255,255,255,.4)">🪙 20 XPF</div>
@@ -1342,6 +1342,8 @@ function formatDateTournoi(dateHeure){
 async function loadTournoisProgrammes(){
   try{
     const r = await fetch('/api/tournois-programmes');
+    const ct = r.headers.get('content-type') || '';
+    if(!r.ok || ct.indexOf('application/json') === -1){ return; }
     const tournois = await r.json();
     // Cote organisateur (liste avec bouton supprimer)
     var boxOrg = document.getElementById('tp-liste');
@@ -2040,6 +2042,19 @@ function buildOrgSpace(){
       <div id="tickets-pions-liste"></div>
     </div>
 
+    <!-- CONVERSION RAPIDE -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(217,70,239,.12),rgba(192,38,211,.08));border:1px solid rgba(217,70,239,.4);margin-bottom:14px">
+      <div class="ct">⚡ Remettre un gain rapidement</div>
+      <div style="font-size:11px;color:var(--mu);margin-bottom:10px">Tape le montant exact, le calcul se fait seul</div>
+      <div class="lbl">Code du joueur gagnant</div>
+      <input id="rapide-code" placeholder="Ex: AB12CD" style="text-transform:uppercase;letter-spacing:2px;margin-bottom:8px">
+      <div class="lbl">Montant total a remettre (XPF)</div>
+      <input id="rapide-montant" type="number" placeholder="Ex: 2350" oninput="calcRapide()" style="margin-bottom:8px">
+      <div id="rapide-detail" style="display:none;background:rgba(217,70,239,.1);border-radius:8px;padding:10px;margin-bottom:10px;font-size:13px"></div>
+      <button onclick="donnerMontantRapide()" style="width:100%;padding:10px;background:linear-gradient(135deg,#d946ef,#c026d3);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">⚡ Remettre ce montant</button>
+      <div id="rapide-result" style="margin-top:8px"></div>
+    </div>
+
     <!-- DONNER PIONS JOUEURS -->
     <div class="card">
       <div class="ct">🎁 Donner des pions à un joueur</div>
@@ -2378,7 +2393,10 @@ async function delJeu(nom){try{await fetch(`/api/jeux/${encodeURIComponent(nom)}
 
 async function loadTournois(){
   try{
-    const r=await fetch("/api/tournois");tournois=await r.json();
+    const r=await fetch("/api/tournois");
+    const ct=r.headers.get("content-type")||"";
+    if(!r.ok || ct.indexOf("application/json")===-1){ return; }
+    tournois=await r.json();
     const sel=document.getElementById("b-tournoi");
     sel.innerHTML='<option value="">-- Aucun tournoi --</option>';
     tournois.forEach(t=>{const o=document.createElement("option");o.value=t.id;o.textContent=`${t.nom} — ${new Date(t.date_tournoi).toLocaleDateString('fr-FR')}`;sel.appendChild(o);});
@@ -4525,6 +4543,51 @@ async function donnerPionsJoueur(){
       alert(d.msg || 'Erreur');
     }
   }catch(e){ alert('Erreur'); }
+}
+
+function calcRapide(){
+  var m = parseInt(document.getElementById('rapide-montant').value||0);
+  var det = document.getElementById('rapide-detail');
+  if(!m || m<=0){ det.style.display='none'; return; }
+  var n100 = Math.floor(m/100);
+  var n50 = Math.floor((m-n100*100)/50);
+  var n20 = Math.floor((m-n100*100-n50*50)/20);
+  var reste = m - n100*100 - n50*50 - n20*20;
+  var lignes = [];
+  if(n100>0) lignes.push(n100+' pion(s) de 100 XPF');
+  if(n50>0) lignes.push(n50+' pion(s) de 50 XPF');
+  if(n20>0) lignes.push(n20+' pion(s) de 20 XPF');
+  det.innerHTML = lignes.join('<br>') + (reste>0 ? '<br><span style="color:#fbbf24">Reste '+reste+' XPF en especes a part</span>' : '<br><span style="color:#34d399">Montant couvert exactement</span>');
+  det.style.display = 'block';
+  window._rapideBreak = {n100:n100, n50:n50, n20:n20, reste:reste};
+}
+async function donnerUnPion(code, valeur, nb){
+  const r = await fetch('/api/pions/donner', {
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Token':TOKEN},
+    body: JSON.stringify({code_joueur:code, valeur_pion:valeur, nb_pions:nb, mode_paiement:'Especes'})
+  });
+  return await r.json();
+}
+async function donnerMontantRapide(){
+  var code = document.getElementById('rapide-code').value.trim().toUpperCase();
+  var m = parseInt(document.getElementById('rapide-montant').value||0);
+  if(!code){ alert('Entrez le code du joueur'); return; }
+  if(!m || m<=0){ alert('Entrez un montant'); return; }
+  calcRapide();
+  var b = window._rapideBreak;
+  if(!b || (b.n100===0 && b.n50===0 && b.n20===0)){ alert('Montant trop faible'); return; }
+  try{
+    if(b.n100>0) await donnerUnPion(code, 100, b.n100);
+    if(b.n50>0) await donnerUnPion(code, 50, b.n50);
+    if(b.n20>0) await donnerUnPion(code, 20, b.n20);
+    var msg = (m-b.reste)+' XPF donnes a '+code+(b.reste>0?' (reste '+b.reste+' XPF a part)':'');
+    document.getElementById('rapide-result').innerHTML = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399">'+msg+'</div>';
+    document.getElementById('rapide-code').value='';
+    document.getElementById('rapide-montant').value='';
+    document.getElementById('rapide-detail').style.display='none';
+    loadSoldesPions();
+  }catch(e){ alert('Erreur : '+e.message); }
 }
 
 // === ANNONCES JEUX ORGANISATEUR ===
