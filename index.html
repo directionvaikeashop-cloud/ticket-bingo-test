@@ -1379,7 +1379,15 @@ async function loadTournoisProgrammes(){
         cardJ.style.display = 'none';
       }
     }
-  }catch(e){ console.log('tournois:', e); }
+  }catch(e){
+    if(!window._tournoisRetry){
+      window._tournoisRetry = true;
+      setTimeout(function(){
+        window._tournoisRetry = false;
+        if(typeof loadTournoisProgrammes === 'function') loadTournoisProgrammes();
+      }, 3000);
+    }
+  }
 }
 
 async function supprimerTournoiProgramme(id){
