@@ -5846,3 +5846,22 @@ def dedommagement_heini():
         return {"ok": False, "msg": f"Erreur : {str(e)}"}
 
     return Response(html, content_type="text/html; charset=utf-8")
+@app.route('/dedommagement-heini', methods=['GET', 'POST'])
+def dedommagement_heini():
+    if request.method == 'GET':
+        return '''<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dedommagement</title><style>body{font-family:system-ui;background:#7c3aed;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}.box{background:#fff;border-radius:16px;padding:40px;max-width:400px;width:100%}h1{color:#7c3aed;text-align:center}input{width:100%;padding:12px;border:2px solid #e2e8f0;border-radius:8px;margin:20px 0;font-size:16px}button{width:100%;padding:14px;background:#7c3aed;color:#fff;border:0;border-radius:8px;font-size:16px;font-weight:600}</style></head><body><div class="box"><h1>Dedommagement</h1><form id="f"><input type="password" id="a" placeholder="Code admin" required><button type="submit">Valider</button><div id="r"></div></form></div><script>document.getElementById('f').addEventListener('submit',async e=>{e.preventDefault();const r=await fetch('/dedommagement-heini',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'admin='+encodeURIComponent(document.getElementById('a').value)});const d=await r.json();document.getElementById('r').innerHTML='<p>'+d.msg+'</p>'});</script></body></html>'''
+    admin = request.form.get('admin', '').strip()
+    if admin != "ADMIN2024":
+        return {"ok": False, "msg": "Code admin incorrect"}, 403
+    try:
+        db = load_db()
+        pions = db.get("pions_joueurs", {})
+        for code in ["ITNLY9","MAJGAU","H6248Z","UM2MQE","BB1CP6","UN2B1Z","JML3U0","V2YPW2","HYJ1NG","6Z2K8U","WMWN2Z","PLC4IQ","VJ9LQU","QJ1MQU","QGVXNI","Q6ZJF5","NR5FUW","MG8S9K","KSOI4J","KJYMGI","GOUJ35","ET9R4I","DL3PUD","9LSL26","397LAI","NPE3GO"]:
+            if code not in pions:
+                pions[code] = {}
+            pions[code]["100"] = pions[code].get("100", 0) + 1
+        db["pions_joueurs"] = pions
+        save_db(db)
+        return {"ok": True, "msg": "26 joueuses recreditees de 100 XPF"}
+    except Exception as e:
+        return {"ok": False, "msg": f"Erreur : {str(e)}"}
