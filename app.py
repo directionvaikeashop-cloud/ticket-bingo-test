@@ -1771,6 +1771,79 @@ def calculer_cagnotte():
         "part_org": part_org
     })
 
+@app.route("/api/gain/enregistrer", methods=["POST"])
+def enregistrer_gain():
+    """Enregistre un gain de tournoi ET credite la gagnante en pions. Laisse une trace complete."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Acces refuse"}), 403
+    d = request.json
+    code_gagnant = (d.get("code_gagnant", "") or "").upper().strip()
+    jeu = d.get("jeu", "")
+    montant_gain = int(d.get("montant_gain", 0))
+    if not code_gagnant or montant_gain <= 0:
+        return jsonify({"ok": False, "msg": "Code gagnant et montant obligatoires"}), 400
+    # Decomposer le gain en pions (100 / 50 / 20)
+    reste = montant_gain
+    n100 = reste // 100; reste -= n100 * 100
+    n50 = reste // 50; reste -= n50 * 50
+    n20 = reste // 20; reste -= n20 * 20
+    # Crediter la gagnante
+    if "pions_joueurs" not in DB:
+        DB["pions_joueurs"] = {}
+    if code_gagnant not in DB["pions_joueurs"]:
+        DB["pions_joueurs"][code_gagnant] = {}
+    if n100 > 0:
+        DB["pions_joueurs"][code_gagnant]["100"] = DB["pions_joueurs"][code_gagnant].get("100", 0) + n100
+    if n50 > 0:
+        DB["pions_joueurs"][code_gagnant]["50"] = DB["pions_joueurs"][code_gagnant].get("50", 0) + n50
+    if n20 > 0:
+        DB["pions_joueurs"][code_gagnant]["20"] = DB["pions_joueurs"][code_gagnant].get("20", 0) + n20
+    montant_credite = n100 * 100 + n50 * 50 + n20 * 20
+    # Enregistrer la trace du gain (le journal des gains)
+    if "gains_finaux" not in DB:
+        DB["gains_finaux"] = []
+    trace = {
+        "id": gen_code(6),
+        "code_gagnant": code_gagnant,
+        "code_org": s["code"],
+        "nom_org": s.get("nom", s["code"]),
+        "jeu": jeu,
+        "montant_gain": montant_gain,
+        "montant_credite": montant_credite,
+        "reste_especes": montant_gain - montant_credite,
+        "pions": {"100": n100, "50": n50, "20": n20},
+        "date": datetime.datetime.now().isoformat()
+    }
+    DB["gains_finaux"].insert(0, trace)
+    save_data()
+    return jsonify({
+        "ok": True,
+        "code_gagnant": code_gagnant,
+        "montant_credite": montant_credite,
+        "reste_especes": montant_gain - montant_credite,
+        "pions": {"100": n100, "50": n50, "20": n20},
+        "solde": DB["pions_joueurs"][code_gagnant]
+    })
+
+@app.route("/api/gains/journal", methods=["GET"])
+def journal_gains():
+    """Liste tous les gains enregistres (filtrable par organisateur)."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Acces refuse"}), 403
+    gains = DB.get("gains_finaux", [])
+    # Admin voit tout ; organisateur voit seulement les siens
+    if not s.get("admin"):
+        gains = [g for g in gains if g.get("code_org") == s["code"]]
+    return jsonify({"ok": True, "gains": gains})
+
 @app.route("/api/demande-acces", methods=["POST"])
 def demande_acces():
     d = request.json
