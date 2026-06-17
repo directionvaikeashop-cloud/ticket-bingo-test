@@ -143,6 +143,10 @@ def load_data():
                     data["codes"] = {}
                 if "ADMIN2024" not in data["codes"]:
                     data["codes"]["ADMIN2024"] = {"duree": 36500, "nom": "Administrateur", "actif": True, "admin": True}
+                # CODE ADMIN SECRET (via variable Railway ADMIN_CODE_SECRET)
+                _admin_secret = os.environ.get("ADMIN_CODE_SECRET", "").strip().upper()
+                if _admin_secret:
+                    data["codes"][_admin_secret] = {"duree": 36500, "nom": "Administrateur", "actif": True, "admin": True}
                 if not data.get("jeux"):
                     data["jeux"] = ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"]
                 return data
@@ -294,17 +298,36 @@ def creer_alerte_systeme(type_alerte, niveau, message, cible=""):
         print(f"[ALERTE] Erreur creation alerte : {e}")
 
 
+def _get_client_ip():
+    """Recupere l'adresse IP reelle du client (gere les proxys Railway)."""
+    try:
+        # Railway / proxys mettent l'IP reelle dans X-Forwarded-For
+        fwd = request.headers.get("X-Forwarded-For", "")
+        if fwd:
+            return fwd.split(",")[0].strip()
+        return request.remote_addr or ""
+    except Exception:
+        return ""
+
 def journaliser_connexion(code, resultat, type_compte="organisateur", nom=""):
-    """Enregistre chaque tentative de connexion (reussie ou echouee) pour controle anti-mensonge."""
+    """Enregistre chaque tentative de connexion (reussie ou echouee) avec IP pour controle."""
     global DB
     try:
         if "journal_connexions" not in DB:
             DB["journal_connexions"] = []
+        ip = _get_client_ip()
+        ua = ""
+        try:
+            ua = request.headers.get("User-Agent", "")[:120]
+        except Exception:
+            pass
         DB["journal_connexions"].insert(0, {
             "code": code,
             "nom": nom,
             "resultat": resultat,
             "type_compte": type_compte,
+            "ip": ip,
+            "user_agent": ua,
             "date": datetime.datetime.now().isoformat()
         })
         DB["journal_connexions"] = DB["journal_connexions"][:300]
@@ -1803,6 +1826,33 @@ def enregistrer_gain():
     if n20 > 0:
         DB["pions_joueurs"][code_gagnant]["20"] = DB["pions_joueurs"][code_gagnant].get("20", 0) + n20
     montant_credite = n100 * 100 + n50 * 50 + n20 * 20
+    # DEBITER la poche organisateur (le gain sort de son stock, alimente par les mises)
+    # Si l'org n'a pas assez en poche, on l'autorise mais on note le decouvert (paiement especes possible)
+    decouvert_org = 0
+    if not s.get("admin"):
+        code_org_g = s["code"]
+        DB.setdefault("pions_org", {})
+        DB["pions_org"].setdefault(code_org_g, {})
+        poche = DB["pions_org"][code_org_g]
+        solde_org = poche.get("100", 0) * 100 + poche.get("50", 0) * 50 + poche.get("20", 0) * 20
+        a_debiter = montant_credite
+        if solde_org >= a_debiter:
+            # Debiter proprement en puisant dans les pions disponibles
+            reste_deb = a_debiter
+            for val in ["100", "50", "20"]:
+                vi = int(val)
+                dispo = poche.get(val, 0)
+                use = min(dispo, reste_deb // vi)
+                poche[val] = dispo - use
+                reste_deb -= use * vi
+            # S'il reste un residu non divisible, on le prend sur les plus petits
+            if reste_deb > 0 and poche.get("20", 0) > 0:
+                extra = min(poche.get("20", 0), -(-reste_deb // 20))
+                poche["20"] -= extra
+        else:
+            decouvert_org = a_debiter - solde_org
+            # On vide la poche et on note le decouvert (l'org complete en especes)
+            poche["100"] = 0; poche["50"] = 0; poche["20"] = 0
     # Enregistrer la trace du gain (le journal des gains)
     if "gains_finaux" not in DB:
         DB["gains_finaux"] = []
@@ -1815,6 +1865,7 @@ def enregistrer_gain():
         "montant_gain": montant_gain,
         "montant_credite": montant_credite,
         "reste_especes": montant_gain - montant_credite,
+        "decouvert_org": decouvert_org,
         "pions": {"100": n100, "50": n50, "20": n20},
         "date": datetime.datetime.now().isoformat()
     }
@@ -2060,6 +2111,37 @@ def valider_ticket_pions():
     if not commande:
         save_data()
         return jsonify({"ok": False, "msg": "Commande introuvable"}), 404
+
+    # === CREDIT DES MISES A L'ORGANISATEUR (corrige le cycle cagnotte) ===
+    # Quand une joueuse mise des pions sur un ticket, ces pions reviennent
+    # dans la poche organisateur. C'est avec cette poche que l'org paie les gains.
+    try:
+        code_org_credit = (commande.get("code_org") or "").upper().strip()
+        total_mise = int(commande.get("total_pions", 0) or 0)
+        if code_org_credit and total_mise > 0 and not commande.get("mise_creditee_org"):
+            DB.setdefault("pions_org", {})
+            DB["pions_org"].setdefault(code_org_credit, {})
+            # On credite en pions de 100 (la mise est toujours un multiple de 100)
+            nb100 = total_mise // 100
+            reste = total_mise - nb100 * 100
+            if nb100 > 0:
+                DB["pions_org"][code_org_credit]["100"] = DB["pions_org"][code_org_credit].get("100", 0) + nb100
+            if reste >= 20:
+                n20 = reste // 20
+                DB["pions_org"][code_org_credit]["20"] = DB["pions_org"][code_org_credit].get("20", 0) + n20
+            commande["mise_creditee_org"] = True
+            # Trace de l'encaissement de la mise
+            DB.setdefault("encaissements_org", [])
+            DB["encaissements_org"].insert(0, {
+                "id": secrets.token_hex(4).upper(),
+                "code_org": code_org_credit,
+                "code_joueur": (commande.get("code_joueur") or "").upper(),
+                "jeu": commande.get("jeu", ""),
+                "montant": total_mise,
+                "date": datetime.datetime.now().isoformat()
+            })
+    except Exception as e_credit:
+        print(f"[CREDIT ORG MISE] Erreur : {e_credit}")
 
     # === ATTRIBUTION DU TICKET A LA JOUEUSE (circuit restaure 12/06/2026) ===
     # En validant, l'organisateur attribue les fiches : la joueuse voit son ticket immediatement.
@@ -3660,17 +3742,28 @@ def stripe_webhook():
     
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        # CORRECTION DÉFINITIVE : convertir en dict Python pur.
-        # Les objets Stripe ne supportent pas .get() de façon fiable -> source des crashs.
-        try:
-            session = dict(session)
-        except Exception:
-            pass
+        # CORRECTION DEFINITIVE : conversion RECURSIVE en dict Python pur.
+        # Les objets Stripe (StripeObject) ne supportent pas .get() de facon fiable.
+        def _to_pure_dict(obj):
+            try:
+                if hasattr(obj, "to_dict_recursive"):
+                    return obj.to_dict_recursive()
+            except Exception:
+                pass
+            try:
+                import json as _json
+                return _json.loads(_json.dumps(obj, default=lambda o: dict(o) if hasattr(o, "keys") else str(o)))
+            except Exception:
+                try:
+                    return dict(obj)
+                except Exception:
+                    return {}
+        session = _to_pure_dict(session)
+        if not isinstance(session, dict):
+            session = {}
         metadata = session.get("metadata") or {}
-        try:
-            metadata = dict(metadata)
-        except Exception:
-            pass
+        if not isinstance(metadata, dict):
+            metadata = _to_pure_dict(metadata)
         type_p = metadata.get("type", "")
         code_org = metadata.get("code_org", "")
         montant = session.get("amount_total", 0)
