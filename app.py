@@ -147,6 +147,10 @@ def load_data():
                 _admin_secret = os.environ.get("ADMIN_CODE_SECRET", "").strip().upper()
                 if _admin_secret:
                     data["codes"][_admin_secret] = {"duree": 36500, "nom": "Administrateur", "actif": True, "admin": True}
+                    # SECURITE : desactiver l'ancien ADMIN2024 UNIQUEMENT si le code secret existe
+                    # (garantit qu'on ne se retrouve jamais sans acces admin)
+                    if "ADMIN2024" in data["codes"] and _admin_secret != "ADMIN2024":
+                        data["codes"]["ADMIN2024"]["actif"] = False
                 if not data.get("jeux"):
                     data["jeux"] = ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"]
                 return data
