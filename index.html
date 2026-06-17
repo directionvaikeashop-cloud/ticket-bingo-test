@@ -4349,10 +4349,15 @@ function loadSoldesPions(){
 }
 
 function ouvrirGuide(type){
-  var code = (typeof CODE_ORG !== 'undefined' && CODE_ORG) ? CODE_ORG : ((typeof codeJoueurActuel !== 'undefined' && codeJoueurActuel) ? codeJoueurActuel : '');
+  var code = '';
+  if(typeof CODE_ORG !== 'undefined' && CODE_ORG) code = CODE_ORG;
+  else if(typeof codeJoueurActuel !== 'undefined' && codeJoueurActuel) code = codeJoueurActuel;
+  else if(typeof ADMIN !== 'undefined' && ADMIN) code = 'ADMIN2024';
+  if(!code){ alert('Connecte-toi d\u0027abord pour voir le guide.'); return; }
   var url = (type === 'joueur') ? '/guide-joueur' : '/guide';
-  if(code) url += '?code=' + encodeURIComponent(code);
-  window.open(url, '_blank');
+  url += '?code=' + encodeURIComponent(code);
+  var w = window.open(url, '_blank');
+  if(!w){ window.location.href = url; }
 }
 
 function voirMonCircuit(){
