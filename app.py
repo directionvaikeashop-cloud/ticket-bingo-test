@@ -1259,6 +1259,63 @@ def valider_commande_pions():
     save_data()
     return jsonify({"ok": True})
 
+@app.route("/api/admin/crediter-poche-org", methods=["POST"])
+def crediter_poche_org():
+    """ADMIN : credite la poche ORGANISATEUR (stock pour payer les gains).
+    Sert a regulariser les mises qui n'ont pas ete creditees (defaut corrige).
+    Operation tracee : auteur, IP, montant, motif."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s or not s.get("admin"):
+        return jsonify({"ok": False, "msg": "Acces admin requis"}), 403
+    d = request.json or {}
+    code_org = (d.get("code_org") or "").upper().strip()
+    montant = int(d.get("montant", 0) or 0)
+    motif = (d.get("motif") or "").strip()
+    if not code_org or montant <= 0:
+        return jsonify({"ok": False, "msg": "Code organisateur et montant (>0) obligatoires"}), 400
+    # Verifier que le code existe comme organisateur
+    if code_org not in DB.get("codes", {}):
+        return jsonify({"ok": False, "msg": "Code organisateur introuvable"}), 404
+    # Decomposer le montant en pions (100 puis 20)
+    n100 = montant // 100
+    reste = montant - n100 * 100
+    n20 = reste // 20
+    residu = reste - n20 * 20
+    if residu != 0:
+        return jsonify({"ok": False, "msg": "Le montant doit etre un multiple de 20 XPF"}), 400
+    # Crediter la poche org
+    DB.setdefault("pions_org", {})
+    DB["pions_org"].setdefault(code_org, {})
+    if n100 > 0:
+        DB["pions_org"][code_org]["100"] = DB["pions_org"][code_org].get("100", 0) + n100
+    if n20 > 0:
+        DB["pions_org"][code_org]["20"] = DB["pions_org"][code_org].get("20", 0) + n20
+    # TRACE de l'operation (auteur, IP, montant, motif)
+    DB.setdefault("credits_poche_org", [])
+    DB["credits_poche_org"].insert(0, {
+        "id": secrets.token_hex(4).upper(),
+        "code_org": code_org,
+        "montant": montant,
+        "pions": {"100": n100, "20": n20},
+        "motif": motif,
+        "par": s.get("code", "ADMIN"),
+        "ip": _get_client_ip(),
+        "date": datetime.datetime.now().isoformat()
+    })
+    save_data()
+    poche = DB["pions_org"][code_org]
+    nouveau_solde = poche.get("100", 0) * 100 + poche.get("50", 0) * 50 + poche.get("20", 0) * 20
+    return jsonify({
+        "ok": True,
+        "code_org": code_org,
+        "montant_credite": montant,
+        "pions": {"100": n100, "20": n20},
+        "nouveau_solde_poche_org": nouveau_solde
+    })
+
 @app.route("/api/pions/donner", methods=["POST"])
 def donner_pions():
     global DB
