@@ -653,6 +653,19 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div id="recred-result" style="margin-top:8px"></div>
       </div>
 
+      <!-- REGULARISATION : crediter la POCHE ORGANISATEUR (stock pour payer les gains) -->
+      <div style="background:linear-gradient(135deg,rgba(8,145,178,.14),rgba(13,110,160,.08));border:1px solid rgba(8,145,178,.45);border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:14px;font-weight:700;color:#22d3ee;margin-bottom:8px">🏦 Créditer la poche ORGANISATEUR</div>
+        <div style="font-size:12px;color:rgba(255,255,255,.6);margin-bottom:10px">Remet dans la poche organisateur les mises encaissées qui n'ont pas été créditées (régularisation). C'est le stock qui sert à payer les cagnottes — différent de la poche joueuse.</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+          <input id="credorg-code" placeholder="Code organisateur (ex: CPFRD66H)" style="flex:1;min-width:140px;padding:9px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:#fff;font-size:13px;text-transform:uppercase">
+          <input id="credorg-montant" type="number" placeholder="Montant XPF" style="width:120px;padding:9px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:#fff;font-size:13px">
+        </div>
+        <input id="credorg-motif" placeholder="Motif (ex: Mises tournoi 16/06 non créditées)" style="width:100%;padding:9px;background:var(--s2);border:1px solid var(--bd);border-radius:8px;color:#fff;font-size:13px;margin-bottom:8px">
+        <button onclick="crediterPocheOrg()" style="width:100%;padding:10px;background:#0891b2;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700">🏦 Créditer la poche organisateur</button>
+        <div id="credorg-result" style="margin-top:8px"></div>
+      </div>
+
       <!-- MODE MAINTENANCE -->
       <div style="background:linear-gradient(135deg,rgba(249,115,22,.12),rgba(234,88,12,.08));border:1px solid rgba(249,115,22,.4);border-radius:12px;padding:14px;margin-bottom:14px">
         <div style="font-size:14px;font-weight:700;color:#fb923c;margin-bottom:8px">🚧 Mode maintenance</div>
@@ -6212,6 +6225,38 @@ async function recrediterJoueur(){
       var s = d.solde || {};
       res.innerHTML = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:8px;color:#34d399;font-size:12px">✅ ' + nb + ' pions à ' + valeur + ' XPF crédités à ' + codeJ + ' — Solde : ' + (s['20']||0) + '×20 / ' + (s['50']||0) + '×50 / ' + (s['100']||0) + '×100</div>';
       document.getElementById('recred-nb').value = '';
+    } else {
+      res.innerHTML = '<div style="color:#f87171;font-size:12px">' + (d.msg || 'Erreur') + '</div>';
+    }
+  }catch(e){
+    res.innerHTML = '<div style="color:#f87171;font-size:12px">Erreur réseau</div>';
+  }
+}
+
+async function crediterPocheOrg(){
+  var code = (document.getElementById('credorg-code').value || '').trim().toUpperCase();
+  var montant = parseInt(document.getElementById('credorg-montant').value);
+  var motif = (document.getElementById('credorg-motif').value || '').trim();
+  var res = document.getElementById('credorg-result');
+  if(!code || !montant || montant <= 0){
+    res.innerHTML = '<div style="color:#f87171;font-size:12px">Code organisateur et montant obligatoires</div>';
+    return;
+  }
+  if(montant % 20 !== 0){
+    res.innerHTML = '<div style="color:#f87171;font-size:12px">Le montant doit être un multiple de 20 XPF</div>';
+    return;
+  }
+  if(!confirm('Créditer ' + montant + ' XPF dans la POCHE ORGANISATEUR de ' + code + ' ?')) return;
+  try{
+    const r = await fetch('/api/admin/crediter-poche-org', {
+      method: 'POST', headers: {'Content-Type': 'application/json', 'X-Token': TOKEN},
+      body: JSON.stringify({code_org: code, montant: montant, motif: motif})
+    });
+    const d = await r.json();
+    if(d.ok){
+      res.innerHTML = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:8px;color:#34d399;font-size:12px">✅ ' + d.montant_credite + ' XPF crédités dans la poche organisateur de ' + d.code_org + ' (' + d.pions['100'] + '×100 + ' + (d.pions['20']||0) + '×20). Nouveau solde poche org : ' + d.nouveau_solde_poche_org + ' XPF</div>';
+      document.getElementById('credorg-montant').value = '';
+      document.getElementById('credorg-motif').value = '';
     } else {
       res.innerHTML = '<div style="color:#f87171;font-size:12px">' + (d.msg || 'Erreur') + '</div>';
     }
