@@ -1208,6 +1208,7 @@ def get_soldes_pions():
     code_org = s["code"]
     pions = DB.get("pions_org", {}).get(code_org, {})
     return jsonify({
+        "pions_10": pions.get("10", 0),
         "pions_20": pions.get("20", 0),
         "pions_50": pions.get("50", 0),
         "pions_100": pions.get("100", 0)
@@ -1282,24 +1283,30 @@ def crediter_poche_org():
     # Decomposer le montant en pions (100 puis 20)
     n100 = montant // 100
     reste = montant - n100 * 100
-    n20 = reste // 20
-    residu = reste - n20 * 20
+    n50 = reste // 50; reste -= n50 * 50
+    n20 = reste // 20; reste -= n20 * 20
+    n10 = reste // 10; reste -= n10 * 10
+    residu = reste
     if residu != 0:
-        return jsonify({"ok": False, "msg": "Le montant doit etre un multiple de 20 XPF"}), 400
+        return jsonify({"ok": False, "msg": "Le montant doit etre un multiple de 10 XPF"}), 400
     # Crediter la poche org
     DB.setdefault("pions_org", {})
     DB["pions_org"].setdefault(code_org, {})
     if n100 > 0:
         DB["pions_org"][code_org]["100"] = DB["pions_org"][code_org].get("100", 0) + n100
+    if n50 > 0:
+        DB["pions_org"][code_org]["50"] = DB["pions_org"][code_org].get("50", 0) + n50
     if n20 > 0:
         DB["pions_org"][code_org]["20"] = DB["pions_org"][code_org].get("20", 0) + n20
+    if n10 > 0:
+        DB["pions_org"][code_org]["10"] = DB["pions_org"][code_org].get("10", 0) + n10
     # TRACE de l'operation (auteur, IP, montant, motif)
     DB.setdefault("credits_poche_org", [])
     DB["credits_poche_org"].insert(0, {
         "id": secrets.token_hex(4).upper(),
         "code_org": code_org,
         "montant": montant,
-        "pions": {"100": n100, "20": n20},
+        "pions": {"100": n100, "50": n50, "20": n20, "10": n10},
         "motif": motif,
         "par": s.get("code", "ADMIN"),
         "ip": _get_client_ip(),
@@ -1307,12 +1314,12 @@ def crediter_poche_org():
     })
     save_data()
     poche = DB["pions_org"][code_org]
-    nouveau_solde = poche.get("100", 0) * 100 + poche.get("50", 0) * 50 + poche.get("20", 0) * 20
+    nouveau_solde = poche.get("100", 0) * 100 + poche.get("50", 0) * 50 + poche.get("20", 0) * 20 + poche.get("10", 0) * 10
     return jsonify({
         "ok": True,
         "code_org": code_org,
         "montant_credite": montant,
-        "pions": {"100": n100, "20": n20},
+        "pions": {"100": n100, "50": n50, "20": n20, "10": n10},
         "nouveau_solde_poche_org": nouveau_solde
     })
 
@@ -1870,11 +1877,12 @@ def enregistrer_gain():
     montant_gain = int(d.get("montant_gain", 0))
     if not code_gagnant or montant_gain <= 0:
         return jsonify({"ok": False, "msg": "Code gagnant et montant obligatoires"}), 400
-    # Decomposer le gain en pions (100 / 50 / 20)
+    # Decomposer le gain en pions (100 / 50 / 20 / 10)
     reste = montant_gain
     n100 = reste // 100; reste -= n100 * 100
     n50 = reste // 50; reste -= n50 * 50
     n20 = reste // 20; reste -= n20 * 20
+    n10 = reste // 10; reste -= n10 * 10
     # Crediter la gagnante
     if "pions_joueurs" not in DB:
         DB["pions_joueurs"] = {}
@@ -1886,7 +1894,9 @@ def enregistrer_gain():
         DB["pions_joueurs"][code_gagnant]["50"] = DB["pions_joueurs"][code_gagnant].get("50", 0) + n50
     if n20 > 0:
         DB["pions_joueurs"][code_gagnant]["20"] = DB["pions_joueurs"][code_gagnant].get("20", 0) + n20
-    montant_credite = n100 * 100 + n50 * 50 + n20 * 20
+    if n10 > 0:
+        DB["pions_joueurs"][code_gagnant]["10"] = DB["pions_joueurs"][code_gagnant].get("10", 0) + n10
+    montant_credite = n100 * 100 + n50 * 50 + n20 * 20 + n10 * 10
     # DEBITER la poche organisateur (le gain sort de son stock, alimente par les mises)
     # Si l'org n'a pas assez en poche, on l'autorise mais on note le decouvert (paiement especes possible)
     decouvert_org = 0
@@ -1895,25 +1905,28 @@ def enregistrer_gain():
         DB.setdefault("pions_org", {})
         DB["pions_org"].setdefault(code_org_g, {})
         poche = DB["pions_org"][code_org_g]
-        solde_org = poche.get("100", 0) * 100 + poche.get("50", 0) * 50 + poche.get("20", 0) * 20
+        solde_org = poche.get("100", 0) * 100 + poche.get("50", 0) * 50 + poche.get("20", 0) * 20 + poche.get("10", 0) * 10
         a_debiter = montant_credite
         if solde_org >= a_debiter:
             # Debiter proprement en puisant dans les pions disponibles
             reste_deb = a_debiter
-            for val in ["100", "50", "20"]:
+            for val in ["100", "50", "20", "10"]:
                 vi = int(val)
                 dispo = poche.get(val, 0)
                 use = min(dispo, reste_deb // vi)
                 poche[val] = dispo - use
                 reste_deb -= use * vi
             # S'il reste un residu non divisible, on le prend sur les plus petits
-            if reste_deb > 0 and poche.get("20", 0) > 0:
+            if reste_deb > 0 and poche.get("10", 0) > 0:
+                extra = min(poche.get("10", 0), -(-reste_deb // 10))
+                poche["10"] -= extra
+            elif reste_deb > 0 and poche.get("20", 0) > 0:
                 extra = min(poche.get("20", 0), -(-reste_deb // 20))
                 poche["20"] -= extra
         else:
             decouvert_org = a_debiter - solde_org
             # On vide la poche et on note le decouvert (l'org complete en especes)
-            poche["100"] = 0; poche["50"] = 0; poche["20"] = 0
+            poche["100"] = 0; poche["50"] = 0; poche["20"] = 0; poche["10"] = 0
     # Enregistrer la trace du gain (le journal des gains)
     if "gains_finaux" not in DB:
         DB["gains_finaux"] = []
@@ -2286,9 +2299,10 @@ def solde_pions_joueur(code_joueur):
     global DB
     DB = load_data()
     if code_joueur.upper().strip() in DB.get("codes_bloques", []):
-        return jsonify({"pions_20": 0, "pions_50": 0, "pions_100": 0, "bloque": True})
+        return jsonify({"pions_10": 0, "pions_20": 0, "pions_50": 0, "pions_100": 0, "bloque": True})
     pions = DB.get("pions_joueurs", {}).get(code_joueur.upper(), {})
     return jsonify({
+        "pions_10": pions.get("10", 0),
         "pions_20": pions.get("20", 0),
         "pions_50": pions.get("50", 0),
         "pions_100": pions.get("100", 0)
