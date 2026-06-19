@@ -2367,6 +2367,7 @@ def gerer_annonce_jeu():
         "jeu": d.get("jeu", ""),
         "prix": int(d.get("prix", 0)),
         "desc": d.get("desc", ""),
+        "ventes_ouvertes": True,
         "date": datetime.datetime.now().isoformat()
     }
     DB["annonces_jeux"].insert(0, annonce)
@@ -2411,6 +2412,29 @@ def get_annonces_jeux():
             annonces = []
     return jsonify(annonces)
 
+@app.route("/api/annonce/ventes", methods=["POST"])
+def annonce_ventes():
+    """ORGANISATEUR — Ouvre ou ferme les ventes de son jeu annonce.
+    Quand c'est ferme, plus aucune joueuse ne peut commander (bloque cote serveur)."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    d = request.get_json(silent=True) or {}
+    ouvertes = bool(d.get("ouvertes", False))
+    trouve = False
+    for a in DB.get("annonces_jeux", []):
+        if a.get("code_org") == s["code"]:
+            a["ventes_ouvertes"] = ouvertes
+            trouve = True
+            break  # une seule annonce active par organisateur
+    if not trouve:
+        return jsonify({"ok": False, "msg": "Aucun jeu annoncé à clôturer."}), 404
+    save_data()
+    return jsonify({"ok": True, "ventes_ouvertes": ouvertes})
+
 @app.route("/api/commande/ticket-pions", methods=["POST"])
 def commander_ticket_pions():
     global DB
@@ -2422,7 +2446,16 @@ def commander_ticket_pions():
     nb_tickets = int(d.get("nb_tickets", 1))
     total = int(d.get("total", 0))
     code_org = d.get("code_org", "")
-    
+
+    # === BLOCAGE VENTES FERMEES (avant tout debit de pions) ===
+    # Si l'organisateur a cloture la vente de ce jeu, on refuse la commande
+    # AVANT de toucher aux pions : la joueuse ne paie donc jamais pour rien.
+    for a in DB.get("annonces_jeux", []):
+        if a.get("code_org") == code_org and (a.get("jeu", "") or "") == jeu:
+            if a.get("ventes_ouvertes") is False:
+                return jsonify({"ok": False, "msg": "🛑 Les ventes de ce jeu sont fermées par l'organisateur. Aucun pion n'a été débité."}), 400
+            break
+
     # Vérifier solde pions du joueur
     pions_joueur = DB.get("pions_joueurs", {}).get(code_joueur, {})
     
