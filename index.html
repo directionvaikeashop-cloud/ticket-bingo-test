@@ -367,10 +367,10 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     </div>
 
     <!-- JEUX DISPONIBLES -->
-    <div id="joueur-jeux-card" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:14px;margin-bottom:14px">
+    <div id="joueur-jeux-card" class="jeux-dispo-card" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:14px;margin-bottom:14px">
       <div style="font-size:14px;font-weight:700;color:#fbbf24;margin-bottom:6px">🎮 Jeux disponibles maintenant !</div>
       <div style="font-size:11px;color:#34d399;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:8px;padding:8px;margin-bottom:10px">🌍 Tes pions sont universels — tu peux jouer chez TOUS les organisateurs de l'application avec le même solde !</div>
-      <div id="joueur-jeux-liste"></div>
+      <div id="joueur-jeux-liste" class="jeux-dispo-liste"></div>
     </div>
 
     <!-- COMMANDER -->
@@ -433,6 +433,13 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
     <div id="bandeau-msg-joueurs" style="display:none;background:linear-gradient(135deg,rgba(16,185,129,.18),rgba(5,150,105,.1));border:1.5px solid #10b981;border-radius:12px;padding:12px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:#34d399;margin-bottom:4px">📢 Message de Ticket Bingo <span id="msg-joueurs-date" style="font-weight:400;color:rgba(255,255,255,.4)"></span></div>
       <div id="msg-joueurs-contenu" style="font-size:13px;color:#fff;line-height:1.6"></div>
+    </div>
+
+    <!-- JEUX DISPONIBLES (visibles aussi sur l'écran Jouer) -->
+    <div class="jeux-dispo-card" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:14px;margin-bottom:14px">
+      <div style="font-size:14px;font-weight:700;color:#fbbf24;margin-bottom:6px">🎮 Jeux disponibles maintenant !</div>
+      <div style="font-size:11px;color:#34d399;background:rgba(16,185,129,.12);border:1px solid rgba(16,185,129,.3);border-radius:8px;padding:8px;margin-bottom:10px">🌍 Tes pions sont universels — tu peux jouer chez TOUS les organisateurs de l'application avec le même solde !</div>
+      <div class="jeux-dispo-liste"></div>
     </div>
 
     <!-- ONGLET JOUER -->
@@ -1289,6 +1296,9 @@ async function accesJoueurDirect(){
       // Vérifier les messages micro toutes les 3 secondes
       setInterval(checkMicroJoueur, 3000);
       checkMicroJoueur();
+      // Afficher et rafraîchir les jeux annoncés par l'organisateur
+      chargerJeuxDisponibles(code);
+      setInterval(function(){ chargerJeuxDisponibles(code); }, 10000);
       document.getElementById("joueur-ticket-zone").innerHTML = `
         <div class="card">
           <div class="ct">🎱 ${t.jeu} — Série ${t.serie}</div>
@@ -4805,39 +4815,48 @@ function chargerJeuxDisponibles(codeJoueur){
   fetch('/api/annonce/jeux')
   .then(function(r){ return r.json(); })
   .then(function(jeux){
-    var card = document.getElementById('joueur-jeux-card');
-    var liste = document.getElementById('joueur-jeux-liste');
-    if(!card || !liste) return;
+    var cards = document.querySelectorAll('.jeux-dispo-card');
+    var listes = document.querySelectorAll('.jeux-dispo-liste');
+    if(!cards.length || !listes.length) return;
     if(!jeux.length){
-      card.style.display = 'none';
+      cards.forEach(function(c){ c.style.display = 'none'; });
       return;
     }
-    card.style.display = 'block';
-    liste.innerHTML = '';
-    jeux.forEach(function(j){
-      var div = document.createElement('div');
-      div.style.cssText = 'background:rgba(0,0,0,.2);border-radius:10px;padding:12px;margin-bottom:8px';
-      div.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-        '<div><div style="font-size:15px;font-weight:700;color:#fff">' + j.jeu + '</div>' +
-        '<div style="font-size:12px;color:#fbbf24">💰 ' + (j.prix||0).toLocaleString('fr-FR') + ' XPF / ticket</div>' +
-        (j.desc ? '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">' + j.desc + '</div>' : '') +
-        '</div></div>' +
-        '<div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:8px">Organisateur : ' + (j.nom_org||'') + '</div>' +
-        '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">' +
-        '<input id="nb-tickets-' + j.id + '" type="number" placeholder="Nb tickets" min="1" value="1" style="width:100px;font-size:13px;margin-bottom:0"/>' +
-        '<div style="font-size:12px;color:rgba(255,255,255,.5)">× ' + (j.prix||0).toLocaleString('fr-FR') + ' XPF</div>' +
-        '</div>';
-      var btn = document.createElement('button');
-      btn.style.cssText = 'width:100%;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700';
-      btn.textContent = '🎫 Commander ce jeu avec mes pions';
-      (function(jid, jjeu, jprix, jorg){ 
-        btn.onclick = function(){ 
-          var nb = parseInt(document.getElementById('nb-tickets-' + jid).value || 1);
-          commanderTicketAvecPions(jid, jjeu, jprix, nb, jorg, codeJoueur);
-        }; 
-      })(j.id, j.jeu, j.prix, j.code_org);
-      div.appendChild(btn);
-      liste.appendChild(div);
+    cards.forEach(function(c){ c.style.display = 'block'; });
+    listes.forEach(function(liste){
+      liste.innerHTML = '';
+      jeux.forEach(function(j){
+        var div = document.createElement('div');
+        div.style.cssText = 'background:rgba(0,0,0,.2);border-radius:10px;padding:12px;margin-bottom:8px';
+        div.innerHTML = '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+          '<div><div style="font-size:15px;font-weight:700;color:#fff">' + j.jeu + '</div>' +
+          '<div style="font-size:12px;color:#fbbf24">💰 ' + (j.prix||0).toLocaleString('fr-FR') + ' XPF / ticket</div>' +
+          (j.desc ? '<div style="font-size:11px;color:rgba(255,255,255,.5);margin-top:2px">' + j.desc + '</div>' : '') +
+          '</div></div>' +
+          '<div style="font-size:11px;color:rgba(255,255,255,.4);margin-bottom:8px">Organisateur : ' + (j.nom_org||'') + '</div>';
+        var ligneQte = document.createElement('div');
+        ligneQte.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+        var inputQte = document.createElement('input');
+        inputQte.type = 'number'; inputQte.min = '1'; inputQte.value = '1';
+        inputQte.placeholder = 'Nb tickets';
+        inputQte.style.cssText = 'width:100px;font-size:13px;margin-bottom:0';
+        var prixSpan = document.createElement('div');
+        prixSpan.style.cssText = 'font-size:12px;color:rgba(255,255,255,.5)';
+        prixSpan.textContent = '× ' + (j.prix||0).toLocaleString('fr-FR') + ' XPF';
+        ligneQte.appendChild(inputQte); ligneQte.appendChild(prixSpan);
+        div.appendChild(ligneQte);
+        var btn = document.createElement('button');
+        btn.style.cssText = 'width:100%;padding:10px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700';
+        btn.textContent = '🎫 Commander ce jeu avec mes pions';
+        (function(jid, jjeu, jprix, jorg, champQte){
+          btn.onclick = function(){
+            var nb = parseInt(champQte.value || 1);
+            commanderTicketAvecPions(jid, jjeu, jprix, nb, jorg, codeJoueur);
+          };
+        })(j.id, j.jeu, j.prix, j.code_org, inputQte);
+        div.appendChild(btn);
+        liste.appendChild(div);
+      });
     });
   })
   .catch(function(){});
