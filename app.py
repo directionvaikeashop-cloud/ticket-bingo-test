@@ -2077,6 +2077,82 @@ def calculer_cagnotte():
         "part_org": part_org
     })
 
+@app.route("/api/cagnotte/total-auto")
+def cagnotte_total_auto():
+    """CALCUL AUTOMATIQUE de la cagnotte : additionne tout seul les mises du jeu
+    en cours de l'organisateur, a partir des commandes de tickets recues.
+    Plus besoin de compter a la main sur une feuille."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    code_org = s["code"]
+
+    # 1) Le "jeu en cours" = l'annonce active de cet organisateur (la plus recente).
+    #    Les annonces sont inserees en tete de liste, donc la 1ere trouvee est la bonne.
+    mon_annonce = None
+    for a in DB.get("annonces_jeux", []):
+        if a.get("code_org") == code_org:
+            mon_annonce = a
+            break
+
+    vide = {"ok": True, "jeu": "", "total_mises": 0, "nb_tickets": 0,
+            "nb_commandes": 0, "nb_validees": 0, "nb_attente": 0,
+            "cagnotte_80": 0, "part_org_20": 0, "joueuses": 0}
+    if not mon_annonce:
+        return jsonify(vide)
+
+    jeu = mon_annonce.get("jeu", "")
+    date_debut = mon_annonce.get("date", "")
+
+    # 2) Additionner les mises de CE jeu, depuis l'annonce, en ignorant
+    #    les commandes annulees ou remboursees.
+    total_mises = 0
+    nb_tickets = 0
+    nb_validees = 0
+    nb_attente = 0
+    joueuses = set()
+    for c in DB.get("commandes_tickets_pions", []):
+        if c.get("code_org") != code_org:
+            continue
+        if (c.get("jeu", "") or "") != jeu:
+            continue
+        if date_debut and (c.get("date", "") or "") < date_debut:
+            continue  # commande d'un tournoi precedent du meme jeu
+        statut = c.get("statut", "")
+        if statut not in ("en_attente", "validee"):
+            continue  # exclut annulee / rembourse
+        try:
+            montant = int(c.get("total_pions", 0) or 0)
+        except Exception:
+            montant = 0
+        total_mises += montant
+        try:
+            nb_tickets += int(c.get("nb_tickets", 1) or 1)
+        except Exception:
+            nb_tickets += 1
+        if statut == "validee":
+            nb_validees += 1
+        else:
+            nb_attente += 1
+        if c.get("code_joueur"):
+            joueuses.add(c.get("code_joueur"))
+
+    return jsonify({
+        "ok": True,
+        "jeu": jeu,
+        "total_mises": total_mises,
+        "nb_tickets": nb_tickets,
+        "nb_commandes": nb_validees + nb_attente,
+        "nb_validees": nb_validees,
+        "nb_attente": nb_attente,
+        "cagnotte_80": round(total_mises * 0.80),
+        "part_org_20": round(total_mises * 0.20),
+        "joueuses": len(joueuses),
+    })
+
 @app.route("/api/gain/enregistrer", methods=["POST"])
 def enregistrer_gain():
     """Enregistre un gain de tournoi ET credite la gagnante en pions. Laisse une trace complete."""
