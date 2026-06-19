@@ -7183,3 +7183,88 @@ def api_grand_livre_liste():
 # ============================================================
 # 📒 FIN DU BLOC GRAND LIVRE
 # ============================================================
+
+
+# ============================================================
+# 👁️ SURVEILLANCE EN DIRECT — qui a ouvert son PDF / qui pointe
+# Ajout du 19/06/2026. Stockage EN MEMOIRE (temps reel, ephemere) :
+# n'ecrit RIEN sur le disque, ne declenche aucune sauvegarde,
+# ne ralentit pas l'appli. Se vide au redemarrage (normal).
+# ============================================================
+import threading as _threading_act
+ACTIVITE_JOUEURS = {}          # code_joueur -> {pdf_ouvert, dernier_pointage, nb_coches, jeu, derniere_activite}
+_VERROU_ACTIVITE = _threading_act.Lock()
+
+
+@app.route("/api/activite/ping", methods=["POST"])
+def activite_ping():
+    """Appele par l'espace joueuse : ouverture du PDF, pointage, ou simple presence."""
+    d = request.get_json(silent=True) or {}
+    code = (d.get("code_joueur", "") or "").upper().strip()
+    if not code:
+        return jsonify({"ok": False}), 400
+    typ = d.get("type", "ping")
+    maintenant = datetime.datetime.now().isoformat()
+    with _VERROU_ACTIVITE:
+        a = ACTIVITE_JOUEURS.get(code, {})
+        a["derniere_activite"] = maintenant
+        if typ == "pdf_ouvert":
+            a["pdf_ouvert"] = maintenant
+        if typ == "pointage":
+            a["dernier_pointage"] = maintenant
+        if d.get("jeu"):
+            a["jeu"] = d.get("jeu")
+        if "nb_coches" in d:
+            try:
+                a["nb_coches"] = int(d.get("nb_coches") or 0)
+            except Exception:
+                pass
+        ACTIVITE_JOUEURS[code] = a
+    return jsonify({"ok": True})
+
+
+@app.route("/api/activite/joueurs")
+def activite_joueurs():
+    """ORGANISATEUR — Voir en direct qui a ouvert son PDF et qui est en train de pointer."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify([]), 403
+    code_org = s["code"]
+    is_admin = bool(s.get("admin"))
+
+    # A quel organisateur appartient chaque joueuse ? (via ses tickets)
+    org_de = {}
+    nom_de = {}
+    for t in DB.get("tickets", []):
+        c = (t.get("code_acheteur", "") or "").upper()
+        if c:
+            org_de[c] = t.get("code_org")
+            nom_de[c] = t.get("acheteur", "")
+
+    maintenant = datetime.datetime.now()
+    out = []
+    with _VERROU_ACTIVITE:
+        for code, a in list(ACTIVITE_JOUEURS.items()):
+            if not is_admin and org_de.get(code) != code_org:
+                continue
+            secs = 99999
+            try:
+                secs = (maintenant - datetime.datetime.fromisoformat(a.get("derniere_activite", ""))).total_seconds()
+            except Exception:
+                secs = 99999
+            out.append({
+                "code": code,
+                "nom": nom_de.get(code, ""),
+                "a_ouvert_pdf": bool(a.get("pdf_ouvert")),
+                "pdf_ouvert": a.get("pdf_ouvert", ""),
+                "dernier_pointage": a.get("dernier_pointage", ""),
+                "nb_coches": a.get("nb_coches", 0),
+                "jeu": a.get("jeu", ""),
+                "en_train_de_jouer": (secs <= 35),
+                "secondes_inactif": int(secs) if secs < 99999 else None,
+            })
+    out.sort(key=lambda x: (x["secondes_inactif"] if x["secondes_inactif"] is not None else 99999))
+    return jsonify(out)
