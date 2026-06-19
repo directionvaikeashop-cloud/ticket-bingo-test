@@ -366,6 +366,18 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       <div id="tournois-avenir-liste"></div>
     </div>
 
+    <!-- 🙋 LÈVE-LA-MAIN : signaler à l'organisateur avant le jeu -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(99,102,241,.15),rgba(124,58,237,.1));border:1px solid rgba(99,102,241,.4);margin-bottom:14px">
+      <div style="font-size:14px;font-weight:700;color:#a5b4fc;margin-bottom:4px">🙋 Dis à l'organisateur où tu en es</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:10px">Un clic et l'organisateur te voit en direct (avant le jeu).</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <button onclick="envoyerSignal('prete')" style="padding:11px;background:rgba(16,185,129,.22);color:#34d399;border:1px solid rgba(16,185,129,.5);border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">✅ Je suis prête</button>
+        <button onclick="envoyerSignal('souci_pdf')" style="padding:11px;background:rgba(245,158,11,.18);color:#fbbf24;border:1px solid rgba(245,158,11,.45);border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">🙋 J'arrive pas à ouvrir mon PDF</button>
+        <button onclick="envoyerSignal('souci_connexion')" style="padding:11px;background:rgba(239,68,68,.18);color:#f87171;border:1px solid rgba(239,68,68,.45);border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">🙋 J'ai un problème de connexion</button>
+      </div>
+      <div id="signal-confirme" style="display:none;margin-top:10px;text-align:center;font-size:13px;color:#34d399;font-weight:700"></div>
+    </div>
+
     <!-- JEUX DISPONIBLES -->
     <div id="joueur-jeux-card" class="jeux-dispo-card" style="display:none;background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(251,191,36,.1));border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:14px;margin-bottom:14px">
       <div style="font-size:14px;font-weight:700;color:#fbbf24;margin-bottom:6px">🎮 Jeux disponibles maintenant !</div>
@@ -2744,15 +2756,54 @@ async function chargerSurveillance(){
       var depuis = (j.secondes_inactif == null) ? ''
         : (j.secondes_inactif < 60 ? ('vu il y a ' + j.secondes_inactif + 's')
           : ('vu il y a ' + Math.round(j.secondes_inactif/60) + 'min'));
-      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--s2);border:0.5px solid var(--bd);border-radius:8px;margin-bottom:6px">'
-        + '<div><div style="font-weight:700;font-size:13px">' + (j.nom || j.code) + ' <span style="color:var(--mu);font-size:11px">(' + j.code + ')</span></div>'
+      var signalHtml = '';
+      if(j.signal_label){
+        var estSouci = (j.signal || '').indexOf('souci') === 0;
+        var cSig = estSouci ? '#f87171' : '#34d399';
+        var bgSig = estSouci ? 'rgba(239,68,68,.15)' : 'rgba(16,185,129,.15)';
+        signalHtml = '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:8px;padding:7px 8px;background:' + bgSig + ';border-radius:6px">'
+          + '<span style="font-size:12px;font-weight:700;color:' + cSig + '">' + j.signal_label + '</span>'
+          + '<button onclick="effacerSignal(\'' + j.code + '\')" style="padding:4px 9px;background:var(--s2);color:var(--mu);border:0.5px solid var(--bd);border-radius:6px;cursor:pointer;font-size:11px;white-space:nowrap">✓ Traité</button>'
+          + '</div>';
+      }
+      return '<div style="padding:10px;background:var(--s2);border:0.5px solid var(--bd);border-radius:8px;margin-bottom:6px">'
+        + '<div style="font-weight:700;font-size:13px">' + (j.nom || j.code) + ' <span style="color:var(--mu);font-size:11px">(' + j.code + ')</span></div>'
         + '<div style="font-size:11px;color:' + couleur + ';font-weight:600">' + statut + '</div>'
-        + '<div style="font-size:11px;color:var(--mu)">' + (j.nb_coches || 0) + ' numéros pointés · ' + depuis + '</div></div></div>';
+        + '<div style="font-size:11px;color:var(--mu)">' + (j.nb_coches || 0) + ' numéros pointés · ' + depuis + '</div>'
+        + signalHtml
+        + '</div>';
     }).join('');
+  }catch(e){}
+}
+async function effacerSignal(code){
+  try{
+    await fetch('/api/activite/signal/effacer', {
+      method:'POST', headers:{'Content-Type':'application/json','X-Token':TOKEN},
+      body: JSON.stringify({code: code})
+    });
+    chargerSurveillance();
   }catch(e){}
 }
 // Rafraîchissement automatique de la surveillance toutes les 8s (si organisateur connecté)
 try{ setInterval(function(){ try{ if(typeof TOKEN !== 'undefined' && TOKEN && document.getElementById('surveillance-liste')) chargerSurveillance(); }catch(e){} }, 8000); }catch(e){}
+
+// 🙋 LÈVE-LA-MAIN : la joueuse signale son état à l'organisateur
+function envoyerSignal(type){
+  if(typeof codeJoueurActuel === 'undefined' || !codeJoueurActuel){ alert('Connecte-toi d\'abord à ton espace joueuse.'); return; }
+  var labels = {
+    'prete': '✅ Prête à jouer',
+    'souci_pdf': '🙋 N\'arrive pas à ouvrir le PDF',
+    'souci_connexion': '🙋 Problème de connexion'
+  };
+  try{
+    fetch('/api/activite/signal', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code_joueur: codeJoueurActuel, signal: type, label: labels[type] || type})
+    });
+  }catch(e){}
+  var c = document.getElementById('signal-confirme');
+  if(c){ c.textContent = 'Envoyé à l\'organisateur ✅'; c.style.display = 'block'; setTimeout(function(){ if(c) c.style.display = 'none'; }, 4000); }
+}
 
 // 👁️ MOUCHARDS D'ACTIVITÉ : signalent à l'organisateur l'ouverture du PDF et le pointage.
 var _heartbeatActivite = null;
