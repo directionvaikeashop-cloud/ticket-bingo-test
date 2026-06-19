@@ -159,6 +159,106 @@ def _lire_donnees_brut_cache():
     return contenu
 
 
+# ============================================================
+# 🐘 POSTGRESQL — coffre-fort durable (filet anti-perte de données)
+# Si la variable DATABASE_URL existe, l'appli RECOPIE en continu toutes
+# ses données dans PostgreSQL (base ACID, qui ne se corrompt jamais).
+# Le fichier reste la source rapide (avec le cache) ; PostgreSQL est le
+# coffre-fort : si le volume Railway est perdu/abîmé, on récupère
+# automatiquement depuis PostgreSQL au démarrage.
+# Si DATABASE_URL n'existe pas → rien ne change (repli fichier total).
+# ============================================================
+_PG_URL = os.environ.get("DATABASE_URL", "").strip()
+_PG_POOL = None
+_PG_OK = False
+
+
+def _init_postgres():
+    global _PG_POOL, _PG_OK, _PG_URL
+    if not _PG_URL:
+        print("[PG] DATABASE_URL absent — stockage fichier classique (aucun changement).")
+        return
+    try:
+        import psycopg2
+        from psycopg2.pool import ThreadedConnectionPool
+        if _PG_URL.startswith("postgres://"):
+            _PG_URL = "postgresql://" + _PG_URL[len("postgres://"):]
+        _PG_POOL = ThreadedConnectionPool(1, 10, _PG_URL)
+        conn = _PG_POOL.getconn()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("CREATE TABLE IF NOT EXISTS app_data (id INT PRIMARY KEY, data JSONB NOT NULL)")
+            conn.commit()
+        finally:
+            _PG_POOL.putconn(conn)
+        _PG_OK = True
+        print("[PG] PostgreSQL connecté — coffre-fort durable activé.")
+    except Exception as e:
+        print(f"[PG] Indisponible, on garde le fichier : {e}")
+        _PG_OK = False
+
+
+def _pg_lire():
+    if not _PG_OK:
+        return None
+    conn = _PG_POOL.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT data FROM app_data WHERE id = 1")
+            row = cur.fetchone()
+        conn.commit()
+        return row[0] if row else None
+    finally:
+        _PG_POOL.putconn(conn)
+
+
+def _pg_ecrire(data):
+    if not _PG_OK:
+        return False
+    from psycopg2.extras import Json
+    conn = _PG_POOL.getconn()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO app_data (id, data) VALUES (1, %s) "
+                "ON CONFLICT (id) DO UPDATE SET data = EXCLUDED.data",
+                (Json(data),),
+            )
+        conn.commit()
+        return True
+    finally:
+        _PG_POOL.putconn(conn)
+
+
+def _synchroniser_postgres_demarrage():
+    """Au démarrage : recopie le fichier vers PostgreSQL la 1ère fois,
+    OU récupère le fichier depuis PostgreSQL si le volume a été perdu."""
+    if not _PG_OK:
+        return
+    try:
+        pg_data = _pg_lire()
+        fichier_data = None
+        if os.path.exists(DATA_FILE):
+            try:
+                with open(DATA_FILE) as f:
+                    fichier_data = json.load(f)
+            except Exception:
+                fichier_data = None
+        if pg_data is None and fichier_data is not None:
+            _pg_ecrire(fichier_data)
+            print("[PG] Données initiales recopiées du fichier vers PostgreSQL.")
+        elif pg_data is not None and not fichier_data:
+            with open(DATA_FILE + ".tmp", "w") as f:
+                json.dump(pg_data, f, ensure_ascii=False, default=str)
+            os.replace(DATA_FILE + ".tmp", DATA_FILE)
+            print("[PG] ⚠️ Fichier perdu — données RÉCUPÉRÉES depuis PostgreSQL.")
+    except Exception as e:
+        print(f"[PG SYNC ERR] {e}")
+
+
+_init_postgres()
+
+
 def load_data():
     # Essayer le fichier principal, puis la copie de secours (.bak)
     for chemin in [DATA_FILE, DATA_FILE + ".bak"]:
@@ -244,6 +344,11 @@ def _ecrire_donnees_disque():
                 except Exception:
                     pass
             os.replace(tmp, DATA_FILE)
+            # 🐘 Recopie durable dans PostgreSQL (filet anti-perte ; ne bloque jamais la sauvegarde)
+            try:
+                _pg_ecrire(DB)
+            except Exception as _epg:
+                print(f"[PG ECRITURE ERR] {_epg}")
         print(f"[SAVE OK] {DATA_FILE}")
     except Exception as e:
         print(f"[SAVE ERR] {e}")
@@ -293,6 +398,7 @@ def save_data():
         except Exception:
             pass
 
+_synchroniser_postgres_demarrage()
 DB = load_data()
 
 # ============================================
