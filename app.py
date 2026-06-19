@@ -4527,6 +4527,121 @@ def virement_gagnant():
     save_data()
     return jsonify({"ok": True})
 
+@app.route("/api/releve-complet/<code>", methods=["GET"])
+def releve_complet_joueur(code):
+    """Releve de compte complet d'un joueur : achats, gains, depenses, mouvements
+    et detection d'ecart non justifie. Accessible Admin ET Organisateur."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Acces refuse"}), 403
+    code = (code or "").upper().strip()
+    if not code:
+        return jsonify({"ok": False, "msg": "Code obligatoire"}), 400
+
+    # Solde actuel
+    pj = DB.get("pions_joueurs", {}).get(code, {})
+    solde = pj.get("100", 0)*100 + pj.get("50", 0)*50 + pj.get("20", 0)*20 + pj.get("10", 0)*10
+
+    lignes = []
+
+    # 1. Achats de pions (paiements)
+    total_achats = 0
+    for c in DB.get("commandes_pions_joueurs", []):
+        if (c.get("code_joueur") or "").upper() == code:
+            montant = (c.get("pions_credites") or c.get("nb_pions") or 0) * c.get("valeur_pion", 0)
+            valide = c.get("statut") == "validee"
+            if valide:
+                total_achats += montant
+            lignes.append({
+                "date": c.get("date", "")[:16].replace("T", " "),
+                "type": "Achat",
+                "montant": montant if valide else 0,
+                "detail": f"{c.get('nb_pions')}x{c.get('valeur_pion')} - {c.get('mode_paiement','')} {c.get('ref_paiement','')}".strip(),
+                "statut": c.get("statut", "")
+            })
+
+    # 2. Credits / dedommagements
+    total_credits = 0
+    for cm in DB.get("credits_masse", []):
+        if code in cm.get("codes", []):
+            m = cm.get("nb_pions", 0) * cm.get("valeur_pion", 0)
+            total_credits += m
+            lignes.append({
+                "date": cm.get("date", "")[:16].replace("T", " "),
+                "type": "Credit",
+                "montant": m,
+                "detail": cm.get("motif", "Dedommagement"),
+                "statut": "credit"
+            })
+
+    # 3. Gains
+    total_gains = 0
+    for g in DB.get("gains_finaux", []):
+        if g.get("code_gagnant") == code:
+            total_gains += g.get("montant_gain", 0)
+            lignes.append({
+                "date": g.get("date", "")[:16].replace("T", " "),
+                "type": "Gain",
+                "montant": g.get("montant_gain", 0),
+                "detail": f"Gain {g.get('jeu','')}",
+                "statut": "gain"
+            })
+
+    # 4. Tickets joues (depenses)
+    total_depenses = 0
+    for c in DB.get("commandes_tickets_pions", []):
+        if (c.get("code_joueur") or "").upper() == code:
+            valide = c.get("statut") == "validee"
+            if valide:
+                total_depenses += c.get("total_pions", 0)
+            lignes.append({
+                "date": c.get("date", "")[:16].replace("T", " "),
+                "type": "Ticket",
+                "montant": -c.get("total_pions", 0) if valide else 0,
+                "detail": f"{c.get('jeu','')} ({c.get('nb_tickets',0)} tickets)",
+                "statut": c.get("statut", "")
+            })
+
+    # 5. Corrections (retraits manuels)
+    total_corrections = 0
+    for c in DB.get("corrections_pions", []):
+        if c.get("code_joueur") == code:
+            total_corrections += c.get("montant_retire", 0)
+            lignes.append({
+                "date": c.get("date", "")[:16].replace("T", " "),
+                "type": "Correction",
+                "montant": -c.get("montant_retire", 0),
+                "detail": c.get("motif", "Correction admin"),
+                "statut": "correction"
+            })
+
+    # Trier par date
+    lignes.sort(key=lambda x: x.get("date", ""))
+
+    # Calcul du solde attendu et de l'ecart non justifie
+    solde_attendu = total_achats + total_credits + total_gains - total_depenses - total_corrections
+    ecart = solde - solde_attendu
+
+    return jsonify({
+        "ok": True,
+        "code": code,
+        "solde_actuel": solde,
+        "pions": pj,
+        "resume": {
+            "achats_payes": total_achats,
+            "credits": total_credits,
+            "gains": total_gains,
+            "depenses": total_depenses,
+            "corrections": total_corrections,
+            "solde_attendu": solde_attendu,
+            "ecart_non_justifie": ecart
+        },
+        "lignes": lignes
+    })
+
 @app.route("/api/paiement/gains-finaux")
 def get_gains_finaux():
     """Historique des gains finaux pour l'Admin"""
