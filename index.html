@@ -1463,6 +1463,7 @@ async function autoCrediterStripe(){
 }
 
 function fermerPDF(){
+  try{ arreterHeartbeatActivite(); }catch(e){}
   document.querySelectorAll('[id^=pdf-overlay-]').forEach(el => el.remove());
   document.querySelectorAll('div[style*="z-index:1000"]').forEach(el => {
     if(el.querySelector('#pdf-canvas')) el.remove();
@@ -1911,6 +1912,13 @@ function buildOrgSpace(){
       <div class="ct" style="justify-content:space-between"><span>👥 Mes joueurs</span><button class="btn-sm" onclick="loadMesJoueurs()">↻ Charger</button></div>
       <div style="font-size:12px;color:var(--mu);margin-bottom:10px">Vos joueuses : codes, pions, et distribution des tickets (jeu + PDF + pages)</div>
       <div id="mes-joueurs-liste"><div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Cliquez ↻ Charger</div></div>
+    </div>
+
+    <!-- 👁️ SURVEILLANCE EN DIRECT -->
+    <div class="card" style="background:linear-gradient(135deg,rgba(59,130,246,.12),rgba(99,102,241,.08));border:1px solid rgba(59,130,246,.3)">
+      <div class="ct" style="justify-content:space-between"><span>👁️ Surveillance en direct</span><button class="btn-sm" onclick="chargerSurveillance()">↻</button></div>
+      <div style="font-size:12px;color:var(--mu);margin-bottom:10px">Qui a ouvert son PDF et qui est en train de jouer, en temps réel. Pratique pour vérifier un litige « j'ai pas pu jouer ».</div>
+      <div id="surveillance-liste"><div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">En attente d'activité…</div></div>
     </div>
 
     <!-- RESET TOURNOI -->
@@ -2717,6 +2725,55 @@ async function analyserPageNumeroPDF(page, pageNum){
   }catch(e){ console.error('analyserPage error:', e); }
 }
 
+// 👁️ SURVEILLANCE EN DIRECT (côté organisateur)
+async function chargerSurveillance(){
+  var liste = document.getElementById('surveillance-liste');
+  if(!liste) return;
+  try{
+    var r = await fetch('/api/activite/joueurs', {headers:{'X-Token':TOKEN}});
+    var arr = await r.json();
+    if(!Array.isArray(arr) || !arr.length){
+      liste.innerHTML = '<div style="text-align:center;padding:12px;font-size:13px;color:var(--mu)">Aucune joueuse active pour le moment.</div>';
+      return;
+    }
+    liste.innerHTML = arr.map(function(j){
+      var statut, couleur;
+      if(j.en_train_de_jouer){ statut = '🟢 En train de jouer'; couleur = '#34d399'; }
+      else if(j.a_ouvert_pdf){ statut = '🟡 PDF ouvert (inactif)'; couleur = '#fbbf24'; }
+      else { statut = '🔴 PDF jamais ouvert'; couleur = '#f87171'; }
+      var depuis = (j.secondes_inactif == null) ? ''
+        : (j.secondes_inactif < 60 ? ('vu il y a ' + j.secondes_inactif + 's')
+          : ('vu il y a ' + Math.round(j.secondes_inactif/60) + 'min'));
+      return '<div style="display:flex;justify-content:space-between;align-items:center;padding:10px;background:var(--s2);border:0.5px solid var(--bd);border-radius:8px;margin-bottom:6px">'
+        + '<div><div style="font-weight:700;font-size:13px">' + (j.nom || j.code) + ' <span style="color:var(--mu);font-size:11px">(' + j.code + ')</span></div>'
+        + '<div style="font-size:11px;color:' + couleur + ';font-weight:600">' + statut + '</div>'
+        + '<div style="font-size:11px;color:var(--mu)">' + (j.nb_coches || 0) + ' numéros pointés · ' + depuis + '</div></div></div>';
+    }).join('');
+  }catch(e){}
+}
+// Rafraîchissement automatique de la surveillance toutes les 8s (si organisateur connecté)
+try{ setInterval(function(){ try{ if(typeof TOKEN !== 'undefined' && TOKEN && document.getElementById('surveillance-liste')) chargerSurveillance(); }catch(e){} }, 8000); }catch(e){}
+
+// 👁️ MOUCHARDS D'ACTIVITÉ : signalent à l'organisateur l'ouverture du PDF et le pointage.
+var _heartbeatActivite = null;
+function nbCochesActuel(){ try{ return Object.values(cochesParPage||{}).flat().length; }catch(e){ return 0; } }
+function pingActivite(type){
+  try{
+    if(typeof codeJoueurActuel === 'undefined' || !codeJoueurActuel) return; // seulement une vraie joueuse connectée
+    fetch('/api/activite/ping', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code_joueur: codeJoueurActuel, type: type, nb_coches: nbCochesActuel()})
+    });
+  }catch(e){}
+}
+function demarrerHeartbeatActivite(){
+  try{ if(_heartbeatActivite) clearInterval(_heartbeatActivite); }catch(e){}
+  _heartbeatActivite = setInterval(function(){ pingActivite('ping'); }, 15000);
+}
+function arreterHeartbeatActivite(){
+  try{ if(_heartbeatActivite){ clearInterval(_heartbeatActivite); _heartbeatActivite = null; } }catch(e){}
+}
+
 // 🎯 COMPARAISON AUTOMATIQUE des boules tirées avec le PDF ouvert.
 // Sert à VÉRIFIER une gagnante : on ouvre son PDF et toutes les boules
 // déjà sorties se cochent automatiquement (peu importe l'interrupteur).
@@ -2774,6 +2831,8 @@ async function chargerPDFJoueur(url,cleCoches,overlay,cochesExistantes,pageDebut
     await renderPageJoueur(pageNum,cleCoches,overlay);
     // 🎯 Vérification automatique : comparer les boules tirées avec ce PDF et cocher les numéros sortis
     try{ await comparerToutesBoulesAvecPDF(); }catch(e){}
+    // 👁️ Signaler à l'organisateur que cette joueuse a bien OUVERT son PDF + démarrer la présence
+    try{ pingActivite('pdf_ouvert'); demarrerHeartbeatActivite(); }catch(e){}
   }catch(e){
     console.error("PDF error:",e);
     const loading=overlay.querySelector('#pdf-loading');
@@ -2843,6 +2902,7 @@ function toggleCoche(x,y,pageN,cleCoches,cochesLayer,canvas,overlay){
   const total=Object.values(cochesParPage).flat().length;
   const nbCoches=overlay.querySelector('#nb-coches');
   if(nbCoches)nbCoches.textContent=`${total} cochés`;
+  try{ pingActivite('pointage'); }catch(e){}
 }
 
 async function changerPageJoueur(dir){
