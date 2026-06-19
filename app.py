@@ -7321,3 +7321,77 @@ def activite_signal_effacer():
             ACTIVITE_JOUEURS[code].pop("signal_label", None)
             ACTIVITE_JOUEURS[code].pop("signal_ts", None)
     return jsonify({"ok": True})
+
+
+# ============================================================
+# 📮 BOÎTE À RÉCLAMATION (persistée — traitée en fin de tournoi)
+# Contrairement aux signaux temps réel, les reclamations sont
+# ENREGISTREES sur le disque (elles doivent survivre jusqu'a la fin).
+# ============================================================
+@app.route("/api/reclamation", methods=["POST"])
+def creer_reclamation():
+    """JOUEUSE — Dépose une réclamation (gardée jusqu'à traitement)."""
+    global DB
+    DB = load_data()
+    d = request.get_json(silent=True) or {}
+    code = (d.get("code_joueur", "") or "").upper().strip()
+    message = (d.get("message", "") or "").strip()
+    if not code or not message:
+        return jsonify({"ok": False, "msg": "Message vide."}), 400
+    message = message[:2000]
+    code_org = ""
+    nom = ""
+    for t in DB.get("tickets", []):
+        if (t.get("code_acheteur", "") or "").upper() == code:
+            code_org = t.get("code_org") or code_org
+            nom = t.get("acheteur", "") or nom
+    rec = {
+        "id": secrets.token_hex(4).upper(),
+        "code_joueur": code,
+        "nom": nom,
+        "code_org": code_org,
+        "message": message,
+        "date": datetime.datetime.now().isoformat(),
+        "statut": "ouverte",
+    }
+    DB.setdefault("reclamations", []).insert(0, rec)
+    save_data()
+    return jsonify({"ok": True})
+
+
+@app.route("/api/reclamations")
+def liste_reclamations():
+    """ORGANISATEUR — Liste de ses réclamations (ouvertes en premier)."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify([]), 403
+    is_admin = bool(s.get("admin"))
+    out = [r for r in DB.get("reclamations", []) if is_admin or r.get("code_org") == s["code"]]
+    out.sort(key=lambda r: (0 if r.get("statut") == "ouverte" else 1,))
+    return jsonify(out)
+
+
+@app.route("/api/reclamation/traiter", methods=["POST"])
+def traiter_reclamation():
+    """ORGANISATEUR — Marque une réclamation comme traitée."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    rid = (request.get_json(silent=True) or {}).get("id", "")
+    trouve = False
+    for r in DB.get("reclamations", []):
+        if r.get("id") == rid and (s.get("admin") or r.get("code_org") == s["code"]):
+            r["statut"] = "traitee"
+            r["traite_le"] = datetime.datetime.now().isoformat()
+            trouve = True
+            break
+    if not trouve:
+        return jsonify({"ok": False, "msg": "Réclamation introuvable."}), 404
+    save_data()
+    return jsonify({"ok": True})
