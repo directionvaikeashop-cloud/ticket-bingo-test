@@ -6497,3 +6497,328 @@ def dedommagement_heini():
         return {"ok": True, "msg": "26 joueuses recreditees de 100 XPF chacune"}
     except Exception as e:
         return {"ok": False, "msg": f"Erreur : {str(e)}"}
+# ============================================================
+# 🛟 SAUVEGARDES HORODATEES AUTOMATIQUES + RESTAURATION 1 CLIC
+# Ajout du 19/06/2026 — protege contre toute perte de donnees.
+# L'appli se photographie toute seule plusieurs fois par jour et
+# garde plusieurs jours d'historique. Si quoi que ce soit tourne
+# mal, on revient a la photo d'avant en un clic.
+# 100% additif : ne touche a aucune logique d'argent existante.
+# ============================================================
+import shutil as _shutil_bk
+import threading as _threading_bk
+import time as _time_bk
+import glob as _glob_bk
+
+BACKUP_DIR = "/data/sauvegardes"
+BACKUP_INTERVAL_SECONDES = 20 * 60      # une photo toutes les 20 minutes
+BACKUP_MAX_FICHIERS = 300               # garder les 300 dernieres (~4 jours)
+_BACKUP_THREAD_DEMARRE = [False]
+
+
+def _est_admin_code(code):
+    """Verifie qu'un code est un code admin actif (anti-acces non autorise)."""
+    try:
+        code = (code or "").strip().upper()
+        if not code:
+            return False
+        fresh = load_data()
+        info = fresh.get("codes", {}).get(code)
+        return bool(info and info.get("actif") and info.get("admin"))
+    except Exception:
+        return False
+
+
+def creer_sauvegarde_horodatee(raison="auto"):
+    """Copie le fichier de donnees actuel dans un fichier horodate.
+    Retourne le chemin cree, ou None si rien a sauvegarder."""
+    try:
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+        if not os.path.exists(DATA_FILE):
+            return None
+        horodatage = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        raison_propre = "".join(c for c in str(raison) if c.isalnum() or c in "-_")[:30] or "auto"
+        nom = f"ticketbingo_{horodatage}_{raison_propre}.json"
+        chemin = os.path.join(BACKUP_DIR, nom)
+        _shutil_bk.copy2(DATA_FILE, chemin)
+        _purger_vieilles_sauvegardes()
+        print(f"[SAUVEGARDE OK] {nom}")
+        return chemin
+    except Exception as e:
+        print(f"[SAUVEGARDE ERR] {e}")
+        return None
+
+
+def _purger_vieilles_sauvegardes():
+    """Ne garde que les BACKUP_MAX_FICHIERS plus recentes (borne le disque)."""
+    try:
+        fichiers = sorted(_glob_bk.glob(os.path.join(BACKUP_DIR, "ticketbingo_*.json")))
+        surplus = len(fichiers) - BACKUP_MAX_FICHIERS
+        for f in fichiers[:max(0, surplus)]:
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
+def _lister_sauvegardes():
+    """Liste les sauvegardes, de la plus recente a la plus ancienne."""
+    resultats = []
+    try:
+        fichiers = sorted(_glob_bk.glob(os.path.join(BACKUP_DIR, "ticketbingo_*.json")), reverse=True)
+        for f in fichiers:
+            try:
+                st = os.stat(f)
+                nom = os.path.basename(f)
+                # Date lisible depuis le nom : ticketbingo_YYYYMMDD_HHMMSS_raison.json
+                parties = nom.replace("ticketbingo_", "").replace(".json", "").split("_")
+                date_lisible = nom
+                raison = "auto"
+                if len(parties) >= 2:
+                    d, h = parties[0], parties[1]
+                    if len(d) == 8 and len(h) == 6:
+                        date_lisible = f"{d[6:8]}/{d[4:6]}/{d[0:4]} a {h[0:2]}h{h[2:4]}"
+                    if len(parties) >= 3:
+                        raison = parties[2]
+                resultats.append({
+                    "nom": nom,
+                    "date": date_lisible,
+                    "raison": raison,
+                    "taille_ko": round(st.st_size / 1024, 1),
+                })
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return resultats
+
+
+def _resume_donnees(donnees):
+    """Petit resume d'un jeu de donnees (pour confirmer visuellement avant restauration)."""
+    try:
+        nb_joueurs = len(donnees.get("pions_joueurs", {}))
+        nb_codes = len(donnees.get("codes", {}))
+        nb_orgs = len(donnees.get("pions_org", {}))
+        # Total des pions (toutes valeurs confondues) en nombre de pieces
+        total_pions = 0
+        for poche in donnees.get("pions_joueurs", {}).values():
+            if isinstance(poche, dict):
+                for v in poche.values():
+                    try:
+                        total_pions += int(v)
+                    except Exception:
+                        pass
+        return {"joueurs": nb_joueurs, "codes": nb_codes, "organisateurs": nb_orgs, "pions_total": total_pions}
+    except Exception:
+        return {"joueurs": "?", "codes": "?", "organisateurs": "?", "pions_total": "?"}
+
+
+def _boucle_sauvegardes_auto():
+    """Boucle de fond : une photo au demarrage, puis toutes les 20 min."""
+    # Petite photo de demarrage (utile apres chaque redeploiement)
+    try:
+        creer_sauvegarde_horodatee("demarrage")
+    except Exception:
+        pass
+    while True:
+        try:
+            _time_bk.sleep(BACKUP_INTERVAL_SECONDES)
+            creer_sauvegarde_horodatee("auto")
+        except Exception as e:
+            print(f"[SAUVEGARDE BOUCLE ERR] {e}")
+            _time_bk.sleep(60)
+
+
+def _demarrer_sauvegardes_auto():
+    """Demarre le thread de sauvegarde une seule fois."""
+    if _BACKUP_THREAD_DEMARRE[0]:
+        return
+    _BACKUP_THREAD_DEMARRE[0] = True
+    t = _threading_bk.Thread(target=_boucle_sauvegardes_auto, daemon=True)
+    t.start()
+    print("[SAUVEGARDES] Thread de sauvegardes automatiques demarre.")
+
+
+_demarrer_sauvegardes_auto()
+
+
+# ---------- ROUTES : page et actions de sauvegarde/restauration ----------
+
+@app.route("/sauvegardes")
+def page_sauvegardes():
+    """Page admin : voir, telecharger et restaurer les sauvegardes."""
+    return '''<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sauvegardes — Ticket Bingo</title><style>
+*{box-sizing:border-box}body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:20px}
+h1{color:#58a6ff;font-size:22px}.sub{color:#8b949e;margin-bottom:18px;font-size:14px}
+.box{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px;margin-bottom:16px}
+input{width:100%;padding:13px;border:2px solid #30363d;background:#0d1117;color:#e6edf3;border-radius:9px;font-size:16px;margin:8px 0}
+button{padding:12px 16px;border:0;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer}
+.primary{background:#238636;color:#fff;width:100%}.danger{background:#da3633;color:#fff}
+.ghost{background:#21262d;color:#e6edf3;border:1px solid #30363d}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+th{text-align:left;color:#8b949e;border-bottom:1px solid #30363d;padding:8px}
+td{border-bottom:1px solid #21262d;padding:8px;vertical-align:middle}
+.date{color:#e6edf3;font-weight:600}.raison{color:#8b949e;font-size:11px}
+.actions{display:flex;gap:6px;flex-wrap:wrap}
+.msg{margin-top:12px;padding:12px;border-radius:9px;font-size:14px;display:none}
+.ok{background:#0f5132;color:#d1fae5}.ko{background:#5c1a1a;color:#fecaca}
+.resume{font-size:12px;color:#8b949e;margin-top:6px}
+.badge{display:inline-block;background:#1f6feb22;color:#58a6ff;border:1px solid #1f6feb55;border-radius:20px;padding:3px 10px;font-size:11px}
+</style></head><body>
+<h1>🛟 Sauvegardes Ticket Bingo</h1>
+<div class="sub">L'appli se sauvegarde toute seule toutes les 20 min. Ici tu peux télécharger ou revenir à n'importe quelle photo.</div>
+<div class="box">
+  <label>Code admin</label>
+  <input type="password" id="code" placeholder="Ton code admin secret" autocomplete="off">
+  <button class="primary" onclick="charger()">🔓 Afficher les sauvegardes</button>
+  <div id="msg" class="msg"></div>
+</div>
+<div class="box" id="actuel" style="display:none">
+  <div class="badge">État ACTUEL en ligne</div>
+  <div class="resume" id="resumeActuel"></div>
+  <button class="ghost" style="margin-top:10px" onclick="sauverMaintenant()">📸 Faire une sauvegarde tout de suite</button>
+</div>
+<div class="box" id="listeBox" style="display:none">
+  <div style="color:#8b949e;font-size:13px;margin-bottom:6px">Choisis une photo pour la restaurer ou la télécharger :</div>
+  <table><thead><tr><th>Date</th><th>Taille</th><th>Actions</th></tr></thead>
+  <tbody id="liste"></tbody></table>
+</div>
+<script>
+function code(){return document.getElementById("code").value.trim();}
+function show(t,ok){var m=document.getElementById("msg");m.textContent=t;m.className="msg "+(ok?"ok":"ko");m.style.display="block";}
+async function post(url,extra){
+  var body=Object.assign({code:code()},extra||{});
+  var r=await fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+  return r.json();
+}
+async function charger(){
+  if(!code()){show("Entre ton code admin.",false);return;}
+  var d=await post("/api/sauvegardes/liste");
+  if(!d.ok){show(d.msg||"Code refusé.",false);return;}
+  show("Code accepté ✅","true"==="true"?true:true);
+  document.getElementById("actuel").style.display="block";
+  var a=d.actuel||{};
+  document.getElementById("resumeActuel").textContent=
+    a.joueurs+" joueuses · "+a.pions_total+" pions au total · "+a.codes+" codes";
+  var tb=document.getElementById("liste");tb.innerHTML="";
+  (d.sauvegardes||[]).forEach(function(s){
+    var tr=document.createElement("tr");
+    tr.innerHTML="<td><span class='date'>"+s.date+"</span><br><span class='raison'>"+s.raison+"</span></td>"
+      +"<td>"+s.taille_ko+" Ko</td>"
+      +"<td class='actions'>"
+      +"<button class='ghost' onclick=\\"tele('"+s.nom+"')\\">⬇️</button>"
+      +"<button class='danger' onclick=\\"restaurer('"+s.nom+"','"+s.date+"')\\">♻️ Restaurer</button>"
+      +"</td>";
+    tb.appendChild(tr);
+  });
+  document.getElementById("listeBox").style.display="block";
+}
+async function sauverMaintenant(){
+  var d=await post("/api/sauvegardes/creer");
+  show(d.ok?"📸 Sauvegarde faite.":(d.msg||"Erreur"),d.ok);
+  if(d.ok)charger();
+}
+function tele(nom){
+  window.open("/api/sauvegardes/telecharger?code="+encodeURIComponent(code())+"&nom="+encodeURIComponent(nom),"_blank");
+}
+async function restaurer(nom,date){
+  if(!confirm("⚠️ REVENIR à la sauvegarde du "+date+" ?\\n\\nL'état actuel sera d'abord photographié (réversible), puis remplacé par cette sauvegarde."))return;
+  show("Restauration en cours...",true);
+  var d=await post("/api/sauvegardes/restaurer",{nom:nom});
+  if(d.ok){
+    show("✅ Restauré. Avant : "+d.avant.joueurs+" joueuses / "+d.avant.pions_total+" pions → Après : "+d.apres.joueurs+" joueuses / "+d.apres.pions_total+" pions.",true);
+    charger();
+  }else{show(d.msg||"Erreur de restauration.",false);}
+}
+</script></body></html>'''
+
+
+@app.route("/api/sauvegardes/liste", methods=["POST"])
+def api_sauvegardes_liste():
+    d = request.get_json(silent=True) or {}
+    if not _est_admin_code(d.get("code")):
+        return jsonify({"ok": False, "msg": "Code admin refusé."}), 403
+    return jsonify({
+        "ok": True,
+        "actuel": _resume_donnees(load_data()),
+        "sauvegardes": _lister_sauvegardes(),
+    })
+
+
+@app.route("/api/sauvegardes/creer", methods=["POST"])
+def api_sauvegardes_creer():
+    d = request.get_json(silent=True) or {}
+    if not _est_admin_code(d.get("code")):
+        return jsonify({"ok": False, "msg": "Code admin refusé."}), 403
+    chemin = creer_sauvegarde_horodatee("manuelle")
+    return jsonify({"ok": bool(chemin), "msg": "" if chemin else "Rien à sauvegarder."})
+
+
+@app.route("/api/sauvegardes/telecharger", methods=["GET"])
+def api_sauvegardes_telecharger():
+    if not _est_admin_code(request.args.get("code")):
+        return "Code admin refusé.", 403
+    nom = os.path.basename(request.args.get("nom", ""))  # anti remontee de dossier
+    chemin = os.path.join(BACKUP_DIR, nom)
+    if not (nom.startswith("ticketbingo_") and nom.endswith(".json") and os.path.exists(chemin)):
+        return "Sauvegarde introuvable.", 404
+    return send_file(chemin, as_attachment=True, download_name=nom)
+
+
+@app.route("/api/sauvegardes/restaurer", methods=["POST"])
+def api_sauvegardes_restaurer():
+    global DB
+    d = request.get_json(silent=True) or {}
+    if not _est_admin_code(d.get("code")):
+        return jsonify({"ok": False, "msg": "Code admin refusé."}), 403
+    nom = os.path.basename(d.get("nom", ""))  # anti remontee de dossier
+    chemin = os.path.join(BACKUP_DIR, nom)
+    if not (nom.startswith("ticketbingo_") and nom.endswith(".json") and os.path.exists(chemin)):
+        return jsonify({"ok": False, "msg": "Sauvegarde introuvable."}), 404
+
+    # 1) Valider que le fichier de sauvegarde est lisible AVANT de toucher a quoi que ce soit
+    try:
+        with open(chemin, "r") as f:
+            donnees_cible = json.load(f)
+        if not isinstance(donnees_cible, dict):
+            raise ValueError("format inattendu")
+    except Exception as e:
+        return jsonify({"ok": False, "msg": f"Sauvegarde illisible, restauration annulée : {e}"}), 400
+
+    resume_avant = _resume_donnees(load_data())
+
+    # 2) Photographier l'etat ACTUEL avant de le remplacer (la restauration est reversible)
+    creer_sauvegarde_horodatee("avant-restauration")
+
+    # 3) Ecrire la sauvegarde choisie comme nouveau fichier principal, puis recharger
+    try:
+        with _VERROU_SAUVEGARDE:
+            os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
+            tmp = DATA_FILE + ".tmp"
+            _shutil_bk.copy2(chemin, tmp)
+            if os.path.exists(DATA_FILE):
+                try:
+                    os.replace(DATA_FILE, DATA_FILE + ".bak")
+                except Exception:
+                    pass
+            os.replace(tmp, DATA_FILE)
+        DB = load_data()
+        resume_apres = _resume_donnees(DB)
+    except Exception as e:
+        return jsonify({"ok": False, "msg": f"Erreur pendant la restauration : {e}"}), 500
+
+    try:
+        creer_alerte_systeme("restauration", "info",
+                             f"Restauration depuis {nom}. Avant {resume_avant} / Apres {resume_apres}.")
+    except Exception:
+        pass
+
+    return jsonify({"ok": True, "avant": resume_avant, "apres": resume_apres})
+
+# ============================================================
+# 🛟 FIN DU BLOC SAUVEGARDES
+# ============================================================
