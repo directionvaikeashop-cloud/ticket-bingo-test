@@ -2717,6 +2717,39 @@ async function analyserPageNumeroPDF(page, pageNum){
   }catch(e){ console.error('analyserPage error:', e); }
 }
 
+// 🎯 COMPARAISON AUTOMATIQUE des boules tirées avec le PDF ouvert.
+// Sert à VÉRIFIER une gagnante : on ouvre son PDF et toutes les boules
+// déjà sorties se cochent automatiquement (peu importe l'interrupteur).
+async function comparerToutesBoulesAvecPDF(){
+  try{
+    if(Object.keys(carteNumeros).length === 0) return;
+    var r = await fetch('/api/tirage');
+    var d = await r.json();
+    var boules = d.boules || [];
+    if(!boules.length) return;
+    boules.forEach(function(boule){
+      var positions = carteNumeros[boule];
+      if(!positions || !positions.length) return;
+      positions.forEach(function(pos){
+        var pageKey = 'page_' + pos.page;
+        if(!cochesParPage[pageKey]) cochesParPage[pageKey] = [];
+        var deja = cochesParPage[pageKey].find(function(c){
+          return Math.abs(c.x - pos.x) < 3 && Math.abs(c.y - pos.y) < 3;
+        });
+        if(!deja){
+          cochesParPage[pageKey].push({x: pos.x, y: pos.y, id: Date.now() + Math.random()});
+        }
+      });
+    });
+    try{ if(cleCochesActuel) localStorage.setItem(cleCochesActuel, JSON.stringify(cochesParPage)); }catch(e){}
+    // Réafficher la page courante avec les coches mises à jour
+    if(typeof renderPageJoueur === 'function' && overlayActuel && cleCochesActuel){
+      await renderPageJoueur(pageNum, cleCochesActuel, overlayActuel);
+    }
+    if(typeof verifierBingoAutomatique === 'function') verifierBingoAutomatique();
+  }catch(e){ console.error('Comparaison boules/PDF:', e); }
+}
+
 async function chargerPDFJoueur(url,cleCoches,overlay,cochesExistantes,pageDebut,pageFin){
   overlayActuel=overlay;cleCochesActuel=cleCoches;pageDebutActuel=pageDebut||1;
   try{
@@ -2739,6 +2772,8 @@ async function chargerPDFJoueur(url,cleCoches,overlay,cochesExistantes,pageDebut
     console.log('Carte numéros:', Object.keys(carteNumeros).length, 'numéros trouvés');
     
     await renderPageJoueur(pageNum,cleCoches,overlay);
+    // 🎯 Vérification automatique : comparer les boules tirées avec ce PDF et cocher les numéros sortis
+    try{ await comparerToutesBoulesAvecPDF(); }catch(e){}
   }catch(e){
     console.error("PDF error:",e);
     const loading=overlay.querySelector('#pdf-loading');
