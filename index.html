@@ -4434,15 +4434,19 @@ function loadCommandesPions(){
   .catch(function(){});
 }
 
-function loadSoldesPions(){
-  fetch('/api/pions/soldes', {headers: {'X-Token': TOKEN}})
-  .then(function(r){ return r.json(); })
+function loadSoldesPions(tentative){
+  tentative = tentative || 0;
+  fetch('/api/pions/soldes?t=' + Date.now(), {headers: {'X-Token': TOKEN}})
+  .then(function(r){ if(!r.ok) throw new Error('HTTP'); return r.json(); })
   .then(function(d){
+    if(document.getElementById('solde-pions-10')) document.getElementById('solde-pions-10').textContent = d.pions_10 || 0;
     if(document.getElementById('solde-pions-20')) document.getElementById('solde-pions-20').textContent = d.pions_20 || 0;
     if(document.getElementById('solde-pions-50')) document.getElementById('solde-pions-50').textContent = d.pions_50 || 0;
     if(document.getElementById('solde-pions-100')) document.getElementById('solde-pions-100').textContent = d.pions_100 || 0;
   })
-  .catch(function(){});
+  .catch(function(){
+    if(tentative < 4){ setTimeout(function(){ loadSoldesPions(tentative + 1); }, 800 * (tentative + 1)); }
+  });
 }
 
 function ouvrirGuide(type){
@@ -5000,16 +5004,45 @@ async function commanderPionsJoueur(){
   }catch(e){ alert('Erreur de connexion'); }
 }
 
-function chargerSoldesPionsJoueur(code){
-  fetch('/api/pions/solde-joueur/' + code)
-  .then(function(r){ return r.json(); })
+function chargerSoldesPionsJoueur(code, tentative){
+  // Version ROBUSTE : réessaie automatiquement si le chargement échoue,
+  // n'écrase JAMAIS l'affichage par 0 en cas d'erreur réseau.
+  tentative = tentative || 0;
+  if(!code) return;
+  fetch('/api/pions/solde-joueur/' + encodeURIComponent(code) + '?t=' + Date.now())
+  .then(function(r){
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json();
+  })
   .then(function(d){
-    // Mettre a jour TOUTES les copies de l'affichage (l'ecran pions, l'ecran jeu, etc.)
+    // Succès : mettre à jour TOUTES les copies de l'affichage
+    document.querySelectorAll('[id="joueur-solde-10"]').forEach(function(el){ el.textContent = d.pions_10 || 0; });
     document.querySelectorAll('[id="joueur-solde-20"]').forEach(function(el){ el.textContent = d.pions_20 || 0; });
     document.querySelectorAll('[id="joueur-solde-50"]').forEach(function(el){ el.textContent = d.pions_50 || 0; });
     document.querySelectorAll('[id="joueur-solde-100"]').forEach(function(el){ el.textContent = d.pions_100 || 0; });
+    // Afficher le solde TOTAL en XPF
+    var total = (d.pions_10||0)*10 + (d.pions_20||0)*20 + (d.pions_50||0)*50 + (d.pions_100||0)*100;
+    document.querySelectorAll('[id="joueur-solde-total"]').forEach(function(el){ el.textContent = total + ' XPF'; });
   })
-  .catch(function(){});
+  .catch(function(e){
+    // ÉCHEC : ne PAS afficher 0 (trompeur). Réessayer jusqu'à 4 fois.
+    if(tentative < 4){
+      setTimeout(function(){ chargerSoldesPionsJoueur(code, tentative + 1); }, 800 * (tentative + 1));
+    } else {
+      // Après 4 échecs : afficher un indicateur de rechargement (pas 0)
+      document.querySelectorAll('[id="joueur-solde-total"]').forEach(function(el){
+        if(el.textContent === '' || el.textContent === '0 XPF') el.textContent = '⏳ Rechargement...';
+      });
+    }
+  });
+}
+
+// Rechargement automatique du solde toutes les 12s pour la joueuse active
+var _intervalSolde = null;
+function demarrerRafraichissementSolde(code){
+  if(_intervalSolde) clearInterval(_intervalSolde);
+  if(!code) return;
+  _intervalSolde = setInterval(function(){ chargerSoldesPionsJoueur(code); }, 12000);
 }
 
 // === SYSTEME DE PIONS ===
