@@ -3833,6 +3833,15 @@ def recrediter_pions_joueur():
     if code_joueur not in DB["pions_joueurs"]:
         DB["pions_joueurs"][code_joueur] = {}
     DB["pions_joueurs"][code_joueur][valeur] = max(0, DB["pions_joueurs"][code_joueur].get(valeur, 0) + nb)
+    # TRACABILITE : enregistrer ce crédit/débit admin pour qu'il apparaisse dans le relevé
+    DB.setdefault("credits_admin", []).insert(0, {
+        "id": secrets.token_hex(4).upper(),
+        "code_joueur": code_joueur,
+        "valeur_pion": int(valeur),
+        "nb_pions": nb,
+        "par": s.get("code", "admin"),
+        "date": datetime.datetime.now().isoformat()
+    })
     save_data()
     return jsonify({"ok": True, "solde": DB["pions_joueurs"][code_joueur]})
 
@@ -5689,6 +5698,36 @@ def releve_financier_joueur(code):
                     "entree": 0,
                     "sortie": retire
                 })
+
+    # === ENTREE/SORTIE : crédits directs de l'admin (recrédit après incident) ===
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict) and c.get("code_joueur") == code:
+            montant = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+            if montant > 0:
+                lignes.append({"date": c.get("date", "?"), "type": "Crédit admin",
+                               "desc": "Pions crédités par l'admin", "entree": montant, "sortie": 0})
+            elif montant < 0:
+                lignes.append({"date": c.get("date", "?"), "type": "Débit admin",
+                               "desc": "Pions retirés par l'admin", "entree": 0, "sortie": -montant})
+
+    # === ENTREE : crédits en masse de l'admin (dédommagements / transferts) ===
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict) and c.get("profil", "joueur") == "joueur" and code in (c.get("codes") or []):
+            montant = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+            if montant > 0:
+                lignes.append({"date": c.get("date", "?"), "type": "Crédit admin (groupe)",
+                               "desc": "Dédommagement / transfert admin", "entree": montant, "sortie": 0})
+
+    # === ENTREE : remboursements (jeu annulé par l'organisateur) ===
+    for rb in DB.get("remboursements_tournoi", []):
+        if isinstance(rb, dict):
+            for det in (rb.get("detail") or []):
+                if isinstance(det, dict) and det.get("code_joueur") == code:
+                    montant = int(det.get("montant", 0) or 0)
+                    if montant > 0:
+                        lignes.append({"date": rb.get("date", "?"), "type": "Remboursement",
+                                       "desc": "Jeu annulé : " + str(rb.get("jeu", "?")),
+                                       "entree": montant, "sortie": 0})
 
     # Solde de pions RÉEL actuel
     pj = DB.get("pions_joueurs", {}).get(code, {})
