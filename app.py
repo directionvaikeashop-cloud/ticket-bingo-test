@@ -118,13 +118,63 @@ _VERROU_SAUVEGARDE = threading.Lock()
 # Les lectures (GET, actualisation des boules...) restent paralleles et rapides.
 _VERROU_ECRITURES = threading.Lock()
 
+# ============================================================
+# ⚡ CACHE ANTI-SATURATION (lecture des données)
+# Au lieu de relire le fichier disque à CHAQUE requête, on garde le
+# contenu en mémoire et on ne relit QUE s'il a changé (date de modif
+# + taille) ou après 2 secondes. Dès que save_data écrit, la date de
+# modif change → le cache se renouvelle tout seul (données toujours
+# fraîches). Chaque appel re-parse le contenu → chaque requête a son
+# propre objet isolé (aucun risque de mélanger l'argent de 2 personnes).
+# ============================================================
+import time as _time_cache
+_LD_CACHE = {"contenu": None, "mtime": None, "taille": None, "ts": 0.0}
+_LD_VERROU = threading.Lock()
+
+
+def _lire_donnees_brut_cache():
+    """Contenu brut du fichier principal, avec cache court anti-saturation."""
+    try:
+        st = os.stat(DATA_FILE)
+        mtime, taille = st.st_mtime, st.st_size
+    except Exception:
+        return None  # fichier absent -> laisser load_data gérer (.bak / défaut)
+    maintenant = _time_cache.time()
+    with _LD_VERROU:
+        c = _LD_CACHE
+        if (c["contenu"] is not None and c["mtime"] == mtime
+                and c["taille"] == taille and (maintenant - c["ts"]) < 2.0):
+            return c["contenu"]  # cache frais : AUCUNE lecture disque
+    # Cache raté : on lit le disque UNE fois (hors verrou pour ne pas bloquer)
+    try:
+        with open(DATA_FILE, "r") as f:
+            contenu = f.read()
+    except Exception:
+        return None
+    with _LD_VERROU:
+        _LD_CACHE["contenu"] = contenu
+        _LD_CACHE["mtime"] = mtime
+        _LD_CACHE["taille"] = taille
+        _LD_CACHE["ts"] = maintenant
+    return contenu
+
+
 def load_data():
     # Essayer le fichier principal, puis la copie de secours (.bak)
     for chemin in [DATA_FILE, DATA_FILE + ".bak"]:
         try:
-            if os.path.exists(chemin):
+            data = None
+            if chemin == DATA_FILE:
+                _contenu = _lire_donnees_brut_cache()
+                if _contenu is None:
+                    continue
+                data = json.loads(_contenu)
+            elif os.path.exists(chemin):
                 with open(chemin, "r") as f:
                     data = json.load(f)
+            else:
+                continue
+            if data is not None:
                 if chemin.endswith(".bak"):
                     print("[LOAD] Fichier principal illisible — copie de secours utilisée")
                 # AUTO-REPARATION : recreer toute case manquante (listes et dictionnaires)
