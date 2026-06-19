@@ -5541,17 +5541,10 @@ def releve_financier_org(code):
                 "recette": t.get("montant_total", 0)
             })
     
-    # === RECETTES : tickets vendus aux joueuses (en pions) ===
-    for c in DB.get("commandes_tickets_pions", []):
-        if isinstance(c, dict) and c.get("code_org") == code:
-            lignes.append({
-                "date": c.get("date", "?"),
-                "type": "Vente tickets (pions)",
-                "desc": str(c.get("jeu", "?")) + " — " + str(c.get("nb_tickets", "?")) + " tickets — Joueuse " + str(c.get("code_joueur", "?")),
-                "depense": 0,
-                "recette": c.get("total_pions", 0)
-            })
-    
+    # === (Les tickets achetés en pions ne sont PAS recomptés en recette :
+    #      l'argent a déjà été encaissé quand l'organisateur a VENDU les pions
+    #      à la joueuse. Les recompter ici gonflerait la marge à tort.) ===
+
     # === RECETTES : part de cagnotte (20%) ===
     for g in DB.get("gains_finaux", []):
         if isinstance(g, dict) and g.get("code_org") == code:
@@ -5624,33 +5617,45 @@ def releve_financier_joueur(code):
             break
     
     lignes = []  # {date, type, desc, entree, sortie}
-    
-    # === ENTREES : achats de pions (carte/virement/especes) ===
+
+    # === ENTREE : achats de pions — VALEUR EN PIONS (pas l'argent payé, frais exclus) ===
     for c in DB.get("commandes_pions_joueurs", []):
         if isinstance(c, dict) and c.get("code_joueur") == code and c.get("statut") == "validee":
-            montant = c.get("montant_paye", c.get("montant_total", 0))
-            mode = str(c.get("mode_paiement", "?"))
-            nb = c.get("nb_pions", c.get("pions_credites", "?"))
+            nb = int(c.get("nb_pions", 0) or 0)
+            val = int(c.get("valeur_pion", 0) or 0)
             lignes.append({
                 "date": c.get("date", "?"),
                 "type": "Achat pions",
-                "desc": str(nb) + " pions (" + mode + ")",
-                "entree": montant,
+                "desc": str(nb) + " pions x " + str(val) + " XPF (" + str(c.get("mode_paiement", "?")) + ")",
+                "entree": nb * val,
                 "sortie": 0
             })
-    
-    # === ENTREES : pions recus de l'organisateur ===
+
+    # === ENTREE : pions reçus de l'organisateur ===
     for t in DB.get("transactions_joueur_org", []):
         if isinstance(t, dict) and t.get("code_joueur") == code:
             lignes.append({
                 "date": t.get("date", "?"),
-                "type": "Pions recus (org)",
+                "type": "Pions reçus (org)",
                 "desc": str(t.get("nb_pions", "?")) + " x " + str(t.get("valeur_pion", "?")) + " XPF (" + str(t.get("mode_paiement", "?")) + ")",
-                "entree": t.get("montant_total", 0),
+                "entree": int(t.get("montant_total", 0) or 0),
                 "sortie": 0
             })
-    
-    # === SORTIES : tickets achetes en pions ===
+
+    # === ENTREE : gains à la cagnotte (pions gagnés au tournoi) ===
+    for g in DB.get("gains_finaux", []):
+        if isinstance(g, dict) and g.get("code_gagnant") == code:
+            gain = int(g.get("montant_credite", 0) or 0)
+            if gain > 0:
+                lignes.append({
+                    "date": g.get("date", "?"),
+                    "type": "Gain cagnotte",
+                    "desc": "Pions gagnés au tournoi",
+                    "entree": gain,
+                    "sortie": 0
+                })
+
+    # === SORTIE : tickets achetés en pions ===
     for c in DB.get("commandes_tickets_pions", []):
         if isinstance(c, dict) and c.get("code_joueur") == code:
             lignes.append({
@@ -5658,22 +5663,57 @@ def releve_financier_joueur(code):
                 "type": "Achat tickets",
                 "desc": str(c.get("jeu", "?")) + " (" + str(c.get("nb_tickets", "?")) + " tickets)",
                 "entree": 0,
-                "sortie": c.get("total_pions", 0)
+                "sortie": int(c.get("total_pions", 0) or 0)
             })
-    
-    lignes.sort(key=lambda x: str(x["date"]), reverse=True)
-    
-    total_entrees = sum(l["entree"] for l in lignes)
-    total_sorties = sum(l["sortie"] for l in lignes)
-    
-    # Solde de pions actuel
+
+    # === SORTIE : retraits validés (pions convertis en argent) ===
+    for r in DB.get("demandes_retrait", []):
+        if isinstance(r, dict) and r.get("code_joueur") == code and r.get("statut") == "validee":
+            lignes.append({
+                "date": r.get("date", "?"),
+                "type": "Retrait argent",
+                "desc": "Pions convertis en argent (" + str(r.get("mode", "?")) + ")",
+                "entree": 0,
+                "sortie": int(r.get("montant_demande", 0) or 0)
+            })
+
+    # === SORTIE : corrections admin (pions retirés) ===
+    for c in DB.get("corrections_pions", []):
+        if isinstance(c, dict) and c.get("code_joueur") == code:
+            retire = int(c.get("solde_avant", 0) or 0) - int(c.get("solde_apres", 0) or 0)
+            if retire > 0:
+                lignes.append({
+                    "date": c.get("date", "?"),
+                    "type": "Correction admin",
+                    "desc": "Pions retirés (correction)",
+                    "entree": 0,
+                    "sortie": retire
+                })
+
+    # Solde de pions RÉEL actuel
     pj = DB.get("pions_joueurs", {}).get(code, {})
     solde_pions = 0
     for v, nb in pj.items():
         try:
-            solde_pions += int(v) * nb
+            solde_pions += int(v) * int(nb)
         except (ValueError, TypeError):
             pass
+
+    # Régularisation transparente : si un mouvement n'est pas détaillé
+    # (ex : recrédit admin après incident), on l'affiche pour que le relevé
+    # se boucle TOUJOURS exactement : entrées − sorties = solde réel.
+    _ent = sum(l["entree"] for l in lignes)
+    _sor = sum(l["sortie"] for l in lignes)
+    ajustement = solde_pions - (_ent - _sor)
+    if ajustement > 0:
+        lignes.append({"date": "", "type": "Régularisation", "desc": "Autres mouvements (gains/recrédits non détaillés)", "entree": ajustement, "sortie": 0})
+    elif ajustement < 0:
+        lignes.append({"date": "", "type": "Régularisation", "desc": "Autres mouvements (corrections non détaillées)", "entree": 0, "sortie": -ajustement})
+
+    lignes.sort(key=lambda x: str(x["date"]), reverse=True)
+
+    total_entrees = sum(l["entree"] for l in lignes)
+    total_sorties = sum(l["sortie"] for l in lignes)
     
     html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Mon releve</title><style>"
     html += "body{font-family:monospace;background:#0d1117;color:#e6edf3;padding:20px}h1{color:#58a6ff}"
@@ -5688,8 +5728,8 @@ def releve_financier_joueur(code):
     html += "<div class='sub'>" + str(nom) + " (" + code + ")</div>"
     html += "<div class='totaux'>"
     html += "<div><strong>Pions achetes/recus</strong><br><span class='m ent'>+" + format(total_entrees, ",") + " XPF</span></div>"
-    html += "<div><strong>Pions depenses</strong><br><span class='m sor'>-" + format(total_sorties, ",") + " XPF</span><br><span style='font-size:11px;color:#8b949e'>en tickets</span></div>"
-    html += "<div><strong>Solde actuel</strong><br><span class='m sol'>" + format(solde_pions, ",") + " XPF</span><br><span style='font-size:11px;color:#8b949e'>en pions</span></div>"
+    html += "<div><strong>Pions depenses</strong><br><span class='m sor'>-" + format(total_sorties, ",") + " XPF</span><br><span style='font-size:11px;color:#8b949e'>tickets, retraits, corrections</span></div>"
+    html += "<div><strong>Solde actuel</strong><br><span class='m sol'>" + format(solde_pions, ",") + " XPF</span><br><span style='font-size:11px;color:#8b949e'>= entrees - sorties</span></div>"
     html += "</div>"
     
     if lignes:
