@@ -4862,8 +4862,7 @@ async function commanderTicketAvecPions(jeuId, jeu, prix, nbTickets, codeOrg, co
     });
     const d = await r.json();
     if(d.ok){
-      var result = document.getElementById('joueur-pion-result');
-      if(result) result.innerHTML = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399;margin-top:6px">✅ Commande envoyee a l organisateur !</div>';
+      document.querySelectorAll('[id="joueur-pion-result"]').forEach(function(result){ result.innerHTML = '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399;margin-top:6px">✅ Commande envoyee a l organisateur !</div>'; });
       chargerSoldesPionsJoueur(codeJoueur);
     } else {
       alert(d.msg || 'Erreur — vérifiez votre solde de pions');
@@ -4895,28 +4894,28 @@ function tauxCommissionPions(mode){
 }
 
 function calcPionsJoueur(){
-  var montant = parseFloat(document.getElementById('joueur-pion-montant').value || 0);
-  var calcDiv = document.getElementById('joueur-pion-calcul');
-  if(!calcDiv || montant <= 0 || !valeurPionJoueur){
-    if(calcDiv) calcDiv.style.display = 'none';
+  var montant = parseFloat(_valVisible('joueur-pion-montant') || 0);
+  var calcDivs = document.querySelectorAll('[id="joueur-pion-calcul"]');
+  if(montant <= 0 || !valeurPionJoueur){
+    calcDivs.forEach(function(d){ d.style.display = 'none'; });
     return;
   }
-  var modeJ = (document.getElementById('joueur-pion-mode') || {}).value || '';
+  var modeJ = _valVisible('joueur-pion-mode') || '';
   var commission = Math.round(montant * tauxCommissionPions(modeJ));
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionJoueur);
-  calcDiv.style.display = 'block';
-  document.getElementById('joueur-pion-prix').textContent = montant.toLocaleString('fr-FR') + ' XPF';
-  document.getElementById('joueur-pion-commission').textContent = commission.toLocaleString('fr-FR') + ' XPF';
-  document.getElementById('joueur-pion-nb').textContent = nbPions + ' pions à ' + valeurPionJoueur + ' XPF';
+  calcDivs.forEach(function(d){ d.style.display = 'block'; });
+  document.querySelectorAll('[id="joueur-pion-prix"]').forEach(function(e){ e.textContent = montant.toLocaleString('fr-FR') + ' XPF'; });
+  document.querySelectorAll('[id="joueur-pion-commission"]').forEach(function(e){ e.textContent = commission.toLocaleString('fr-FR') + ' XPF'; });
+  document.querySelectorAll('[id="joueur-pion-nb"]').forEach(function(e){ e.textContent = nbPions + ' pions à ' + valeurPionJoueur + ' XPF'; });
 }
 
 async function commanderPionsJoueur(){
   if(!valeurPionJoueur){ alert('Choisissez la valeur du pion'); return; }
-  var montant = parseFloat(document.getElementById('joueur-pion-montant').value || 0);
+  var montant = parseFloat(_valVisible('joueur-pion-montant') || 0);
   if(montant < 500){ alert('Montant minimum : 500 XPF'); return; }
-  var mode = document.getElementById('joueur-pion-mode').value;
-  var ref = document.getElementById('joueur-pion-ref').value.trim();
+  var mode = _valVisible('joueur-pion-mode');
+  var ref = _valVisible('joueur-pion-ref');
   if(!mode){ alert('Choisissez votre mode de paiement'); return; }
   if(!ref) ref = 'TUKEA-' + (codeJoueurActuel ? codeJoueurActuel + '-' : '') + Date.now().toString().slice(-4);
   else if(codeJoueurActuel && ref.toUpperCase().indexOf(codeJoueurActuel) === -1) ref = codeJoueurActuel + '-' + ref;
@@ -4935,8 +4934,8 @@ async function commanderPionsJoueur(){
       });
       const ds = await rs.json();
       if(ds.ok && ds.url){
-        document.getElementById('joueur-pion-result').innerHTML =
-          '<div style="background:rgba(99,102,241,.2);border:1px solid #6366f1;border-radius:8px;padding:10px;text-align:center;color:#818cf8;margin-top:6px">💳 Redirection vers le paiement sécurisé...</div>';
+        document.querySelectorAll('[id="joueur-pion-result"]').forEach(function(el){ el.innerHTML =
+          '<div style="background:rgba(99,102,241,.2);border:1px solid #6366f1;border-radius:8px;padding:10px;text-align:center;color:#818cf8;margin-top:6px">💳 Redirection vers le paiement sécurisé...</div>'; });
         window.location.href = ds.url;
       } else {
         alert(ds.msg || 'Paiement par carte indisponible — choisissez un autre mode');
@@ -4963,14 +4962,14 @@ async function commanderPionsJoueur(){
     });
     const d = await r.json();
     if(d.ok){
-      document.getElementById('joueur-pion-result').innerHTML = 
-        '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399;margin-top:6px">✅ Commande envoyée ! Réf : ' + ref + ' — effectuez maintenant votre virement.</div>';
+      document.querySelectorAll('[id="joueur-pion-result"]').forEach(function(el){ el.innerHTML = 
+        '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399;margin-top:6px">✅ Commande envoyée ! Réf : ' + ref + ' — effectuez maintenant votre virement.</div>'; });
       // Afficher OU PAYER : RIB + reference + montant
       afficherInstructionsPaiement(mode, montant, ref, codeJoueurActuel);
-      document.getElementById('joueur-pion-montant').value = '';
-      document.getElementById('joueur-pion-calcul').style.display = 'none';
-      document.getElementById('joueur-pion-mode').value = '';
-      document.getElementById('joueur-pion-ref').value = '';
+      document.querySelectorAll('[id="joueur-pion-montant"]').forEach(function(e){ e.value = ''; });
+      document.querySelectorAll('[id="joueur-pion-calcul"]').forEach(function(e){ e.style.display = 'none'; });
+      document.querySelectorAll('[id="joueur-pion-mode"]').forEach(function(e){ e.value = ''; });
+      document.querySelectorAll('[id="joueur-pion-ref"]').forEach(function(e){ e.value = ''; });
       valeurPionJoueur = 0;
       document.querySelectorAll('.pion-val-j').forEach(function(p){
         p.style.borderColor = 'var(--bd)';
