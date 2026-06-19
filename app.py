@@ -177,6 +177,11 @@ def _ecrire_donnees_disque():
     """Écriture atomique réelle sur le disque (anti-corruption)."""
     try:
         with _VERROU_SAUVEGARDE:
+            # GRAND LIVRE : note les mouvements de pions (ne doit JAMAIS bloquer la sauvegarde)
+            try:
+                _journaliser_mouvements_pions()
+            except Exception as _egl:
+                print(f"[GRAND-LIVRE ERR] {_egl}")
             os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
             tmp = DATA_FILE + ".tmp"
             with open(tmp, "w") as f:
@@ -6821,4 +6826,219 @@ def api_sauvegardes_restaurer():
 
 # ============================================================
 # 🛟 FIN DU BLOC SAUVEGARDES
+# ============================================================
+
+
+# ============================================================
+# 📒 GRAND LIVRE DES PIONS (journalisation automatique)
+# Ajout du 19/06/2026 — etape 2 de la fiabilisation.
+# A chaque sauvegarde, on compare les soldes avant/apres et on
+# note CHAQUE mouvement dans un cahier qu'on n'efface jamais.
+# Aucun mouvement ne peut echapper a la surveillance, et on ne
+# touche presque pas a la logique d'argent (juste un appel place
+# dans _ecrire_donnees_disque, protege par try/except).
+# Le cahier est dans un fichier separe, en mode "on ajoute".
+# ============================================================
+GRAND_LIVRE_FICHIER = "/data/grand_livre.jsonl"
+GRAND_LIVRE_MAX_LIGNES_AFFICHEES = 800
+GRAND_LIVRE_SEUIL_INHABITUEL_XPF = 30000  # un mouvement >= 30000 XPF est marque "a verifier"
+
+_VERROU_GRAND_LIVRE = _threading_bk.Lock()
+
+
+def _instantane_soldes():
+    """Photo des soldes actuels, a plat : {'J|CODE|valeur': nb}."""
+    snap = {}
+    try:
+        for code, poche in list(DB.get("pions_joueurs", {}).items()):
+            if isinstance(poche, dict):
+                for val, qty in list(poche.items()):
+                    try:
+                        q = int(qty)
+                    except Exception:
+                        q = 0
+                    if q != 0:
+                        snap["J|" + str(code) + "|" + str(val)] = q
+        for code, poche in list(DB.get("pions_org", {}).items()):
+            if isinstance(poche, dict):
+                for val, qty in list(poche.items()):
+                    try:
+                        q = int(qty)
+                    except Exception:
+                        q = 0
+                    if q != 0:
+                        snap["O|" + str(code) + "|" + str(val)] = q
+    except Exception:
+        pass
+    return snap
+
+
+def _journaliser_mouvements_pions():
+    """Compare les soldes avant/apres et ecrit les mouvements dans le grand livre.
+    Appelee a chaque sauvegarde. Ne leve jamais d'exception vers l'appelant."""
+    nouveau = _instantane_soldes()
+    ancien = DB.get("_solde_precedent")
+
+    # Toute premiere fois : on memorise l'etat de depart SANS tout journaliser
+    # (sinon on creerait 200 fausses lignes de "credit" au demarrage).
+    if ancien is None:
+        DB["_solde_precedent"] = nouveau
+        return
+
+    cles = set(ancien.keys()) | set(nouveau.keys())
+    horod = datetime.datetime.now().isoformat(timespec="seconds")
+    lignes = []
+    for cle in cles:
+        avant = ancien.get(cle, 0)
+        apres = nouveau.get(cle, 0)
+        delta = apres - avant
+        if delta == 0:
+            continue
+        parties = cle.split("|", 2)
+        if len(parties) != 3:
+            continue
+        typ, code, valeur = parties
+        try:
+            xpf = abs(delta) * int(valeur)
+        except Exception:
+            xpf = 0
+        ligne = {
+            "ts": horod,
+            "type": "joueur" if typ == "J" else "organisateur",
+            "code": code,
+            "valeur": valeur,
+            "delta": delta,             # + = credit, - = debit (en NOMBRE de pions de cette valeur)
+            "xpf": (delta // abs(delta) if delta else 0) * xpf,  # montant signe en XPF
+            "solde_apres": apres,
+        }
+        if xpf >= GRAND_LIVRE_SEUIL_INHABITUEL_XPF:
+            ligne["inhabituel"] = True
+        if apres < 0:
+            ligne["negatif"] = True
+        lignes.append(ligne)
+
+    if lignes:
+        try:
+            with _VERROU_GRAND_LIVRE:
+                with open(GRAND_LIVRE_FICHIER, "a") as f:
+                    for l in lignes:
+                        f.write(json.dumps(l, ensure_ascii=False) + "\n")
+        except Exception as e:
+            print("[GRAND-LIVRE ECRITURE ERR]", e)
+
+    DB["_solde_precedent"] = nouveau
+
+
+def _lire_grand_livre(filtre_code="", limite=GRAND_LIVRE_MAX_LIGNES_AFFICHEES):
+    """Lit les dernieres lignes du grand livre, de la plus recente a la plus ancienne.
+    filtre_code : ne garder qu'un seul compte (joueuse ou org)."""
+    filtre_code = (filtre_code or "").strip().upper()
+    lignes = []
+    try:
+        if not os.path.exists(GRAND_LIVRE_FICHIER):
+            return []
+        with open(GRAND_LIVRE_FICHIER, "r") as f:
+            brutes = f.readlines()
+        # parcourir de la fin vers le debut
+        for ligne_txt in reversed(brutes):
+            ligne_txt = ligne_txt.strip()
+            if not ligne_txt:
+                continue
+            try:
+                obj = json.loads(ligne_txt)
+            except Exception:
+                continue
+            if filtre_code and str(obj.get("code", "")).upper() != filtre_code:
+                continue
+            lignes.append(obj)
+            if len(lignes) >= limite:
+                break
+    except Exception as e:
+        print("[GRAND-LIVRE LECTURE ERR]", e)
+    return lignes
+
+
+@app.route("/grand-livre")
+def page_grand_livre():
+    """Page admin : consulter le grand livre des mouvements de pions."""
+    return '''<!DOCTYPE html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grand livre — Ticket Bingo</title><style>
+*{box-sizing:border-box}body{font-family:system-ui,-apple-system,sans-serif;background:#0d1117;color:#e6edf3;margin:0;padding:20px}
+h1{color:#58a6ff;font-size:22px}.sub{color:#8b949e;margin-bottom:18px;font-size:14px}
+.box{background:#161b22;border:1px solid #30363d;border-radius:12px;padding:18px;margin-bottom:16px}
+input{width:100%;padding:13px;border:2px solid #30363d;background:#0d1117;color:#e6edf3;border-radius:9px;font-size:16px;margin:8px 0}
+button{padding:12px 16px;border:0;border-radius:9px;font-size:15px;font-weight:600;cursor:pointer}
+.primary{background:#238636;color:#fff;width:100%}
+.ghost{background:#21262d;color:#e6edf3;border:1px solid #30363d}
+table{width:100%;border-collapse:collapse;margin-top:10px;font-size:13px}
+th{text-align:left;color:#8b949e;border-bottom:1px solid #30363d;padding:8px}
+td{border-bottom:1px solid #21262d;padding:8px;vertical-align:middle}
+.date{color:#8b949e;font-size:11px}.code{color:#818cf8;font-weight:bold}
+.plus{color:#3fb950;font-weight:bold}.moins{color:#f85149;font-weight:bold}
+.flag{display:inline-block;background:#7a3a00;color:#ffb86b;border-radius:6px;padding:2px 7px;font-size:11px;margin-left:6px}
+.neg{display:inline-block;background:#5c1a1a;color:#fecaca;border-radius:6px;padding:2px 7px;font-size:11px;margin-left:6px}
+.msg{margin-top:12px;padding:12px;border-radius:9px;font-size:14px;display:none}
+.ok{background:#0f5132;color:#d1fae5}.ko{background:#5c1a1a;color:#fecaca}
+.row2{display:flex;gap:8px}.row2 input{flex:1}
+</style></head><body>
+<h1>📒 Grand livre des pions</h1>
+<div class="sub">Chaque mouvement de pion (achat, gain, dépense, correction) est noté ici, automatiquement, et jamais effacé.</div>
+<div class="box">
+  <label>Code admin</label>
+  <input type="password" id="code" placeholder="Ton code admin secret" autocomplete="off">
+  <label style="font-size:13px;color:#8b949e">Filtrer un compte précis (facultatif)</label>
+  <div class="row2">
+    <input type="text" id="filtre" placeholder="Ex : JML3UO (laisser vide = tout)" autocomplete="off" style="text-transform:uppercase">
+    <button class="ghost" style="width:auto" onclick="charger()">🔍</button>
+  </div>
+  <button class="primary" onclick="charger()">📖 Afficher le grand livre</button>
+  <div id="msg" class="msg"></div>
+</div>
+<div class="box" id="resBox" style="display:none">
+  <div id="resume" style="color:#8b949e;font-size:13px;margin-bottom:6px"></div>
+  <table><thead><tr><th>Quand</th><th>Compte</th><th>Mouvement</th><th>Solde après</th></tr></thead>
+  <tbody id="liste"></tbody></table>
+</div>
+<script>
+function code(){return document.getElementById("code").value.trim();}
+function show(t,ok){var m=document.getElementById("msg");m.textContent=t;m.className="msg "+(ok?"ok":"ko");m.style.display="block";}
+async function charger(){
+  if(!code()){show("Entre ton code admin.",false);return;}
+  var r=await fetch("/api/grand-livre/liste",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({code:code(),filtre:document.getElementById("filtre").value.trim()})});
+  var d=await r.json();
+  if(!d.ok){show(d.msg||"Code refusé.",false);return;}
+  show("Code accepté ✅",true);
+  var tb=document.getElementById("liste");tb.innerHTML="";
+  document.getElementById("resume").textContent=
+    d.lignes.length+" mouvement(s) affiché(s)"+(d.filtre?(" pour le compte "+d.filtre):"")+" — du plus récent au plus ancien.";
+  d.lignes.forEach(function(l){
+    var signe=l.delta>0?("+"+l.delta):(""+l.delta);
+    var cls=l.delta>0?"plus":"moins";
+    var xpf=(l.xpf>0?"+":"")+l.xpf+" XPF";
+    var flags=(l.inhabituel?"<span class='flag'>à vérifier</span>":"")+(l.negatif?"<span class='neg'>négatif</span>":"");
+    var tr=document.createElement("tr");
+    tr.innerHTML="<td class='date'>"+(l.ts||"").replace("T"," ")+"</td>"
+      +"<td><span class='code'>"+l.code+"</span><br><span class='date'>"+l.type+"</span></td>"
+      +"<td><span class='"+cls+"'>"+signe+" pion"+(Math.abs(l.delta)>1?"s":"")+" de "+l.valeur+"</span> <span class='date'>("+xpf+")</span>"+flags+"</td>"
+      +"<td>"+l.solde_apres+" × "+l.valeur+"</td>";
+    tb.appendChild(tr);
+  });
+  document.getElementById("resBox").style.display="block";
+}
+</script></body></html>'''
+
+
+@app.route("/api/grand-livre/liste", methods=["POST"])
+def api_grand_livre_liste():
+    d = request.get_json(silent=True) or {}
+    if not _est_admin_code(d.get("code")):
+        return jsonify({"ok": False, "msg": "Code admin refusé."}), 403
+    filtre = (d.get("filtre") or "").strip().upper()
+    lignes = _lire_grand_livre(filtre)
+    return jsonify({"ok": True, "filtre": filtre, "lignes": lignes})
+
+# ============================================================
+# 📒 FIN DU BLOC GRAND LIVRE
 # ============================================================
