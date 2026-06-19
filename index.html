@@ -2711,7 +2711,7 @@ async function analyserPageNumeroPDF(page, pageNum){
 async function chargerPDFJoueur(url,cleCoches,overlay,cochesExistantes,pageDebut,pageFin){
   overlayActuel=overlay;cleCochesActuel=cleCoches;pageDebutActuel=pageDebut||1;
   try{
-    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
     // Utiliser le proxy pour eviter les erreurs CORS/401 de Cloudinary
     const proxyUrl = url.includes('cloudinary.com') ? '/api/proxy-pdf?url=' + encodeURIComponent(url) : url;
     pdfDoc=await pdfjsLib.getDocument({url:proxyUrl,withCredentials:false}).promise;
@@ -6551,7 +6551,7 @@ async function desactiver(code){try{await fetch("/api/admin/desactiver",{method:
 
 document.getElementById("login-code").addEventListener("keypress",e=>{if(e.key==="Enter")doLogin();});
 </script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js">
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js">
 function calculerCombinaisonsPions(montant){
   var combinations = [];
   // Combinaisons avec 100F, 50F, 20F
