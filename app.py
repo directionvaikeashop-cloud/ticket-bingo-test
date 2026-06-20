@@ -323,9 +323,18 @@ def load_data():
         "alertes_bingo": [], "tirage": []
     }
 
+# 📸 PHOTO de l'état à écrire (anti-écrasement) : quand une sauvegarde est
+# demandée, on fige l'état du moment. L'écriture (même différée) écrit CETTE
+# photo, et non le DB global que les téléphones ont pu recharger entre-temps.
+_DB_A_ECRIRE = [None]
+
 def _ecrire_donnees_disque():
-    """Écriture atomique réelle sur le disque (anti-corruption)."""
+    """Écriture atomique réelle sur le disque (anti-corruption).
+    Écrit la PHOTO figée (_DB_A_ECRIRE) si elle existe, sinon le DB courant."""
     try:
+        # On écrit la photo prise au moment de la demande de sauvegarde.
+        # Si aucune photo (cas improbable), on retombe sur le DB courant.
+        a_ecrire = _DB_A_ECRIRE[0] if _DB_A_ECRIRE[0] is not None else DB
         with _VERROU_SAUVEGARDE:
             # GRAND LIVRE : note les mouvements de pions (ne doit JAMAIS bloquer la sauvegarde)
             try:
@@ -335,7 +344,7 @@ def _ecrire_donnees_disque():
             os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
             tmp = DATA_FILE + ".tmp"
             with open(tmp, "w") as f:
-                json.dump(DB, f, ensure_ascii=False, default=str)
+                json.dump(a_ecrire, f, ensure_ascii=False, default=str)
                 f.flush()
                 os.fsync(f.fileno())
             if os.path.exists(DATA_FILE):
@@ -346,7 +355,7 @@ def _ecrire_donnees_disque():
             os.replace(tmp, DATA_FILE)
             # 🐘 Recopie durable dans PostgreSQL (filet anti-perte ; ne bloque jamais la sauvegarde)
             try:
-                _pg_ecrire(DB)
+                _pg_ecrire(a_ecrire)
             except Exception as _epg:
                 print(f"[PG ECRITURE ERR] {_epg}")
         print(f"[SAVE OK] {DATA_FILE}")
@@ -359,6 +368,9 @@ import time as _time_save
 _DERNIERE_SAUVEGARDE = [0.0]
 _SAUVEGARDE_EN_ATTENTE = [None]
 _VERROU_THROTTLE = _threading_save.Lock()
+# 🔒 Verrou unique pour sérialiser les écritures d'argent (aucun risque
+# d'interblocage : un seul verrou réentrant). Ne ralentit que les écritures.
+_VERROU_DB = _threading_save.RLock()
 _THROTTLE_SECONDES = 2.0
 
 def _sauvegarde_differee():
@@ -366,15 +378,37 @@ def _sauvegarde_differee():
     with _VERROU_THROTTLE:
         _SAUVEGARDE_EN_ATTENTE[0] = None
         _DERNIERE_SAUVEGARDE[0] = _time_save.time()
-    _ecrire_donnees_disque()
+    with _VERROU_DB:
+        _ecrire_donnees_disque()
     try:
         verifier_soldes_negatifs()
     except Exception:
         pass
 
-def save_data():
+def save_data(immediat=False):
     """Sauvegarde intelligente : immédiate si isolée, regroupée si en rafale.
-    L'état final est TOUJOURS écrit (aucune perte de données)."""
+    L'état final est TOUJOURS écrit (aucune perte de données).
+
+    immediat=True  -> écrit TOUT DE SUITE, sans différer (à utiliser pour les
+                      mouvements d'argent : retrait, crédit, achat, validation…
+                      pour qu'aucune sauvegarde différée ne puisse les écraser).
+
+    À chaque appel on fige une PHOTO de l'état courant (_DB_A_ECRIRE) ; c'est
+    cette photo qui sera écrite, même par une sauvegarde différée — donc un
+    rafraîchissement de téléphone ne peut plus effacer la correction."""
+    # 📸 On fige l'état courant : c'est la modification que l'appelant vient de faire.
+    _DB_A_ECRIRE[0] = DB
+    if immediat:
+        # Écriture synchrone immédiate, sérialisée (anti-écrasement).
+        with _VERROU_DB:
+            with _VERROU_THROTTLE:
+                _DERNIERE_SAUVEGARDE[0] = _time_save.time()
+            _ecrire_donnees_disque()
+        try:
+            verifier_soldes_negatifs()
+        except Exception:
+            pass
+        return
     maintenant = _time_save.time()
     with _VERROU_THROTTLE:
         depuis_derniere = maintenant - _DERNIERE_SAUVEGARDE[0]
@@ -392,7 +426,8 @@ def save_data():
                 _SAUVEGARDE_EN_ATTENTE[0] = t
                 t.start()
     if faire_maintenant:
-        _ecrire_donnees_disque()
+        with _VERROU_DB:
+            _ecrire_donnees_disque()
         try:
             verifier_soldes_negatifs()
         except Exception:
@@ -1685,7 +1720,7 @@ def retirer_pions_joueur():
         "ip": _get_client_ip(),
         "date": datetime.datetime.now().isoformat()
     })
-    save_data()
+    save_data(immediat=True)
     return jsonify({
         "ok": True,
         "code_joueur": code_joueur,
@@ -1737,7 +1772,7 @@ def donner_pions():
         "source": "stock_organisateur",
         "date": datetime.datetime.now().isoformat()
     })
-    save_data()
+    save_data(immediat=True)
     return jsonify({"ok": True})
 
 @app.route("/api/admin/reset-donnees", methods=["POST"])
@@ -2172,7 +2207,7 @@ def crediter_pions():
         "code_org": s["code"],
         "date": datetime.datetime.now().isoformat()
     })
-    save_data()
+    save_data(immediat=True)
     return jsonify({"ok": True, "solde": DB["pions"][code_joueur], "commission": commission})
 
 @app.route("/api/pions/utiliser", methods=["POST"])
@@ -2675,7 +2710,7 @@ def commander_ticket_pions():
         "date": datetime.datetime.now().isoformat()
     }
     DB["commandes_tickets_pions"].insert(0, commande)
-    save_data()
+    save_data(immediat=True)
     return jsonify({"ok": True, "commande_id": commande["id"]})
 
 @app.route("/api/commande/tickets-pions-org")
@@ -2709,7 +2744,7 @@ def valider_ticket_pions():
             commande = c
             break
     if not commande:
-        save_data()
+        save_data(immediat=True)
         return jsonify({"ok": False, "msg": "Commande introuvable"}), 404
 
     # === CREDIT DES MISES A L'ORGANISATEUR (corrige le cycle cagnotte) ===
@@ -2779,7 +2814,7 @@ def valider_ticket_pions():
     if pdf_url:
         ticket["pdf_url"] = pdf_url
     ticket["date"] = datetime.datetime.now().isoformat()
-    save_data()
+    save_data(immediat=True)
     return jsonify({"ok": True, "ticket": ticket})
 
 @app.route("/api/pions/commande-joueur", methods=["POST"])
@@ -2877,7 +2912,7 @@ def valider_pions_joueur():
                 DB["pions_joueurs"][code_joueur] = {}
             DB["pions_joueurs"][code_joueur][valeur] = DB["pions_joueurs"][code_joueur].get(valeur, 0) + nb
             break
-    save_data()
+    save_data(immediat=True)
     return jsonify({"ok": True})
 
 @app.route("/api/maintenance")
@@ -3106,7 +3141,7 @@ def stripe_crediter():
             "statut": "validee",
             "date": datetime.datetime.now().isoformat()
         })
-        save_data()
+        save_data(immediat=True)
         return jsonify({"ok": True, "code": code, "nb_pions": nb_pions, "valeur": valeur, "solde": DB["pions_joueurs"][code]})
     except Exception as e:
         print(f"[STRIPE CREDIT ERR] {e}")
@@ -3810,7 +3845,7 @@ def crediter_masse():
         "par": s["code"],
         "date": datetime.datetime.now().isoformat()
     })
-    save_data()
+    save_data(immediat=True)
     return jsonify({"ok": True, "nb_codes": len(codes), "resultats": resultats})
 
 @app.route("/api/pions/recrediter-joueur", methods=["POST"])
@@ -3842,7 +3877,7 @@ def recrediter_pions_joueur():
         "par": s.get("code", "admin"),
         "date": datetime.datetime.now().isoformat()
     })
-    save_data()
+    save_data(immediat=True)
     return jsonify({"ok": True, "solde": DB["pions_joueurs"][code_joueur]})
 
 @app.route("/api/pions/commandes-joueurs")
@@ -4516,7 +4551,7 @@ def stripe_webhook():
             _notifier_admin_stripe(f"Commande PDF — {jeu}",
                 f"{nb_tickets} tickets commandés par {code_org}", montant)
         
-        save_data()
+        save_data(immediat=True)
         print(f"[STRIPE] Paiement reçu: {type_p} — {montant} XPF — {code_org}")
     
     return jsonify({"ok": True})
@@ -5988,7 +6023,7 @@ def valider_retrait():
             DB["pions_joueurs"][code_joueur] = pions
             r["statut"] = "validee"
             r["date_validation"] = datetime.datetime.now().isoformat()
-            save_data()
+            save_data(immediat=True)
             return jsonify({"ok": True, "montant_net": r.get("montant_net")})
     
     return jsonify({"ok": False, "msg": "Demande introuvable"}), 404
@@ -6007,7 +6042,7 @@ def refuser_retrait():
     for r in DB.get("demandes_retrait", []):
         if r["id"] == demande_id and r.get("statut") == "en_attente":
             r["statut"] = "refusee"
-            save_data()
+            save_data(immediat=True)
             return jsonify({"ok": True})
     return jsonify({"ok": False, "msg": "Demande introuvable"}), 404
 
@@ -6710,7 +6745,7 @@ def stripe_auto_credit():
                 continue
         
         if credites:
-            save_data()
+            save_data(immediat=True)
         return jsonify({"ok": True, "credites": credites, "nb": len(credites)})
     except Exception as e:
         print(f"[AUTO-CREDIT ERR] {e}")
