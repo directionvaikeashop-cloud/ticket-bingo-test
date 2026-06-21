@@ -4864,7 +4864,7 @@ function ouvrirModaleRetrait(){
   document.getElementById('retrait-mode').value = 'Cash';
   document.getElementById('retrait-coords').value = '';
   document.getElementById('retrait-coords-wrap').style.display = 'none';
-  document.getElementById('retrait-calcul').innerHTML = 'Entre un montant pour voir le calcul.';
+  document.getElementById('retrait-calcul').innerHTML = 'Entre un montant. <span style="color:#fbbf24">Le bonus offert n\'est pas retirable (il sert à jouer).</span>';
   document.getElementById('retrait-result').innerHTML = '';
   document.getElementById('modale-retrait').style.display = 'flex';
 }
@@ -5394,9 +5394,17 @@ function chargerSoldesPionsJoueur(code, tentative){
     document.querySelectorAll('[id="joueur-solde-20"]').forEach(function(el){ el.textContent = d.pions_20 || 0; });
     document.querySelectorAll('[id="joueur-solde-50"]').forEach(function(el){ el.textContent = d.pions_50 || 0; });
     document.querySelectorAll('[id="joueur-solde-100"]').forEach(function(el){ el.textContent = d.pions_100 || 0; });
-    // Afficher le solde TOTAL en XPF
-    var total = (d.pions_10||0)*10 + (d.pions_20||0)*20 + (d.pions_50||0)*50 + (d.pions_100||0)*100;
-    document.querySelectorAll('[id="joueur-solde-total"]').forEach(function(el){ el.textContent = total + ' XPF'; });
+    // Afficher le solde TOTAL JOUABLE en XPF = pions réels + bonus offert
+    var reel = (d.reel_total != null) ? d.reel_total : ((d.pions_10||0)*10 + (d.pions_20||0)*20 + (d.pions_50||0)*50 + (d.pions_100||0)*100);
+    var bonus = d.bonus_total || 0;
+    var jouable = reel + bonus;
+    document.querySelectorAll('[id="joueur-solde-total"]').forEach(function(el){
+      if(bonus > 0){
+        el.innerHTML = jouable + ' XPF <span style="font-size:11px;color:#34d399;font-weight:700">(dont ' + bonus + ' offert 🎁)</span>';
+      } else {
+        el.textContent = jouable + ' XPF';
+      }
+    });
   })
   .catch(function(e){
     // ÉCHEC : ne PAS afficher 0 (trompeur). Réessayer jusqu'à 4 fois.
