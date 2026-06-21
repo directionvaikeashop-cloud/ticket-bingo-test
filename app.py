@@ -6833,6 +6833,98 @@ def supprimer_tournoi_programme():
 
 
 
+@app.route("/diag-envois")
+def diag_envois():
+    """Diagnostic LECTURE SEULE des envois admin -> organisateur (ventes + PDF).
+    Protégé : nécessite ?cle=CODE_ADMIN."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info_cle = DB.get("codes", {}).get(cle)
+    if not (info_cle and info_cle.get("admin")):
+        return Response(
+            "Acces reserve. Ajoute ?cle=TON_CODE_ADMIN a l'adresse (ex: /diag-envois?cle=ADMIN2024).",
+            status=403, mimetype="text/plain; charset=utf-8")
+
+    org_filtre = (request.args.get("org", "") or "").strip().upper()
+    ventes = DB.get("ventes", [])
+    codes = DB.get("codes", {})
+
+    # Codes organisateurs connus (= le code de connexion)
+    orgs_connus = ""
+    for co, inf in codes.items():
+        if inf.get("admin"):
+            continue
+        orgs_connus += (f'<tr><td style="padding:6px;color:#fff">{inf.get("nom", "")}</td>'
+                        f'<td style="padding:6px;color:#a78bfa;font-family:monospace">{co}</td>'
+                        f'<td style="padding:6px;color:#94a3b8">{inf.get("role", "")}</td></tr>')
+
+    # Combien de ventes par code
+    comptes = {}
+    for v in ventes:
+        co = (v.get("code_org") or "?")
+        comptes[co] = comptes.get(co, 0) + 1
+    rep_comptes = " &nbsp;·&nbsp; ".join(f'<b style="color:#fff">{c}</b> : {n}'
+                                          for c, n in sorted(comptes.items(), key=lambda x: -x[1])) or "aucune vente"
+
+    vus = ventes if not org_filtre else [v for v in ventes if (v.get("code_org", "") or "").upper() == org_filtre]
+    lignes = ""
+    for v in vus[:40]:
+        co = v.get("code_org", "?") or "?"
+        pdf_url = v.get("pdf_url") or ""
+        existe = False
+        if pdf_url:
+            pid = pdf_url.split("/")[-1].replace(".pdf", "")
+            existe = os.path.exists(f"/data/pdfs/{pid}.pdf")
+        if pdf_url and existe:
+            etat = '<span style="color:#6ee7b7;font-weight:700">✅ PDF présent</span>'
+        elif pdf_url:
+            etat = '<span style="color:#fca5a5;font-weight:700">❌ PDF absent du serveur</span>'
+        else:
+            etat = '<span style="color:#9ca3af">— aucun PDF</span>'
+        date_c = (v.get("date", "") or "")[:16].replace("T", " ")
+        lignes += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.08)">'
+                   f'<td style="padding:8px;font-family:monospace;color:#a78bfa">{co}</td>'
+                   f'<td style="padding:8px;color:#fff">{v.get("jeu", "?")}</td>'
+                   f'<td style="padding:8px;color:#c4b5fd;font-weight:700">{v.get("serie", "?")}</td>'
+                   f'<td style="padding:8px;color:#94a3b8">{v.get("client", "")}</td>'
+                   f'<td style="padding:8px;color:#64748b;font-size:12px">{v.get("paiement_statut", "")}</td>'
+                   f'<td style="padding:8px">{etat}</td>'
+                   f'<td style="padding:8px;color:#64748b;font-size:11px">{date_c}</td></tr>')
+    if not lignes:
+        lignes = ('<tr><td colspan="7" style="padding:20px;text-align:center;color:#94a3b8">'
+                  'Aucune vente' + (f' pour le code {org_filtre}' if org_filtre else '') + '.</td></tr>')
+
+    return f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1"><title>Diagnostic envois</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff">
+    <div style="max-width:940px;margin:0 auto">
+      <h1 style="font-size:20px;color:#a855f7;margin:4px 0 16px">🔍 Diagnostic des envois admin → organisateur</h1>
+      <div style="background:#1e1b3a;border:1px solid #3730a3;border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:13px;color:#a78bfa;margin-bottom:8px">📦 Où sont rangés les envois (nombre de ventes par code) :</div>
+        <div style="font-size:14px;color:#fff;line-height:1.8">{rep_comptes}</div>
+      </div>
+      <div style="background:#1e1b3a;border:1px solid #3730a3;border-radius:12px;padding:14px;margin-bottom:14px">
+        <div style="font-size:13px;color:#a78bfa;margin-bottom:8px">🔑 Codes des organisateurs (le code de connexion exact) :</div>
+        <table style="width:100%;border-collapse:collapse">{orgs_connus or '<tr><td style="color:#94a3b8;padding:6px">Aucun</td></tr>'}</table>
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:640px">
+        <tr style="border-bottom:2px solid #3730a3">
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Code destinataire</th>
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Jeu</th>
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Série</th>
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Client</th>
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Statut</th>
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Fichier PDF</th>
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Date</th>
+        </tr>
+        {lignes}
+      </table></div>
+      <div style="text-align:center;margin-top:16px;font-size:12px;color:#64748b">
+        Filtrer un organisateur : ajoute <code style="color:#a78bfa">&amp;org=PKKPZMU1</code> à l'adresse.
+      </div>
+    </div></body></html>'''
+
 @app.route("/diagnostic-pdf")
 def diagnostic_pdf():
     """Diagnostic des PDF : présents / manquants, groupés par organisateur."""
