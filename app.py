@@ -940,6 +940,23 @@ def enregistrer_ticket():
     # plus tard lors de l'annonce + validation de la commande en pions). Corrige 12/06/2026.
     if not d.get("acheteur"):
         return jsonify({"ok": False, "msg": "Le nom de la joueuse est obligatoire"}), 400
+    # 🔒 SECURITE PAGES (20/06/2026) : si un PDF est attribué, la plage de pages est
+    # OBLIGATOIRE — sinon le client verrait TOUT le PDF (beaucoup trop de cartes).
+    # Et une plage à l'envers (fin < début) est refusée.
+    _pd_in = d.get("page_debut")
+    _pf_in = d.get("page_fin")
+    _has_pd = _pd_in not in (None, "")
+    _has_pf = _pf_in not in (None, "")
+    if (d.get("pdf_url") or "") and not (_has_pd and _has_pf):
+        return jsonify({"ok": False, "msg": "📄 Indiquez la page de début ET la page de fin des feuilles de cette joueuse (obligatoire avec un PDF)."}), 400
+    if _has_pd and _has_pf:
+        try:
+            _pd_i = int(_pd_in)
+            _pf_i = int(_pf_in)
+        except (TypeError, ValueError):
+            return jsonify({"ok": False, "msg": "📄 Les pages doivent être des nombres."}), 400
+        if _pd_i < 1 or _pf_i < _pd_i:
+            return jsonify({"ok": False, "msg": f"📄 Plage de pages invalide ({_pd_in} → {_pf_in}) : la page de fin doit être supérieure ou égale à la page de début."}), 400
     # Code joueur EXISTANT fourni : la joueuse garde son code et ses pions.
     # Si un ticket existe deja sur ce code -> ON LE MET A JOUR (nouvelle vente = nouveau
     # jeu / nouvelles fiches sur le MEME code permanent). Corrige le 12/06/2026.
