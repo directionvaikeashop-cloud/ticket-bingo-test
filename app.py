@@ -2664,46 +2664,30 @@ def commander_ticket_pions():
                 return jsonify({"ok": False, "msg": "🛑 Les ventes de ce jeu sont fermées par l'organisateur. Aucun pion n'a été débité."}), 400
             break
 
-    # Vérifier solde pions du joueur
+    # === SOLDE = pions réels (retirables) + bonus (jouables, NON retirables) ===
     pions_joueur = DB.get("pions_joueurs", {}).get(code_joueur, {})
-    
-    # Trouver les pions disponibles (priorité aux pions de plus grande valeur)
-    solde_total = 0
-    for valeur, nb in pions_joueur.items():
-        solde_total += int(valeur) * nb
-    
+    pions_bonus = DB.get("pions_bonus_joueurs", {}).get(code_joueur, {})
+    solde_reel = _xpf_total_pions(pions_joueur)
+    solde_bonus = _xpf_total_pions(pions_bonus)
+    solde_total = solde_reel + solde_bonus
+
     if solde_total < total:
         return jsonify({"ok": False, "msg": f"Solde insuffisant — vous avez {solde_total} XPF de pions, il faut {total} XPF"}), 400
-    
-    # Débiter les pions intelligemment : petites valeurs d'abord, puis on "casse" un gros pion si besoin
-    # Gère TOUTES les valeurs (10/20/50/100) et rend la monnaie en pions de 10.
-    reste = total
-    # 1) Payer avec les pions du plus petit au plus grand (pour user les petites coupures)
-    for valeur in ["10", "20", "50", "100"]:
-        nb_dispo = pions_joueur.get(valeur, 0)
-        if nb_dispo > 0 and reste > 0:
-            val_int = int(valeur)
-            nb_utilise = min(nb_dispo, reste // val_int)
-            if nb_utilise > 0:
-                pions_joueur[valeur] = nb_dispo - nb_utilise
-                reste -= nb_utilise * val_int
-    # 2) S'il reste un résidu (ex: il faut 20 mais il ne reste que des pions de 100),
-    #    on casse le plus petit pion suffisant et on rend la monnaie en pions de 10.
-    if reste > 0:
-        for valeur in ["20", "50", "100"]:
-            val_int = int(valeur)
-            if pions_joueur.get(valeur, 0) > 0 and val_int >= reste:
-                pions_joueur[valeur] -= 1
-                rendu = val_int - reste
-                if rendu > 0:
-                    pions_joueur["10"] = pions_joueur.get("10", 0) + (rendu // 10)
-                reste = 0
-                break
-    
-    if reste > 0:
+
+    # On dépense le BONUS d'abord (le crédit gratuit se consomme en jouant),
+    # puis les pions réels pour le reste. Copies + validation uniquement si les
+    # deux débits réussissent (anti-incohérence).
+    reel_copie = dict(pions_joueur)
+    bonus_copie = dict(pions_bonus)
+    montant_bonus = min(solde_bonus, total)
+    if montant_bonus > 0 and not _debiter_pions_montant(bonus_copie, montant_bonus):
         return jsonify({"ok": False, "msg": "Solde insuffisant en pions"}), 400
-    
-    DB["pions_joueurs"][code_joueur] = pions_joueur
+    montant_reel = total - montant_bonus
+    if montant_reel > 0 and not _debiter_pions_montant(reel_copie, montant_reel):
+        return jsonify({"ok": False, "msg": "Solde insuffisant en pions"}), 400
+
+    DB.setdefault("pions_joueurs", {})[code_joueur] = reel_copie
+    DB.setdefault("pions_bonus_joueurs", {})[code_joueur] = bonus_copie
     
     # Créditer les pions à l'organisateur
     if "pions_org" not in DB:
@@ -2877,13 +2861,16 @@ def solde_pions_joueur(code_joueur):
     global DB
     DB = load_data()
     if code_joueur.upper().strip() in DB.get("codes_bloques", []):
-        return jsonify({"pions_10": 0, "pions_20": 0, "pions_50": 0, "pions_100": 0, "bloque": True})
+        return jsonify({"pions_10": 0, "pions_20": 0, "pions_50": 0, "pions_100": 0, "bloque": True, "bonus_total": 0, "reel_total": 0})
     pions = DB.get("pions_joueurs", {}).get(code_joueur.upper(), {})
+    bonus = DB.get("pions_bonus_joueurs", {}).get(code_joueur.upper(), {})
     return jsonify({
         "pions_10": pions.get("10", 0),
         "pions_20": pions.get("20", 0),
         "pions_50": pions.get("50", 0),
-        "pions_100": pions.get("100", 0)
+        "pions_100": pions.get("100", 0),
+        "reel_total": _xpf_total_pions(pions),
+        "bonus_total": _xpf_total_pions(bonus)
     })
 
 def _xpf_total_pions(dico):
@@ -7114,6 +7101,132 @@ def diag_tickets():
         Filtrer un organisateur : ajoute <code style="color:#a78bfa">&amp;org=PKKPZMU1</code> à l'adresse.
       </div>
     </div></body></html>'''
+
+@app.route("/api/rejoindre", methods=["POST"])
+def api_rejoindre():
+    """Inscription automatique depuis la pub (page /rejoindre).
+    Crée un code joueur, offre 500 XPF de bonus NON RETIRABLE, 1 seul par numéro."""
+    global DB
+    DB = load_data()
+    d = request.json or {}
+    nom = (d.get("nom") or "").strip()
+    tel = (d.get("telephone") or "").strip()
+    tel_clean = "".join(c for c in tel if c.isdigit() or c == "+")
+    chiffres = "".join(c for c in tel if c.isdigit())
+    if not nom or len(nom) < 2:
+        return jsonify({"ok": False, "msg": "Entre ton prénom."}), 400
+    if len(chiffres) < 6:
+        return jsonify({"ok": False, "msg": "Entre un numéro valide (avec l'indicatif si tu es à l'étranger)."}), 400
+
+    ip = _get_client_ip()
+    maintenant = datetime.datetime.now()
+    index_tel = DB.setdefault("joueurs_par_tel", {})
+    # 1 SEUL code/bonus par numéro : si déjà inscrit, on renvoie son code (sans nouveau bonus)
+    if tel_clean in index_tel:
+        return jsonify({"ok": True, "code": index_tel[tel_clean], "deja": True, "bonus": 0})
+
+    # Anti-robot : max 3 nouveaux codes/heure/appareil
+    DB.setdefault("rejoindre_log", [])
+    recent = 0
+    for x in DB["rejoindre_log"]:
+        try:
+            if x.get("ip") == ip and (maintenant - datetime.datetime.fromisoformat(x["date"])).total_seconds() < 3600:
+                recent += 1
+        except Exception:
+            pass
+    if recent >= 3:
+        return jsonify({"ok": False, "msg": "Trop d'inscriptions depuis cet appareil. Réessaie plus tard."}), 429
+
+    code = gen_code(6)
+    while code in DB.get("tickets_acheteurs", {}) or code in DB.get("pions_joueurs", {}) or code in DB.get("pions_bonus_joueurs", {}):
+        code = gen_code(6)
+
+    ticket = {
+        "id": hashlib.md5(f"{nom}{tel_clean}{maintenant}".encode()).hexdigest()[:8],
+        "acheteur": nom, "jeu": "", "serie": "", "prix": 0,
+        "photo_url": None, "pdf_url": None, "page_debut": None, "page_fin": None,
+        "code_acheteur": code, "email": "", "telephone": tel_clean,
+        "code_org": "PUB", "source": "publicite", "date": maintenant.isoformat()
+    }
+    DB.setdefault("tickets", []).insert(0, ticket)
+    DB.setdefault("tickets_acheteurs", {})[code] = ticket["id"]
+    index_tel[tel_clean] = code
+
+    BONUS = 500
+    poche_bonus = DB.setdefault("pions_bonus_joueurs", {}).get(code, {})
+    _crediter_pions_montant(poche_bonus, BONUS)
+    DB["pions_bonus_joueurs"][code] = poche_bonus
+
+    DB["rejoindre_log"].insert(0, {"ip": ip, "tel": tel_clean, "code": code, "nom": nom, "date": maintenant.isoformat()})
+    save_data(immediat=True)
+    return jsonify({"ok": True, "code": code, "deja": False, "bonus": BONUS})
+
+
+@app.route("/rejoindre")
+def page_rejoindre():
+    """Page publique d'arrivée (destination de la pub Facebook / TikTok)."""
+    return '''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ticket Bingo — Joue et gagne</title></head>
+<body style="margin:0;font-family:system-ui,sans-serif;background:linear-gradient(180deg,#1a1033,#0d0b1f 55%,#050410);color:#fff;min-height:100vh">
+<div style="max-width:480px;margin:0 auto;padding:24px 18px 40px">
+  <div style="text-align:center;color:#fbbf24;font-weight:800;letter-spacing:3px;font-size:20px">TICKET BINGO</div>
+  <div style="height:3px;width:120px;background:#a855f7;margin:10px auto 22px;border-radius:2px"></div>
+
+  <div style="text-align:center;font-size:22px;font-weight:700;color:#fff">MINI JACKPOT</div>
+  <div style="text-align:center;font-size:64px;font-weight:800;color:#fbbf24;line-height:1.1;margin:4px 0">50 000</div>
+  <div style="text-align:center;font-size:20px;font-weight:700;letter-spacing:4px;color:#fff;margin-bottom:18px">FRANCS</div>
+
+  <div style="background:rgba(124,58,237,.25);border:1px solid #a855f7;border-radius:14px;padding:14px;text-align:center;margin-bottom:14px">
+    <div style="font-size:26px;font-weight:800;color:#34d399">500 XPF OFFERTS 🎁</div>
+    <div style="font-size:13px;color:#e9d5ff;margin-top:4px">de pions gratuits pour venir jouer — petits jeux tous les jours !</div>
+  </div>
+
+  <div id="form-zone" style="background:rgba(255,255,255,.06);border-radius:14px;padding:18px">
+    <div style="font-size:15px;font-weight:700;margin-bottom:12px;text-align:center">Inscris-toi en 10 secondes</div>
+    <input id="r-nom" type="text" placeholder="Ton prénom" style="width:100%;padding:13px;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-bottom:10px;box-sizing:border-box;font-size:15px"/>
+    <input id="r-tel" type="tel" placeholder="Ton numéro (ex : 87 12 34 56)" style="width:100%;padding:13px;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-bottom:6px;box-sizing:border-box;font-size:15px"/>
+    <div style="font-size:11px;color:#8b8ba7;margin-bottom:14px">Depuis l'étranger ? Mets l'indicatif (ex : +33…).</div>
+    <button id="r-btn" onclick="rejoindre()" style="width:100%;padding:15px;background:linear-gradient(90deg,#fbbf24,#f59e0b);color:#3b0764;border:none;border-radius:50px;font-size:17px;font-weight:800;cursor:pointer">JOUER GRATUITEMENT</button>
+    <div id="r-msg" style="margin-top:10px;text-align:center;font-size:13px"></div>
+  </div>
+
+  <div id="succes-zone" style="display:none;background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:14px;padding:20px;text-align:center">
+    <div style="font-size:15px;color:#e6edf3">Bienvenue <span id="s-nom" style="font-weight:700"></span> ! Voici ton code :</div>
+    <div id="s-code" style="font-family:monospace;font-size:40px;font-weight:800;letter-spacing:8px;color:#fbbf24;margin:12px 0"></div>
+    <div id="s-bonus" style="font-size:14px;color:#34d399;margin-bottom:6px"></div>
+    <div style="font-size:12px;color:#8b8ba7;margin-bottom:16px">📌 Note bien ton code — c'est lui qui garde tes pions.</div>
+    <a href="/" style="display:block;padding:15px;background:linear-gradient(90deg,#a855f7,#7c3aed);color:#fff;border-radius:50px;font-size:16px;font-weight:800;text-decoration:none">ENTRER DANS L'APPLI ▸</a>
+  </div>
+
+  <div style="text-align:center;font-size:11px;color:#6b6b85;margin-top:20px">Pions universels chez tous les organisateurs. Le bonus offert sert à jouer (non retirable en argent).</div>
+</div>
+<script>
+async function rejoindre(){
+  var nom=(document.getElementById('r-nom').value||'').trim();
+  var tel=(document.getElementById('r-tel').value||'').trim();
+  var msg=document.getElementById('r-msg');
+  var btn=document.getElementById('r-btn');
+  if(!nom){ msg.style.color='#f87171'; msg.textContent='Entre ton prénom.'; return; }
+  if(tel.replace(/[^0-9]/g,'').length<6){ msg.style.color='#f87171'; msg.textContent='Entre un numéro valide.'; return; }
+  btn.disabled=true; btn.style.opacity=.6; msg.style.color='#cbd5e1'; msg.textContent='Création de ton compte…';
+  try{
+    var r=await fetch('/api/rejoindre',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({nom:nom,telephone:tel})});
+    var d=await r.json();
+    if(d.ok){
+      document.getElementById('form-zone').style.display='none';
+      document.getElementById('s-nom').textContent=nom;
+      document.getElementById('s-code').textContent=d.code;
+      document.getElementById('s-bonus').textContent = d.bonus>0 ? ('🎁 '+d.bonus+' XPF de pions offerts ajoutés !') : 'Content de te revoir — tu retrouves ton code et tes pions.';
+      document.getElementById('succes-zone').style.display='block';
+    } else {
+      btn.disabled=false; btn.style.opacity=1; msg.style.color='#f87171'; msg.textContent=d.msg||'Erreur, réessaie.';
+    }
+  }catch(e){ btn.disabled=false; btn.style.opacity=1; msg.style.color='#f87171'; msg.textContent='Erreur de connexion.'; }
+}
+</script>
+</body></html>'''
+
 
 @app.route("/diag-pions")
 def diag_pions():
