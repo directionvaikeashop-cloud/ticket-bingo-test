@@ -2886,6 +2886,102 @@ def solde_pions_joueur(code_joueur):
         "pions_100": pions.get("100", 0)
     })
 
+def _xpf_total_pions(dico):
+    """Somme en XPF d'une poche de pions {denomination: nombre}."""
+    t = 0
+    for v, n in dico.items():
+        try:
+            t += int(v) * int(n)
+        except Exception:
+            pass
+    return t
+
+def _debiter_pions_montant(poche, montant):
+    """Retire 'montant' XPF de la poche (modifiee en place), rend la monnaie en pions de 10.
+    Retourne True si OK, False si le solde ne suffit pas."""
+    if _xpf_total_pions(poche) < montant:
+        return False
+    reste = montant
+    for valeur in ["10", "20", "50", "100"]:
+        val_int = int(valeur)
+        nb_dispo = poche.get(valeur, 0)
+        if nb_dispo > 0 and reste > 0:
+            nb_utilise = min(nb_dispo, reste // val_int)
+            if nb_utilise > 0:
+                poche[valeur] = nb_dispo - nb_utilise
+                reste -= nb_utilise * val_int
+    if reste > 0:
+        for valeur in ["20", "50", "100"]:
+            val_int = int(valeur)
+            if poche.get(valeur, 0) > 0 and val_int >= reste:
+                poche[valeur] -= 1
+                rendu = val_int - reste
+                if rendu > 0:
+                    poche["10"] = poche.get("10", 0) + (rendu // 10)
+                reste = 0
+                break
+    return reste == 0
+
+def _crediter_pions_montant(poche, montant):
+    """Ajoute 'montant' XPF a la poche (modifiee en place), grosses coupures d'abord."""
+    reste = montant
+    for valeur in ["100", "50", "20", "10"]:
+        val_int = int(valeur)
+        n = reste // val_int
+        if n > 0:
+            poche[valeur] = poche.get(valeur, 0) + n
+            reste -= n * val_int
+    return reste
+
+@app.route("/api/pions/transferer", methods=["POST"])
+def transferer_pions():
+    """JOUEUR — Transfere des pions d'un code (source) vers un autre code (cible).
+    Le joueur doit etre sur le code source (il ne deplace que ses propres pions).
+    Operation tracee, ecrite immediatement (anti-ecrasement)."""
+    global DB
+    DB = load_data()
+    d = request.json or {}
+    code_source = (d.get("code_source", "") or "").upper().strip()
+    code_cible = (d.get("code_cible", "") or "").upper().strip()
+    try:
+        montant = int(d.get("montant", 0))
+    except Exception:
+        montant = 0
+    if not code_source or not code_cible:
+        return jsonify({"ok": False, "msg": "Code source et code cible obligatoires."}), 400
+    if code_source == code_cible:
+        return jsonify({"ok": False, "msg": "Le code source et le code cible sont identiques."}), 400
+    if montant <= 0 or montant % 10 != 0:
+        return jsonify({"ok": False, "msg": "Le montant doit etre un multiple de 10 XPF."}), 400
+    if code_source in DB.get("codes_bloques", []) or code_cible in DB.get("codes_bloques", []):
+        return jsonify({"ok": False, "msg": "Un des codes est bloque."}), 400
+    # Le code cible doit etre un vrai compte connu (anti-erreur de saisie)
+    connu = (code_cible in DB.get("pions_joueurs", {}) or
+             code_cible in DB.get("tickets_acheteurs", {}) or
+             code_cible in DB.get("codes", {}))
+    if not connu:
+        return jsonify({"ok": False, "msg": f"Le code cible {code_cible} est introuvable. Verifie-le bien."}), 404
+    pj = DB.setdefault("pions_joueurs", {})
+    poche_src = pj.get(code_source, {})
+    solde_src = _xpf_total_pions(poche_src)
+    if solde_src < montant:
+        return jsonify({"ok": False, "msg": f"Solde insuffisant — {code_source} a {solde_src} XPF, il faut {montant} XPF."}), 400
+    if not _debiter_pions_montant(poche_src, montant):
+        return jsonify({"ok": False, "msg": "Transfert impossible (solde insuffisant)."}), 400
+    pj[code_source] = poche_src
+    poche_cib = pj.get(code_cible, {})
+    _crediter_pions_montant(poche_cib, montant)
+    pj[code_cible] = poche_cib
+    DB.setdefault("transferts_pions", []).insert(0, {
+        "id": secrets.token_hex(4).upper(),
+        "de": code_source, "vers": code_cible, "montant": montant,
+        "ip": _get_client_ip(), "date": datetime.datetime.now().isoformat()
+    })
+    save_data(immediat=True)
+    return jsonify({"ok": True, "montant": montant,
+                    "solde_source": _xpf_total_pions(poche_src),
+                    "solde_cible": _xpf_total_pions(poche_cib)})
+
 @app.route("/api/pions/refuser-joueur", methods=["POST"])
 def refuser_pions_joueur():
     """ADMIN — Refuser une commande de pions jamais payee (commande fantome)"""
