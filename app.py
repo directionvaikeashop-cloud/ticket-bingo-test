@@ -7015,6 +7015,86 @@ def diag_tickets():
       </div>
     </div></body></html>'''
 
+@app.route("/diag-pions")
+def diag_pions():
+    """Diagnostic LECTURE SEULE des pions d'un joueur : solde dépensable réel,
+    ancienne réserve (non dépensable), commandes en attente. ?cle=CODE_ADMIN requis,
+    &code=CODE_JOUEUR pour un joueur précis."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info_cle = DB.get("codes", {}).get(cle)
+    if not (info_cle and info_cle.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN a l'adresse.",
+                        status=403, mimetype="text/plain; charset=utf-8")
+
+    code = (request.args.get("code", "") or "").strip().upper()
+    pj_all = DB.get("pions_joueurs", {})
+    vieux = DB.get("pions", {})
+    cmds = DB.get("commandes_pions_joueurs", [])
+
+    def total_xpf(dico):
+        t = 0
+        for v, n in dico.items():
+            try:
+                t += int(v) * int(n)
+            except Exception:
+                pass
+        return t
+
+    if code:
+        pj = pj_all.get(code, {})
+        tot = total_xpf(pj)
+        vieux_n = vieux.get(code, 0)
+        pend = [c for c in cmds if (c.get("code_joueur", "") or "").upper() == code and c.get("statut") == "en_attente_validation"]
+        pend_xpf = 0
+        for c in pend:
+            try:
+                pend_xpf += int(c.get("nb_pions", 0)) * int(c.get("valeur_pion", 0))
+            except Exception:
+                pass
+        bloc_vieux = (f'<div style="background:#7f1d1d;color:#fecaca;padding:12px;border-radius:8px;margin-top:12px;font-weight:600">⚠️ {vieux_n} pion(s) dans l\'ANCIENNE réserve (non dépensables au jeu). À remettre avec « 🛠️ Recréditer un joueur ».</div>' if vieux_n else '')
+        bloc_pend = (f'<div style="background:#854d0e;color:#fde68a;padding:12px;border-radius:8px;margin-top:12px;font-weight:600">⏳ {len(pend)} commande(s) de pions EN ATTENTE de validation = {pend_xpf} XPF. Le joueur a payé mais ce n\'est PAS encore dépensable tant qu\'un admin ne valide pas.</div>' if pend else '')
+        corps = f'''
+          <h2 style="color:#a78bfa;font-size:18px;margin:0 0 12px">Joueur {code}</h2>
+          <div style="background:#065f46;color:#6ee7b7;padding:16px;border-radius:10px;font-size:24px;font-weight:800;text-align:center">Solde DÉPENSABLE : {tot} XPF</div>
+          <div style="font-size:14px;color:#fff;margin:12px 0;line-height:1.9">
+            Pions de 100 : <b>{pj.get("100", 0)}</b><br>
+            Pions de 50 : <b>{pj.get("50", 0)}</b><br>
+            Pions de 20 : <b>{pj.get("20", 0)}</b><br>
+            Pions de 10 : <b>{pj.get("10", 0)}</b>
+          </div>
+          {bloc_vieux}
+          {bloc_pend}
+          <div style="margin-top:14px;color:#94a3b8;font-size:13px">Si le « solde dépensable » est plus bas que le prix du ticket, c\'est pour ça que l\'achat est refusé.</div>
+        '''
+    else:
+        anomalies = ""
+        for c, n in vieux.items():
+            if n:
+                anomalies += f'<tr style="border-bottom:1px solid rgba(255,255,255,.08)"><td style="padding:8px;font-family:monospace;color:#a78bfa">{c}</td><td style="padding:8px;color:#fca5a5">{n} pion(s) dans l\'ancienne réserve (non dépensables)</td></tr>'
+        pend_par = {}
+        for c in cmds:
+            if c.get("statut") == "en_attente_validation":
+                k = (c.get("code_joueur", "") or "").upper()
+                try:
+                    pend_par[k] = pend_par.get(k, 0) + int(c.get("nb_pions", 0)) * int(c.get("valeur_pion", 0))
+                except Exception:
+                    pass
+        for k, v in sorted(pend_par.items(), key=lambda x: -x[1]):
+            anomalies += f'<tr style="border-bottom:1px solid rgba(255,255,255,.08)"><td style="padding:8px;font-family:monospace;color:#a78bfa">{k}</td><td style="padding:8px;color:#fde68a">{v} XPF en attente de validation (payé mais pas dépensable)</td></tr>'
+        corps = f'''<h2 style="color:#a78bfa;font-size:18px;margin:0 0 12px">Anomalies de pions (tous les joueurs)</h2>
+          <table style="width:100%;border-collapse:collapse">{anomalies or '<tr><td style="padding:12px;color:#6ee7b7">Aucune anomalie : aucun pion coincé, aucune commande en attente.</td></tr>'}</table>
+          <div style="margin-top:14px;color:#94a3b8;font-size:13px">Pour un joueur précis, ajoute <code style="color:#a78bfa">&amp;code=CODEJOUEUR</code> à l\'adresse.</div>'''
+
+    return f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1"><title>Diagnostic pions</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff">
+    <div style="max-width:720px;margin:0 auto">
+      <h1 style="font-size:20px;color:#a855f7;margin:4px 0 16px">🪙 Diagnostic des pions joueur</h1>
+      {corps}
+    </div></body></html>'''
+
 @app.route("/diagnostic-pdf")
 def diagnostic_pdf():
     """Diagnostic des PDF : présents / manquants, groupés par organisateur."""
