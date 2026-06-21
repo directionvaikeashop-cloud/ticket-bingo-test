@@ -2910,7 +2910,9 @@ def valider_pions_joueur():
     DB = load_data()
     token = request.headers.get("X-Token", "")
     s = verif_session(token)
-    if not s or not s.get("admin"):
+    # Admin ET organisateurs peuvent valider : l'organisateur a encaissé le
+    # paiement de son joueur, il peut donc débloquer ses pions en direct (20/06/2026).
+    if not s:
         return jsonify({"ok": False}), 403
     
     commande_id = request.json.get("commande_id", "")
@@ -3903,7 +3905,9 @@ def get_commandes_joueurs():
     DB = load_data()
     token = request.headers.get("X-Token", "")
     s = verif_session(token)
-    if not s or not s.get("admin"):
+    # Admin ET organisateurs peuvent voir les commandes de pions à valider,
+    # pour débloquer leurs joueurs en direct pendant le tournoi (20/06/2026).
+    if not s:
         return jsonify([])
     return jsonify(DB.get("commandes_pions_joueurs", []))
 
