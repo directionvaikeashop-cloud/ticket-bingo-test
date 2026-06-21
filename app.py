@@ -7167,7 +7167,15 @@ def page_rejoindre():
     """Page publique d'arrivée (destination de la pub Facebook / TikTok)."""
     return '''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Ticket Bingo — Joue et gagne</title></head>
+<title>Ticket Bingo — Joue et gagne</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="Mini Jackpot 50 000 F — 500 XPF offerts pour jouer !">
+<meta property="og:description" content="Inscris-toi en 10 secondes, recois ton code et 500 XPF de pions offerts. Petits jeux tous les jours sur Ticket Bingo.">
+<meta property="og:image" content="https://raw.githubusercontent.com/directionvaikeashop-cloud/ticket-bingo/main/og.png">
+<meta property="og:url" content="https://ticket-bingo-production.up.railway.app/rejoindre">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Mini Jackpot 50 000 F — 500 XPF offerts !">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/directionvaikeashop-cloud/ticket-bingo/main/og.png"></head>
 <body style="margin:0;font-family:system-ui,sans-serif;background:linear-gradient(180deg,#1a1033,#0d0b1f 55%,#050410);color:#fff;min-height:100vh">
 <div style="max-width:480px;margin:0 auto;padding:24px 18px 40px">
   <div style="text-align:center;color:#fbbf24;font-weight:800;letter-spacing:3px;font-size:20px">TICKET BINGO</div>
