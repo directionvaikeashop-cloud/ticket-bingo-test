@@ -6925,6 +6925,79 @@ def diag_envois():
       </div>
     </div></body></html>'''
 
+@app.route("/diag-tickets")
+def diag_tickets():
+    """Diagnostic LECTURE SEULE des tickets clients et de leur plage de pages.
+    Repère les tickets qui affichent TOUT le PDF (plage non définie). ?cle=CODE_ADMIN requis."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info_cle = DB.get("codes", {}).get(cle)
+    if not (info_cle and info_cle.get("admin")):
+        return Response(
+            "Acces reserve. Ajoute ?cle=TON_CODE_ADMIN a l'adresse (ex: /diag-tickets?cle=TONCODE).",
+            status=403, mimetype="text/plain; charset=utf-8")
+
+    org_filtre = (request.args.get("org", "") or "").strip().upper()
+    tickets = DB.get("tickets", [])
+    vus = tickets if not org_filtre else [t for t in tickets if (t.get("code_org", "") or "").upper() == org_filtre]
+
+    nb_tout = 0
+    lignes = ""
+    for t in sorted(vus, key=lambda x: x.get("date", ""), reverse=True)[:80]:
+        pd_ = t.get("page_debut")
+        pf_ = t.get("page_fin")
+        if pd_ in (None, "") or pf_ in (None, ""):
+            plage = '<span style="color:#fca5a5;font-weight:700">⚠️ TOUT le PDF</span>'
+            nb_feuilles = "tout"
+            nb_tout += 1
+        else:
+            plage = f'<span style="color:#6ee7b7">pages {pd_} → {pf_}</span>'
+            try:
+                nb_feuilles = str(int(pf_) - int(pd_) + 1)
+            except Exception:
+                nb_feuilles = "?"
+        date_c = (t.get("date", "") or "")[:16].replace("T", " ")
+        lignes += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.08)">'
+                   f'<td style="padding:8px;color:#fff">{t.get("acheteur", "?")}</td>'
+                   f'<td style="padding:8px;color:#c4b5fd">{t.get("jeu", "?")}</td>'
+                   f'<td style="padding:8px;color:#94a3b8">{t.get("serie", "?")}</td>'
+                   f'<td style="padding:8px">{plage}</td>'
+                   f'<td style="padding:8px;color:#fff;text-align:center;font-weight:700">{nb_feuilles}</td>'
+                   f'<td style="padding:8px;font-family:monospace;color:#a78bfa">{t.get("code_org", "?")}</td>'
+                   f'<td style="padding:8px;color:#64748b;font-size:11px">{date_c}</td></tr>')
+    if not lignes:
+        lignes = '<tr><td colspan="7" style="padding:20px;text-align:center;color:#94a3b8">Aucun ticket.</td></tr>'
+
+    alerte = ""
+    if nb_tout:
+        alerte = (f'<div style="background:#7f1d1d;color:#fecaca;padding:12px 16px;border-radius:10px;'
+                  f'margin-bottom:16px;font-size:14px;font-weight:600">⚠️ {nb_tout} ticket(s) sans plage de pages : '
+                  f'ces clients voient TOUT le PDF (donc trop de cartes). À corriger.</div>')
+
+    return f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1"><title>Diagnostic tickets</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff">
+    <div style="max-width:940px;margin:0 auto">
+      <h1 style="font-size:20px;color:#a855f7;margin:4px 0 16px">🎫 Diagnostic des tickets clients (plage de pages)</h1>
+      {alerte}
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:680px">
+        <tr style="border-bottom:2px solid #3730a3">
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Client</th>
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Jeu</th>
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Série</th>
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Pages reçues</th>
+          <th style="padding:8px;text-align:center;font-size:12px;color:#a78bfa">Nb feuilles</th>
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Code org</th>
+          <th style="padding:8px;text-align:left;font-size:12px;color:#a78bfa">Date</th>
+        </tr>
+        {lignes}
+      </table></div>
+      <div style="text-align:center;margin-top:16px;font-size:12px;color:#64748b">
+        Filtrer un organisateur : ajoute <code style="color:#a78bfa">&amp;org=PKKPZMU1</code> à l'adresse.
+      </div>
+    </div></body></html>'''
+
 @app.route("/diagnostic-pdf")
 def diagnostic_pdf():
     """Diagnostic des PDF : présents / manquants, groupés par organisateur."""
