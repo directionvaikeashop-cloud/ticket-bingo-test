@@ -936,6 +936,7 @@ def enregistrer_ticket():
     token = request.headers.get("X-Token", "")
     s = verif_session(token)
     code_org = s["code"] if s else "ADMIN"
+    _seed_feuilles_vendues()
     # Inscription simple : seul le nom est obligatoire (le jeu/serie seront attribues
     # plus tard lors de l'annonce + validation de la commande en pions). Corrige 12/06/2026.
     if not d.get("acheteur"):
@@ -971,6 +972,15 @@ def enregistrer_ticket():
             # Securite : seul l'organisateur proprietaire (ou l'admin) peut re-vendre sur ce code
             if not (s and s.get("admin")) and deja.get("code_org") not in (code_org, "ADMIN"):
                 return jsonify({"ok": False, "msg": f"Le code {code_demande} appartient à un autre organisateur"}), 403
+            # 🔒 FEUILLE A USAGE UNIQUE : refuser si les pages visees sont deja vendues a un autre ticket
+            _org_d = code_org if deja.get("code_org") in (None, "", "ADMIN") else deja.get("code_org")
+            _pdf_d = d.get("pdf_url") or deja.get("pdf_url")
+            _pd_d = d.get("page_debut", deja.get("page_debut"))
+            _pf_d = d.get("page_fin", deja.get("page_fin"))
+            if _pdf_d and _pd_d not in (None, "") and _pf_d not in (None, ""):
+                _conf_d = _pages_en_conflit(_org_d, _pdf_d, _pd_d, _pf_d, deja.get("id"))
+                if _conf_d:
+                    return jsonify({"ok": False, "msg": _msg_conflit(_conf_d)}), 409
             # MISE A JOUR du ticket existant avec la nouvelle vente
             deja["acheteur"] = d["acheteur"]
             deja["jeu"] = d["jeu"]
@@ -986,6 +996,9 @@ def enregistrer_ticket():
                 deja["email"] = d["email"]
             deja["code_org"] = code_org if deja.get("code_org") in (None, "", "ADMIN") else deja["code_org"]
             deja["date"] = datetime.datetime.now().isoformat()
+            # Consommer les feuilles attribuees a ce joueur
+            if (deja.get("pdf_url") or "") and deja.get("page_debut") not in (None, "") and deja.get("page_fin") not in (None, ""):
+                _consommer_feuilles(deja.get("code_org") or _org_d, deja.get("pdf_url"), deja.get("page_debut"), deja.get("page_fin"), deja.get("id"))
             DB["tickets_acheteurs"][code_demande] = deja["id"]
             save_data()
             return jsonify({"ok": True, "ticket": deja, "code_acheteur": code_demande, "mis_a_jour": True})
@@ -993,6 +1006,14 @@ def enregistrer_ticket():
     else:
         code_acheteur = gen_code(6)
     email_joueur = d.get("email", "")
+    # 🔒 FEUILLE A USAGE UNIQUE : refuser si les pages visees sont deja vendues
+    _pdf_n = d.get("pdf_url")
+    _pd_n = d.get("page_debut")
+    _pf_n = d.get("page_fin")
+    if _pdf_n and _pd_n not in (None, "") and _pf_n not in (None, ""):
+        _conf_n = _pages_en_conflit(code_org, _pdf_n, _pd_n, _pf_n, None)
+        if _conf_n:
+            return jsonify({"ok": False, "msg": _msg_conflit(_conf_n)}), 409
     ticket = {
         "id": hashlib.md5(f"{d['acheteur']}{d['serie']}{datetime.datetime.now()}".encode()).hexdigest()[:8],
         "acheteur": d["acheteur"], "jeu": d["jeu"], "serie": d["serie"],
@@ -1008,6 +1029,9 @@ def enregistrer_ticket():
     }
     DB["tickets"].insert(0, ticket)
     DB["tickets_acheteurs"][code_acheteur] = ticket["id"]
+    # Consommer les feuilles attribuees a ce nouveau joueur
+    if _pdf_n and _pd_n not in (None, "") and _pf_n not in (None, ""):
+        _consommer_feuilles(code_org, _pdf_n, _pd_n, _pf_n, ticket["id"])
     save_data()
 
     # Envoyer email au joueur si email fourni
@@ -2859,6 +2883,14 @@ def valider_ticket_pions():
     ticket["jeu"] = commande.get("jeu") or ticket.get("jeu", "")
     if serie:
         ticket["serie"] = serie
+    # 🔒 FEUILLE A USAGE UNIQUE : refuser si les pages visees sont deja vendues a un autre ticket
+    _seed_feuilles_vendues()
+    _pdf_v = pdf_url or ticket.get("pdf_url")
+    _org_v = ticket.get("code_org") or commande.get("code_org") or ""
+    if _pdf_v and page_debut not in (None, "") and page_fin not in (None, ""):
+        _conf_v = _pages_en_conflit(_org_v, _pdf_v, page_debut, page_fin, ticket.get("id"))
+        if _conf_v:
+            return jsonify({"ok": False, "msg": _msg_conflit(_conf_v)}), 409
     try:
         if page_debut not in (None, ""):
             ticket["page_debut"] = int(page_debut)
@@ -2869,6 +2901,9 @@ def valider_ticket_pions():
     if pdf_url:
         ticket["pdf_url"] = pdf_url
     ticket["date"] = datetime.datetime.now().isoformat()
+    # Consommer les feuilles attribuees a ce joueur
+    if (ticket.get("pdf_url") or "") and ticket.get("page_debut") not in (None, "") and ticket.get("page_fin") not in (None, ""):
+        _consommer_feuilles(ticket.get("code_org") or _org_v, ticket.get("pdf_url"), ticket.get("page_debut"), ticket.get("page_fin"), ticket.get("id"))
     save_data(immediat=True)
     return jsonify({"ok": True, "ticket": ticket})
 
@@ -3883,6 +3918,16 @@ def modifier_ticket():
         return jsonify({"ok": False, "msg": "Ticket introuvable"}), 404
     if not s.get("admin") and t.get("code_org") != s["code"]:
         return jsonify({"ok": False, "msg": "Ce ticket ne vous appartient pas"}), 403
+    # 🔒 FEUILLE A USAGE UNIQUE : refuser si les pages visees sont deja vendues a un autre ticket
+    _seed_feuilles_vendues()
+    _pdf_m = d.get("pdf_url") or t.get("pdf_url")
+    _pd_m = d.get("page_debut", t.get("page_debut"))
+    _pf_m = d.get("page_fin", t.get("page_fin"))
+    _org_m = t.get("code_org") or ""
+    if _pdf_m and _pd_m not in (None, "") and _pf_m not in (None, ""):
+        _conf_m = _pages_en_conflit(_org_m, _pdf_m, _pd_m, _pf_m, t.get("id"))
+        if _conf_m:
+            return jsonify({"ok": False, "msg": _msg_conflit(_conf_m)}), 409
     for champ in ["acheteur", "jeu", "serie", "email"]:
         if d.get(champ) is not None and str(d.get(champ)).strip() != "":
             t[champ] = str(d[champ]).strip()
@@ -3894,6 +3939,9 @@ def modifier_ticket():
                 pass
     if d.get("pdf_url"):
         t["pdf_url"] = d["pdf_url"]
+    # Consommer les feuilles attribuees (libere les anciennes de ce ticket, prend les nouvelles)
+    if (t.get("pdf_url") or "") and t.get("page_debut") not in (None, "") and t.get("page_fin") not in (None, ""):
+        _consommer_feuilles(t.get("code_org") or "", t.get("pdf_url"), t.get("page_debut"), t.get("page_fin"), t.get("id"))
     save_data()
     return jsonify({"ok": True, "ticket": t})
 
@@ -4240,6 +4288,145 @@ def save_commande(jeu, nb_tickets, serie_start, output_path, client=""):
     # Garder max 200 commandes
     DB["commandes"] = DB["commandes"][:200]
     save_data()
+
+# ============================================================
+# FEUILLES A USAGE UNIQUE (anti-revente) — Choix Maeva 21/06/2026
+# Chaque feuille (page d'un PDF) attribuee a un joueur est "consommee" pour
+# cet organisateur : elle ne peut plus etre revendue dans un autre tournoi.
+# - BLOQUER toute tentative de revente d'une feuille deja vendue.
+# - Etat reel : les feuilles deja vendues a ce jour sont marquees vendues.
+# Structure : DB["feuilles_vendues"] = { code_org: { pdf_url: { "page": ticket_id } } }
+# ============================================================
+
+def _seed_feuilles_vendues():
+    """Construit l'inventaire des feuilles deja vendues a partir des tickets
+    existants (une seule fois). Respecte l'etat reel actuel."""
+    global DB
+    if "feuilles_vendues" in DB:
+        return
+    reg = {}
+    for t in DB.get("tickets", []):
+        co = t.get("code_org") or ""
+        pdf = t.get("pdf_url") or ""
+        pd = t.get("page_debut")
+        pf = t.get("page_fin")
+        tid = t.get("id")
+        if not co or not pdf or pd in (None, "") or pf in (None, "") or not tid:
+            continue
+        try:
+            pd = int(pd); pf = int(pf)
+        except Exception:
+            continue
+        if pf < pd:
+            continue
+        d_pdf = reg.setdefault(co, {}).setdefault(pdf, {})
+        for p in range(pd, pf + 1):
+            d_pdf.setdefault(str(p), tid)  # premier arrive garde la page
+    DB["feuilles_vendues"] = reg
+    save_data()
+
+def _pages_en_conflit(code_org, pdf_url, page_debut, page_fin, ticket_id_courant=None):
+    """Renvoie la liste des pages de [page_debut, page_fin] deja vendues a un
+    AUTRE ticket (conflit). Les pages du ticket courant ne sont pas des conflits
+    (permet la correction d'un meme joueur sans faux blocage)."""
+    if not code_org or not pdf_url:
+        return []
+    try:
+        pd = int(page_debut); pf = int(page_fin)
+    except (TypeError, ValueError):
+        return []
+    if pf < pd:
+        return []
+    d_pdf = DB.get("feuilles_vendues", {}).get(code_org, {}).get(pdf_url, {})
+    conflits = []
+    for p in range(pd, pf + 1):
+        prop = d_pdf.get(str(p))
+        if prop is not None and prop != ticket_id_courant:
+            conflits.append(p)
+    return conflits
+
+def _resume_plages(pages):
+    """Transforme [1,2,3,7,8] en '1-3, 7-8' pour un message lisible."""
+    if not pages:
+        return ""
+    pages = sorted(set(pages))
+    out = []
+    deb = prev = pages[0]
+    for p in pages[1:]:
+        if p == prev + 1:
+            prev = p
+        else:
+            out.append(str(deb) if deb == prev else f"{deb}-{prev}")
+            deb = prev = p
+    out.append(str(deb) if deb == prev else f"{deb}-{prev}")
+    return ", ".join(out)
+
+def _msg_conflit(conflits):
+    r = _resume_plages(conflits)
+    return (f"🛑 Feuilles déjà vendues : les pages {r} de ce PDF ont déjà été "
+            f"attribuées dans un tournoi. Choisissez des feuilles encore "
+            f"disponibles, ou utilisez un nouveau PDF.")
+
+def _consommer_feuilles(code_org, pdf_url, page_debut, page_fin, ticket_id):
+    """Libere d'abord les pages que CE ticket possedait (sur ce PDF), puis
+    marque [page_debut, page_fin] comme vendues a ce ticket."""
+    if not code_org or not pdf_url or not ticket_id:
+        return
+    try:
+        pd = int(page_debut); pf = int(page_fin)
+    except (TypeError, ValueError):
+        return
+    if pf < pd:
+        return
+    d_pdf = DB.setdefault("feuilles_vendues", {}).setdefault(code_org, {}).setdefault(pdf_url, {})
+    for p in [k for k, v in list(d_pdf.items()) if v == ticket_id]:
+        d_pdf.pop(p, None)
+    for p in range(pd, pf + 1):
+        d_pdf[str(p)] = ticket_id
+
+def _liberer_feuilles_ticket(code_org, ticket_id, pdf_url=None):
+    """Libere toutes les pages possedees par ce ticket (sur un PDF donne ou tous)."""
+    if not code_org or not ticket_id:
+        return
+    d_org = DB.get("feuilles_vendues", {}).get(code_org, {})
+    pdfs = [pdf_url] if pdf_url else list(d_org.keys())
+    for pk in pdfs:
+        d_pdf = d_org.get(pk, {})
+        for p in [k for k, v in list(d_pdf.items()) if v == ticket_id]:
+            d_pdf.pop(p, None)
+
+@app.route("/api/feuilles/etat")
+def feuilles_etat_org():
+    """ORGANISATEUR — Etat des feuilles vendues / restantes par PDF."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    _seed_feuilles_vendues()
+    code_org = (request.args.get("code_org") or s["code"]) if s.get("admin") else s["code"]
+    d_org = DB.get("feuilles_vendues", {}).get(code_org, {})
+    # Total de feuilles vendues par l'admin a cet org, par pdf_url (pack*qty des ventes)
+    totaux = {}
+    for v in DB.get("ventes", []):
+        if (v.get("code_org") or "") == code_org and v.get("pdf_url"):
+            totaux[v["pdf_url"]] = totaux.get(v["pdf_url"], 0) + int(v.get("pack", 0)) * int(v.get("qty", 1))
+    out = []
+    total_vendues = 0
+    for pdf, pages in d_org.items():
+        nums = sorted(int(p) for p in pages.keys())
+        total = totaux.get(pdf, 0)
+        total_vendues += len(nums)
+        out.append({
+            "pdf_url": pdf,
+            "nb_vendues": len(nums),
+            "plages_vendues": _resume_plages(nums),
+            "total_feuilles": total,
+            "restantes": (total - len(nums)) if total else None
+        })
+    out.sort(key=lambda x: -x["nb_vendues"])
+    return jsonify({"ok": True, "code_org": code_org, "total_vendues": total_vendues, "pdfs": out})
 
 @app.route("/api/admin/commandes")
 def get_commandes_admin():
