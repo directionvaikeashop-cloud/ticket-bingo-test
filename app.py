@@ -1605,7 +1605,7 @@ def valider_commande_pions():
                 DB["pions_org"][code_org] = {}
             DB["pions_org"][code_org][valeur] = DB["pions_org"][code_org].get(valeur, 0) + nb
             break
-    save_data()
+    save_data(immediat=True)
     return jsonify({"ok": True})
 
 @app.route("/api/admin/crediter-poche-org", methods=["POST"])
@@ -1660,7 +1660,7 @@ def crediter_poche_org():
         "ip": _get_client_ip(),
         "date": datetime.datetime.now().isoformat()
     })
-    save_data()
+    save_data(immediat=True)
     poche = DB["pions_org"][code_org]
     nouveau_solde = poche.get("100", 0) * 100 + poche.get("50", 0) * 50 + poche.get("20", 0) * 20 + poche.get("10", 0) * 10
     return jsonify({
@@ -2443,7 +2443,7 @@ def enregistrer_gain():
         "date": datetime.datetime.now().isoformat()
     }
     DB["gains_finaux"].insert(0, trace)
-    save_data()
+    save_data(immediat=True)
     return jsonify({
         "ok": True,
         "code_gagnant": code_gagnant,
@@ -7284,6 +7284,75 @@ def page_premier():
 def page_rejoindre():
     return page_premier()
 
+
+@app.route("/diag-ecarts")
+def diag_ecarts():
+    """Réconciliation des GAINS : pour chaque gagnant, compare ce qu'il devrait
+    avoir (relevé) et son solde réel. Liste qui reste à recréditer. ?cle=CODE_ADMIN."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    pj_all = DB.get("pions_joueurs", {})
+    cmds_pions = DB.get("commandes_pions_joueurs", [])
+    credits_masse = DB.get("credits_masse", [])
+    gains = DB.get("gains_finaux", [])
+    tickets = DB.get("commandes_tickets_pions", [])
+    corrections = DB.get("corrections_pions", [])
+
+    def solde_reel(code):
+        p = pj_all.get(code, {})
+        return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
+
+    # Codes gagnants uniques
+    gagnants = []
+    for g in gains:
+        cg = (g.get("code_gagnant") or "").upper()
+        if cg and cg not in gagnants:
+            gagnants.append(cg)
+
+    rows = []
+    for code in gagnants:
+        t_achats = sum(((c.get("pions_credites") or c.get("nb_pions") or 0) * c.get("valeur_pion", 0))
+                       for c in cmds_pions if (c.get("code_joueur") or "").upper() == code and c.get("statut") == "validee")
+        t_credits = sum((cm.get("nb_pions", 0) * cm.get("valeur_pion", 0)) for cm in credits_masse if code in cm.get("codes", []))
+        t_gains = sum(g.get("montant_gain", 0) for g in gains if (g.get("code_gagnant") or "").upper() == code)
+        t_dep = sum(c.get("total_pions", 0) for c in tickets if (c.get("code_joueur") or "").upper() == code and c.get("statut") == "validee")
+        t_corr = sum(c.get("montant_retire", 0) for c in corrections if (c.get("code_joueur") or "") == code)
+        attendu = t_achats + t_credits + t_gains - t_dep - t_corr
+        reel = solde_reel(code)
+        ecart = reel - attendu
+        rows.append((code, reel, attendu, ecart, t_gains))
+
+    # Les plus en déficit d'abord
+    rows.sort(key=lambda r: r[3])
+    corps = ""
+    a_recrediter = 0
+    for code, reel, attendu, ecart, tg in rows:
+        if ecart < 0:
+            coul = "#fca5a5"; note = f"⚠️ doit {-ecart} XPF"
+            a_recrediter += 1
+        elif ecart > 0:
+            coul = "#fde68a"; note = f"+{ecart} XPF (en trop)"
+        else:
+            coul = "#6ee7b7"; note = "✅ OK"
+        corps += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.08)">'
+                  f'<td style="padding:8px;font-family:monospace;color:#a78bfa">{code}</td>'
+                  f'<td style="padding:8px;color:#fff">gagné {tg}</td>'
+                  f'<td style="padding:8px;color:#94a3b8">a {reel} / devrait {attendu}</td>'
+                  f'<td style="padding:8px;color:{coul};font-weight:600">{note}</td></tr>')
+
+    return f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Réconciliation gains</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff">
+    <div style="max-width:760px;margin:0 auto">
+      <h1 style="font-size:20px;color:#a855f7">🏆 Gains à vérifier</h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:14px">{len(rows)} gagnant(s) · <b style="color:#fca5a5">{a_recrediter} à recréditer</b></div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">{corps or '<tr><td style="padding:10px;color:#6ee7b7">Aucun gain enregistré.</td></tr>'}</table>
+      <div style="margin-top:14px;color:#94a3b8;font-size:12px">« doit X XPF » = ce joueur a gagné mais ne l'a pas (ou plus) dans son solde → recrédite-le du montant indiqué avec « 💰 Créditer le joueur ».</div>
+    </div></body></html>'''
 
 @app.route("/diag-campagnes")
 def diag_campagnes():
