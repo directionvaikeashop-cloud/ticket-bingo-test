@@ -2589,18 +2589,49 @@ async function loadStats(){try{const r=await fetch("/api/stats");const s=await r
 
 // ✅ CORRIGE : charge ventes ET tickets avec PDF/photo
 // Renvoie un Set des pdf_url entierement vendus (epuises) pour l'organisateur courant
-async function chargerPdfsEpuises(){
+// Renvoie une Map pdf_url -> {vendues, total, restantes} pour l'organisateur courant
+async function chargerEtatFeuilles(){
+  const m = new Map();
   try{
     const r = await fetch('/api/feuilles/etat',{headers:{'X-Token':TOKEN}});
     const d = await r.json();
-    const s = new Set();
     if(d && d.ok && Array.isArray(d.pdfs)){
-      d.pdfs.forEach(p=>{
-        if(p.pdf_url && p.total_feuilles>0 && p.nb_vendues>=p.total_feuilles){ s.add(p.pdf_url); }
-      });
+      d.pdfs.forEach(p=>{ if(p.pdf_url){ m.set(p.pdf_url, {vendues:p.nb_vendues||0, total:p.total_feuilles||0, restantes:p.restantes}); } });
     }
-    return s;
-  }catch(e){ return new Set(); }
+  }catch(e){}
+  return m;
+}
+
+// Set des pdf_url entierement vendus (epuises), construit depuis l'etat
+function epuisesDepuisEtat(etat){
+  const s = new Set();
+  etat.forEach((v,url)=>{ if(v.total>0 && v.vendues>=v.total){ s.add(url); } });
+  return s;
+}
+
+// Compatibilite : Set des pdf_url epuises (utilise ailleurs)
+async function chargerPdfsEpuises(){
+  return epuisesDepuisEtat(await chargerEtatFeuilles());
+}
+
+// Petit badge "X vendues / Y restantes" + barre de progression pour un pdf_url
+function badgeFeuilles(etat, pdfUrl){
+  const e = etat.get(pdfUrl);
+  if(!e) return '';
+  if(e.total>0){
+    const reste = Math.max(0, e.total - e.vendues);
+    const pct = Math.min(100, Math.round((e.vendues/e.total)*100));
+    const couleur = reste===0 ? '#ef4444' : (reste<=e.total*0.2 ? '#f59e0b' : '#10b981');
+    return `<div style="margin-top:8px">
+      <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--mu);margin-bottom:4px">
+        <span>📊 ${e.vendues} vendues · <strong style="color:${couleur}">${reste} restantes</strong></span><span>${pct}%</span>
+      </div>
+      <div style="height:6px;background:var(--s1);border-radius:4px;overflow:hidden">
+        <div style="height:100%;width:${pct}%;background:${couleur};transition:width .3s"></div>
+      </div>
+    </div>`;
+  }
+  return `<div style="margin-top:8px;font-size:11px;color:var(--mu)">📊 ${e.vendues} feuilles vendues</div>`;
 }
 
 async function loadDocs(){
@@ -2608,7 +2639,8 @@ async function loadDocs(){
     const [rV,rT]=await Promise.all([fetch("/api/ventes",{headers:{"X-Token":TOKEN}}),fetch("/api/tickets",{headers:{"X-Token":TOKEN}})]);
     const vs=await rV.json();
     const ts=await rT.json();
-    const epuises=await chargerPdfsEpuises();
+    const etat=await chargerEtatFeuilles();
+    const epuises=epuisesDepuisEtat(etat);
     const docsVentes=vs.filter(v=>(v.photo_url||v.pdf_url) && !(v.pdf_url && epuises.has(v.pdf_url))).map(v=>{const q=v.qty||v.quantite||1;const lbl=(v.pack?q+'x'+v.pack+' feuilles':(v.jeu||'Carnet de jeu'))+(v.client?' · Client: '+v.client:'');return {...v,_type:'vente',label:lbl};});
     const docsTickets=ts.filter(t=>(t.photo_url||t.pdf_url) && !(t.pdf_url && epuises.has(t.pdf_url))).map(t=>({...t,_type:'ticket',label:`Acheteur: ${t.acheteur}`}));
     const docs=[...docsVentes,...docsTickets];
@@ -2633,7 +2665,8 @@ async function loadDocs(){
           <div style="background:rgba(99,102,241,.1);border:.5px solid var(--ac);border-radius:6px;padding:12px;text-align:center;margin-top:8px">
             <div style="font-size:13px;color:var(--ac2);margin-bottom:6px">📄 PDF de vos tickets</div>
             <div style="font-size:11px;color:var(--mu);margin-bottom:8px">🔒 Lecture seule — Non imprimable</div>
-            <button onclick="ouvrirPDFJoueur('${v.pdf_url}','${USER_NOM}','${docId}')" style="padding:10px 20px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;width:100%">🎮 Ouvrir et jouer</button>
+            ${badgeFeuilles(etat, v.pdf_url)}
+            <button onclick="ouvrirPDFJoueur('${v.pdf_url}','${USER_NOM}','${docId}')" style="padding:10px 20px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:500;width:100%;margin-top:8px">🎮 Ouvrir et jouer</button>
           </div>`:""}
       </div>`;
     }).join("");
@@ -3099,7 +3132,8 @@ async function chargerPDFsOrganisateur(){
     ]);
     const vs = await rV.json();
     const ts = await rT.json();
-    const epuises = await chargerPdfsEpuises();
+    const etat = await chargerEtatFeuilles();
+    const epuises = epuisesDepuisEtat(etat);
     
     // Collecter tous les PDFs disponibles (on exclut les PDF entierement vendus)
     const pdfs = [];
@@ -3122,15 +3156,25 @@ async function chargerPDFsOrganisateur(){
       return;
     }
     
-    el.innerHTML = pdfs.map((p, i) => `
+    el.innerHTML = pdfs.map((p, i) => {
+      const e = etat.get(p.url);
+      let resteTxt = 'Appuyer pour sélectionner';
+      if(e && e.total>0){
+        const reste = Math.max(0, e.total - e.vendues);
+        const couleur = reste<=e.total*0.2 ? '#f59e0b' : '#10b981';
+        resteTxt = `<strong style="color:${couleur}">${reste} feuilles restantes</strong> sur ${e.total}`;
+      } else if(e){
+        resteTxt = `${e.vendues} feuilles vendues`;
+      }
+      return `
       <div onclick="selectionnerPDFExistant('${p.url}', this)" style="background:var(--s1);border:0.5px solid var(--bd2);border-radius:var(--rs);padding:10px;cursor:pointer;display:flex;align-items:center;gap:10px" id="pdf-item-${i}">
         <div style="width:36px;height:36px;background:rgba(99,102,241,.2);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:18px">📄</div>
         <div>
           <div style="font-size:13px;font-weight:500">${p.nom}</div>
-          <div style="font-size:11px;color:var(--mu)">Appuyer pour sélectionner</div>
+          <div style="font-size:11px;color:var(--mu)">${resteTxt}</div>
         </div>
-      </div>
-    `).join('');
+      </div>`;
+    }).join('');
   }catch(e){console.error(e);}
 }
 
