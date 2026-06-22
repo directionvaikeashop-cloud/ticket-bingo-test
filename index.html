@@ -2588,13 +2588,29 @@ function validerPaiementVente(id){
 async function loadStats(){try{const r=await fetch("/api/stats");const s=await r.json();document.getElementById("sv").textContent=s.ventes_jour;document.getElementById("sc").textContent=s.total_jour.toLocaleString()+" XPF";}catch(e){}}
 
 // ✅ CORRIGE : charge ventes ET tickets avec PDF/photo
+// Renvoie un Set des pdf_url entierement vendus (epuises) pour l'organisateur courant
+async function chargerPdfsEpuises(){
+  try{
+    const r = await fetch('/api/feuilles/etat',{headers:{'X-Token':TOKEN}});
+    const d = await r.json();
+    const s = new Set();
+    if(d && d.ok && Array.isArray(d.pdfs)){
+      d.pdfs.forEach(p=>{
+        if(p.pdf_url && p.total_feuilles>0 && p.nb_vendues>=p.total_feuilles){ s.add(p.pdf_url); }
+      });
+    }
+    return s;
+  }catch(e){ return new Set(); }
+}
+
 async function loadDocs(){
   try{
     const [rV,rT]=await Promise.all([fetch("/api/ventes",{headers:{"X-Token":TOKEN}}),fetch("/api/tickets",{headers:{"X-Token":TOKEN}})]);
     const vs=await rV.json();
     const ts=await rT.json();
-    const docsVentes=vs.filter(v=>(v.photo_url||v.pdf_url)).map(v=>{const q=v.qty||v.quantite||1;const lbl=(v.pack?q+'x'+v.pack+' feuilles':(v.jeu||'Carnet de jeu'))+(v.client?' · Client: '+v.client:'');return {...v,_type:'vente',label:lbl};});
-    const docsTickets=ts.filter(t=>t.photo_url||t.pdf_url).map(t=>({...t,_type:'ticket',label:`Acheteur: ${t.acheteur}`}));
+    const epuises=await chargerPdfsEpuises();
+    const docsVentes=vs.filter(v=>(v.photo_url||v.pdf_url) && !(v.pdf_url && epuises.has(v.pdf_url))).map(v=>{const q=v.qty||v.quantite||1;const lbl=(v.pack?q+'x'+v.pack+' feuilles':(v.jeu||'Carnet de jeu'))+(v.client?' · Client: '+v.client:'');return {...v,_type:'vente',label:lbl};});
+    const docsTickets=ts.filter(t=>(t.photo_url||t.pdf_url) && !(t.pdf_url && epuises.has(t.pdf_url))).map(t=>({...t,_type:'ticket',label:`Acheteur: ${t.acheteur}`}));
     const docs=[...docsVentes,...docsTickets];
     const el=document.getElementById("docs-liste");
     if(!docs.length){el.innerHTML='<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">Aucun document reçu</div>';return;}
@@ -3083,15 +3099,16 @@ async function chargerPDFsOrganisateur(){
     ]);
     const vs = await rV.json();
     const ts = await rT.json();
+    const epuises = await chargerPdfsEpuises();
     
-    // Collecter tous les PDFs disponibles (ventes validées uniquement)
+    // Collecter tous les PDFs disponibles (on exclut les PDF entierement vendus)
     const pdfs = [];
-    vs.filter(v => v.pdf_url).forEach(v => {
+    vs.filter(v => v.pdf_url && !epuises.has(v.pdf_url)).forEach(v => {
       if(!pdfs.find(p => p.url === v.pdf_url)){
         pdfs.push({url: v.pdf_url, nom: v.jeu + ' — Série ' + v.serie});
       }
     });
-    ts.filter(t => t.pdf_url).forEach(t => {
+    ts.filter(t => t.pdf_url && !epuises.has(t.pdf_url)).forEach(t => {
       if(!pdfs.find(p => p.url === t.pdf_url)){
         pdfs.push({url: t.pdf_url, nom: t.jeu + ' — Série ' + t.serie});
       }
@@ -3517,7 +3534,7 @@ async function validerBingo(alerteId, statut){
       demarrerEffacement(10);
       var resetDiv = document.getElementById('reset-tournoi-zone');
       if(resetDiv) resetDiv.style.display = 'block';
-      toast('toast-t','🏆 Gagnant validé ! Les cartes de ce tournoi s\'effacent dans 3 minutes.');
+      toast('toast-t','🏆 Gagnant validé ! Les PDF entièrement vendus sont nettoyés ; ceux avec des feuilles invendues sont conservés.');
     }
   }catch(e){}
 }
