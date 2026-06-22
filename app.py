@@ -1275,11 +1275,31 @@ def declarer_bingo():
         "date": datetime.datetime.now().isoformat(),
         "statut": "en_attente"
     }
+    # === Vérification automatique (recalcul serveur) au moment du BINGO ===
+    try:
+        import re as _re
+        tirage_set = set()
+        for _x in DB.get("tirage", []):
+            try:
+                tirage_set.add(int(_x))
+            except Exception:
+                pass
+        seriaux = [int(x) for x in _re.findall(r"\d+", str(d.get("serie", "")))]
+        jeu_a = d.get("jeu", "")
+        res_ok = [r for sx in seriaux for r in [_verifier_serial(jeu_a, sx, tirage_set)] if r.get("trouve")]
+        if res_ok:
+            meilleur = next((r for r in res_ok if r.get("complet")), None) \
+                or max(res_ok, key=lambda r: r.get("sortis", 0))
+            alerte["verif"] = {"gagnant": bool(meilleur.get("complet")), "boules": len(tirage_set), **meilleur}
+        else:
+            alerte["verif"] = {"trouve": False}
+    except Exception:
+        alerte["verif"] = {"trouve": False}
     if "alertes_bingo" not in DB:
         DB["alertes_bingo"] = []
     DB["alertes_bingo"].insert(0, alerte)
     save_data()
-    return jsonify({"ok": True, "alerte_id": alerte["id"]})
+    return jsonify({"ok": True, "alerte_id": alerte["id"], "verif": alerte.get("verif")})
 
 @app.route("/api/bingo/alertes")
 def get_alertes_bingo():
@@ -7513,6 +7533,49 @@ def _serie_start_pour(jeu, serial):
             return ss
     return couvrants[0][1]
 
+def _verifier_serial(jeu, serial, tirage):
+    """Vérifie UN ticket (jeu + numéro de série) contre l'ensemble des boules tirées.
+    Renvoie {serial, trouve, [complet, sortis, total, manquants, jeu] | msg}."""
+    cle = _variante_cle(jeu)
+    ss = _serie_start_pour(jeu, serial)
+    if ss is None:
+        return {"serial": serial, "trouve": False, "msg": "Lot introuvable pour ce numéro"}
+    cellules = None   # jeux "boule pour N" : liste de (lettre, [numeros])
+    nums = None       # jeux "une boule" : liste de numeros
+    nom = jeu
+    if cle == "OHANAORIG":
+        cellules = _ohana_cellules(ss, serial); nom = "OHANA 75 (carte 24)"
+    elif cle == "OHANA10":
+        cellules = _ohana10b_lignes(ss, serial); nom = "OHANA 75 10 boules"
+    elif cle == "OHANA8":
+        cellules = _ohana8b_lignes(ss, serial); nom = "OHANA 75 8 boules"
+    elif cle == "TA75":
+        cellules = _ta75_groupes(ss, serial); nom = "TRIPLE ACTION 75"
+    elif cle == "P6":
+        nums = _p6_numeros(ss, serial); nom = "P6"
+    elif cle in _JEUX_PLATS:
+        nums = _regen_plat(cle, ss, serial)
+        nom = {"DOLLAR": "1 dollar", "F500": "500 francs", "B40": "40 boules", "B60": "60 boules"}.get(cle, jeu)
+    elif cle == "4COIN":
+        nums = _regen_4coin(ss, serial); nom = "4 COIN"
+    else:
+        return {"serial": serial, "trouve": False, "msg": "Jeu non encore pris en charge"}
+    if cellules is not None:
+        if not cellules:
+            return {"serial": serial, "trouve": False, "msg": "Recalcul impossible"}
+        manquants = [f"{l}:{'/'.join(str(n) for n in ns)}" for (l, ns) in cellules
+                     if not any(n in tirage for n in ns)]
+        total = len(cellules)
+        return {"serial": serial, "trouve": True, "jeu": nom,
+                "complet": len(manquants) == 0, "sortis": total - len(manquants),
+                "total": total, "manquants": manquants}
+    if not nums:
+        return {"serial": serial, "trouve": False, "msg": "Recalcul impossible"}
+    manquants_n = sorted([n for n in nums if n not in tirage])
+    return {"serial": serial, "trouve": True, "jeu": nom,
+            "complet": len(manquants_n) == 0, "sortis": len(nums) - len(manquants_n),
+            "total": len(nums), "manquants": [str(n) for n in manquants_n], "numeros": sorted(nums)}
+
 @app.route("/api/bingo/verifier-carton", methods=["POST"])
 def verifier_carton():
     """Vérifie automatiquement si un (ou plusieurs) ticket P6 a son CARTON PLEIN.
@@ -7546,59 +7609,7 @@ def verifier_carton():
         except Exception:
             pass
 
-    resultats = []
-    cle = _variante_cle(jeu)
-    for serial in serials:
-        ss = _serie_start_pour(jeu, serial)
-        if ss is None:
-            resultats.append({"serial": serial, "trouve": False, "msg": "Lot introuvable pour ce numéro"})
-            continue
-        cellules = None   # jeux "une boule pour 2" : liste de (lettre, n1, n2)
-        nums = None       # jeux "une boule" : liste de numéros
-        nom = jeu
-        if cle == "OHANAORIG":
-            cellules = _ohana_cellules(ss, serial); nom = "OHANA 75 (carte 24)"
-        elif cle == "OHANA10":
-            cellules = _ohana10b_lignes(ss, serial); nom = "OHANA 75 10 boules"
-        elif cle == "OHANA8":
-            cellules = _ohana8b_lignes(ss, serial); nom = "OHANA 75 8 boules"
-        elif cle == "P6":
-            nums = _p6_numeros(ss, serial); nom = "P6"
-        elif cle in _JEUX_PLATS:
-            nums = _regen_plat(cle, ss, serial)
-            nom = {"DOLLAR": "1 dollar", "F500": "500 francs", "B40": "40 boules", "B60": "60 boules"}.get(cle, jeu)
-        elif cle == "4COIN":
-            nums = _regen_4coin(ss, serial); nom = "4 COIN"
-        elif cle == "TA75":
-            cellules = _ta75_groupes(ss, serial); nom = "TRIPLE ACTION 75"
-        else:
-            resultats.append({"serial": serial, "trouve": False, "msg": "Jeu non encore pris en charge"})
-            continue
-        if cellules is not None:
-            if not cellules:
-                resultats.append({"serial": serial, "trouve": False, "msg": "Recalcul impossible"})
-                continue
-            manquants = [f"{l}:{'/'.join(str(n) for n in ns)}" for (l, ns) in cellules
-                         if not any(n in tirage for n in ns)]
-            total = len(cellules)
-            resultats.append({
-                "serial": serial, "trouve": True, "jeu": nom,
-                "complet": len(manquants) == 0,
-                "sortis": total - len(manquants), "total": total,
-                "manquants": manquants,
-            })
-        else:
-            if not nums:
-                resultats.append({"serial": serial, "trouve": False, "msg": "Recalcul impossible"})
-                continue
-            manquants_n = sorted([n for n in nums if n not in tirage])
-            resultats.append({
-                "serial": serial, "trouve": True, "jeu": nom,
-                "complet": len(manquants_n) == 0,
-                "sortis": len(nums) - len(manquants_n), "total": len(nums),
-                "manquants": [str(n) for n in manquants_n],
-                "numeros": sorted(nums),
-            })
+    resultats = [_verifier_serial(jeu, serial, tirage) for serial in serials]
     gagnant = any(r.get("complet") for r in resultats)
     return jsonify({"ok": True, "gagnant": gagnant, "boules_tirees": len(tirage), "resultats": resultats})
 
