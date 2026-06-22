@@ -7420,7 +7420,38 @@ def _variante_cle(jeu):
         if "10 BOULE" in ju:
             return "OHANA10"
         return "OHANAORIG"
+    if "DOLLAR" in ju:
+        return "DOLLAR"
+    if "FRANC" in ju:
+        return "F500"
+    if "40 BOULE" in ju:
+        return "B40"
+    if "60 BOULE" in ju:
+        return "B60"
     return ju.split()[0] if ju.strip() else ""
+
+# Jeux "une boule" (1 numéro = 1 case), reproductibles depuis la réparation (graine).
+# cle -> (graine, nb_numeros, min, max). Doit coller aux générateurs réparés.
+_JEUX_PLATS = {
+    "DOLLAR": (810000, 9, 1, 75),
+    "F500":   (850000, 10, 1, 75),
+    "B40":    (840000, 10, 1, 40),
+    "B60":    (860000, 8, 1, 60),
+}
+
+def _regen_plat(cle, serie_start, serial_cible):
+    cfg = _JEUX_PLATS.get(cle)
+    if not cfg:
+        return None
+    seed_base, count, lo, hi = cfg
+    serie_start = int(serie_start); serial_cible = int(serial_cible)
+    if serial_cible < serie_start:
+        return None
+    rng = _rnd_verif.Random(seed_base + serie_start)
+    nums = None
+    for _ in range((serial_cible - serie_start) + 1):
+        nums = sorted(rng.sample(range(lo, hi + 1), count))
+    return nums
 
 def _serie_start_pour(jeu, serial):
     """Retrouve la série de départ du lot, en privilégiant la MÊME variante de jeu
@@ -7489,6 +7520,9 @@ def verifier_carton():
             cellules = _ohana8b_lignes(ss, serial); nom = "OHANA 75 8 boules"
         elif cle == "P6":
             nums = _p6_numeros(ss, serial); nom = "P6"
+        elif cle in _JEUX_PLATS:
+            nums = _regen_plat(cle, ss, serial)
+            nom = {"DOLLAR": "1 dollar", "F500": "500 francs", "B40": "40 boules", "B60": "60 boules"}.get(cle, jeu)
         else:
             resultats.append({"serial": serial, "trouve": False, "msg": "Jeu non encore pris en charge"})
             continue
