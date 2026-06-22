@@ -18,10 +18,10 @@ CARD_H = PAGE_H - 2*MARGIN
 CARD_X = MARGIN
 CARD_Y = MARGIN
 
-def _gen_grille():
-    return sorted(random.sample(range(1, 41), 10))
+def _gen_grille(rng):
+    return sorted(rng.sample(range(1, 41), 10))
 
-def _draw_ticket(c, serie, color_hex):
+def _draw_ticket(c, serie, color_hex, rng):
     col = colors.HexColor(color_hex)
     light = colors.Color(0.85, 0.85, 0.85)
 
@@ -52,7 +52,7 @@ def _draw_ticket(c, serie, color_hex):
     c.setFont('Helvetica', 8)
     c.drawCentredString(CARD_X + CARD_W*3/4, CARD_Y + 2*mm, f"{serie:06d}")
 
-    nums = _gen_grille()
+    nums = _gen_grille(rng)
     body_y = ftr_top
     body_h = hdr_y - body_y
     row_h = body_h / 2
@@ -82,8 +82,9 @@ def generate_pdf(nb_tickets=500, serie_start=1, output_path=None, game_name="40B
         os.makedirs('/data', exist_ok=True)
         output_path = f'/data/{game_name}_{serie_start:05d}.pdf'
     c = canvas.Canvas(output_path, pagesize=(PAGE_W, PAGE_H))
+    rng = random.Random(840000 + int(serie_start))
     for i in range(nb_tickets):
-        _draw_ticket(c, serie_start + i, RAINBOW[i % len(RAINBOW)])
+        _draw_ticket(c, serie_start + i, RAINBOW[i % len(RAINBOW)], rng)
         c.showPage()
     c.save()
     return output_path
