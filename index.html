@@ -420,15 +420,28 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#818cf8"><span>Pions reçus</span><span id="joueur-pion-nb">0 pions</span></div>
       </div>
       <div class="lbl">Mode de paiement</div>
-      <select id="joueur-pion-mode" style="margin-bottom:8px">
+      <div style="font-size:11px;color:var(--mu);margin-bottom:6px">🎪 Avec ton organisateur = <b style="color:#a5b4fc">0% de frais</b> · 🏪 Avec Tukea = à distance</div>
+      <select id="joueur-pion-mode" onchange="onModePionChange()" style="margin-bottom:8px">
         <option value="">Choisir le mode de paiement...</option>
-        <option value="CCP">CCP Papeete</option>
-        <option value="BT">BT — Banque de Tahiti</option>
-        <option value="Deblock">Deblock</option>
-        <option value="Especes Papeete">Espèces — Boutique Papeete</option>
-        <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
-        <option value="Carte">Paiement par carte</option>
+        <optgroup label="🎪 Avec mon organisateur — 0% de frais">
+          <option value="ORG:Virement">Virement — à l'organisateur</option>
+          <option value="ORG:Deblock">Deblock — à l'organisateur</option>
+          <option value="ORG:Especes">Espèces — à l'organisateur</option>
+        </optgroup>
+        <optgroup label="🏪 Avec Tukea — à distance">
+          <option value="CCP">CCP Papeete</option>
+          <option value="BT">BT — Banque de Tahiti</option>
+          <option value="Deblock">Deblock</option>
+          <option value="Especes Papeete">Espèces — Boutique Papeete</option>
+          <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
+          <option value="Carte">Paiement par carte</option>
+        </optgroup>
       </select>
+      <div id="bloc-org-cible" style="display:none;margin-bottom:8px">
+        <div class="lbl">Code de ton organisateur</div>
+        <input id="joueur-org-cible" placeholder="Ex: CPFRD66H" oninput="majCoordonneesOrg()" style="text-transform:uppercase;letter-spacing:2px"/>
+        <div id="joueur-org-coords" style="display:none;font-size:11px;color:#a5b4fc;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:8px;margin-top:6px"></div>
+      </div>
       <input id="joueur-pion-ref" placeholder="Référence ou numéro de transaction" style="margin-bottom:12px;font-size:13px"/>
       <button onclick="commanderPionsJoueur()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Commander mes pions</button>
       <button onclick="voirMonReleveJoueur()" style="width:100%;padding:12px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;margin-top:8px">💰 Mon relevé (pions achetés / dépensés)</button>
@@ -545,14 +558,28 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
           <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#818cf8"><span>Pions reçus</span><span id="joueur-pion-nb">0 pions</span></div>
         </div>
         <div class="lbl">Mode de paiement</div>
-        <select id="joueur-pion-mode" style="margin-bottom:8px">
+        <div style="font-size:11px;color:var(--mu);margin-bottom:6px">🎪 Avec ton organisateur = <b style="color:#a5b4fc">0% de frais</b> · 🏪 Avec Tukea = à distance</div>
+        <select id="joueur-pion-mode" onchange="onModePionChange()" style="margin-bottom:8px">
           <option value="">Choisir le mode de paiement...</option>
-          <option value="CCP">CCP Papeete</option>
-          <option value="Deblock">Deblock</option>
-          <option value="Especes Papeete">Espèces — Boutique Papeete</option>
-          <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
-          <option value="Carte">Paiement par carte</option>
+          <optgroup label="🎪 Avec mon organisateur — 0% de frais">
+            <option value="ORG:Virement">Virement — à l'organisateur</option>
+            <option value="ORG:Deblock">Deblock — à l'organisateur</option>
+            <option value="ORG:Especes">Espèces — à l'organisateur</option>
+          </optgroup>
+          <optgroup label="🏪 Avec Tukea — à distance">
+            <option value="CCP">CCP Papeete</option>
+            <option value="BT">BT — Banque de Tahiti</option>
+            <option value="Deblock">Deblock</option>
+            <option value="Especes Papeete">Espèces — Boutique Papeete</option>
+            <option value="Especes Raiatea">Espèces — Boutique Raiatea</option>
+            <option value="Carte">Paiement par carte</option>
+          </optgroup>
         </select>
+        <div id="bloc-org-cible" style="display:none;margin-bottom:8px">
+          <div class="lbl">Code de ton organisateur</div>
+          <input id="joueur-org-cible" placeholder="Ex: CPFRD66H" oninput="majCoordonneesOrg()" style="text-transform:uppercase;letter-spacing:2px"/>
+          <div id="joueur-org-coords" style="display:none;font-size:11px;color:#a5b4fc;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.3);border-radius:8px;padding:8px;margin-top:6px"></div>
+        </div>
         <input id="joueur-pion-ref" placeholder="Référence ou numéro de transaction" style="margin-bottom:12px;font-size:13px"/>
         <button onclick="commanderPionsJoueur()" style="width:100%;padding:12px;background:linear-gradient(135deg,#6366f1,#818cf8);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700">📦 Commander mes pions</button>
       <button onclick="voirMonReleveJoueur()" style="width:100%;padding:12px;background:linear-gradient(135deg,#059669,#10b981);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700;margin-top:8px">💰 Mon relevé (pions achetés / dépensés)</button>
@@ -1189,6 +1216,10 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <input id="a-nom" placeholder="Ex: Marie Dupont"/>
         <div class="lbl">Email du client</div>
         <input id="a-email" type="email" placeholder="client@email.com"/>
+        <div class="lbl">RIB / coordonnées virement <span style="color:var(--mu);font-weight:400">(pour ses joueurs)</span></div>
+        <input id="a-rib" placeholder="Ex: FR76 ... ou nom banque + n° compte"/>
+        <div class="lbl">N° Deblock <span style="color:var(--mu);font-weight:400">(pour ses joueurs)</span></div>
+        <input id="a-deblock" placeholder="Ex: 87 12 34 56"/>
         <div class="lbl">Durée</div>
         <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:12px">
           <div class="plan sel" id="p30" onclick="selPlan(30,'p30')"><div class="plan-n">🎯 1er mois — Lancement</div><div class="plan-p">4 990 XPF</div><div style="font-size:11px;color:var(--gr);margin-top:4px">Engagement 1 an — 2ème mois : 9 990 XPF</div></div>
@@ -1233,6 +1264,10 @@ async function accesJoueurPions(){
   show("s-joueur-pions");
   chargerSoldesPionsJoueur(code);
   chargerJeuxDisponibles(code);
+  // Récupérer l'organisateur du joueur (pour pré-remplir le circuit organisateur)
+  fetch('/api/ticket/acheteur/' + encodeURIComponent(code)).then(function(r){ return r.json(); }).then(function(d){
+    if(d && d.ok && d.ticket && d.ticket.code_org) MON_ORG = d.ticket.code_org;
+  }).catch(function(){});
   // Auto-refresh toutes les 10 secondes
   setInterval(function(){ 
     chargerSoldesPionsJoueur(code);
@@ -1249,7 +1284,7 @@ async function accesJoueurDirect(){
     if(d.ok){
       const t = d.ticket;
       codeJoueurActuel = code;
-      // Afficher directement le ticket sans connexion
+      if(t && t.code_org) MON_ORG = t.code_org;
       document.getElementById("s-login").classList.remove("active");
       document.getElementById("s-joueur").classList.add("active");
       // Charger les soldes pions du joueur
@@ -3351,6 +3386,7 @@ async function chargerTicket(){
     const d=await r.json();
     if(d.ok){
       const t=d.ticket;
+      if(t && t.code_org) MON_ORG = t.code_org;
       document.getElementById("j-ticket-zone").innerHTML=`
         <div class="card">
           <div class="ct">🎱 ${t.jeu} — Série ${t.serie}</div>
@@ -5344,6 +5380,7 @@ async function commanderTicketAvecPions(jeuId, jeu, prix, nbTickets, codeOrg, co
 // === PIONS JOUEUR DIRECT ===
 var valeurPionJoueur = 0;
 var codeJoueurActuel = "";
+var MON_ORG = "";
 
 function selValeurPionJoueur(val, el){
   valeurPionJoueur = val;
@@ -5372,7 +5409,8 @@ function calcPionsJoueur(){
     return;
   }
   var modeJ = _valVisible('joueur-pion-mode') || '';
-  var commission = Math.round(montant * tauxCommissionPions(modeJ));
+  var estOrgJ = (modeJ.indexOf('ORG:') === 0);
+  var commission = estOrgJ ? 0 : Math.round(montant * tauxCommissionPions(modeJ));
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionJoueur);
   calcDivs.forEach(function(d){ d.style.display = 'block'; });
@@ -5385,19 +5423,27 @@ async function commanderPionsJoueur(){
   if(!valeurPionJoueur){ alert('Choisissez la valeur du pion'); return; }
   var montant = parseFloat(_valVisible('joueur-pion-montant') || 0);
   if(montant < 500){ alert('Montant minimum : 500 XPF'); return; }
-  var mode = _valVisible('joueur-pion-mode');
+  var modeRaw = _valVisible('joueur-pion-mode');
+  if(!modeRaw){ alert('Choisissez votre mode de paiement'); return; }
+  var estOrg = (modeRaw.indexOf('ORG:') === 0);
+  var mode = modeRaw.replace('ORG:','');
+  var circuit = estOrg ? 'organisateur' : 'tukea';
+  var orgCible = '';
+  if(estOrg){
+    orgCible = (_valVisible('joueur-org-cible') || '').toUpperCase().trim();
+    if(!orgCible || orgCible.length < 4){ alert('Entre le code de ton organisateur'); return; }
+  }
   var ref = _valVisible('joueur-pion-ref');
-  if(!mode){ alert('Choisissez votre mode de paiement'); return; }
-  if(!ref) ref = 'TUKEA-' + (codeJoueurActuel ? codeJoueurActuel + '-' : '') + Date.now().toString().slice(-4);
+  if(!ref) ref = (estOrg ? 'ORG-' : 'TUKEA-') + (codeJoueurActuel ? codeJoueurActuel + '-' : '') + Date.now().toString().slice(-4);
   else if(codeJoueurActuel && ref.toUpperCase().indexOf(codeJoueurActuel) === -1) ref = codeJoueurActuel + '-' + ref;
   
-  var commission = Math.round(montant * tauxCommissionPions(mode));
+  var commission = estOrg ? 0 : Math.round(montant * tauxCommissionPions(mode));
   var valeurRecue = montant - commission;
   var nbPions = Math.floor(valeurRecue / valeurPionJoueur);
 
   // PAIEMENT PAR CARTE : ouvrir la page de paiement securisee Stripe
   // Les pions seront credites AUTOMATIQUEMENT apres le paiement
-  if(mode === 'Carte'){
+  if(!estOrg && mode === 'Carte'){
     try{
       const rs = await fetch('/api/pions/stripe-checkout', {
         method: 'POST', headers: {'Content-Type': 'application/json'},
@@ -5428,19 +5474,28 @@ async function commanderPionsJoueur(){
         commission: commission,
         nb_pions: nbPions,
         mode_paiement: mode,
-        ref_paiement: ref
+        ref_paiement: ref,
+        circuit: circuit,
+        code_org: orgCible
       })
     });
     const d = await r.json();
     if(d.ok){
-      document.querySelectorAll('[id="joueur-pion-result"]').forEach(function(el){ el.innerHTML = 
-        '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399;margin-top:6px">✅ Commande envoyée ! Réf : ' + ref + ' — effectuez maintenant votre virement.</div>'; });
-      // Afficher OU PAYER : RIB + reference + montant
-      afficherInstructionsPaiement(mode, montant, ref, codeJoueurActuel);
+      if(estOrg){
+        document.querySelectorAll('[id="joueur-pion-result"]').forEach(function(el){ el.innerHTML = 
+          '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399;margin-top:6px">✅ Demande envoyée à ton organisateur ! Il validera tes pions dès réception de ton paiement. Réf : ' + ref + '</div>'; });
+      } else {
+        document.querySelectorAll('[id="joueur-pion-result"]').forEach(function(el){ el.innerHTML = 
+          '<div style="background:rgba(16,185,129,.2);border:1px solid #10b981;border-radius:8px;padding:10px;text-align:center;color:#34d399;margin-top:6px">✅ Commande envoyée ! Réf : ' + ref + ' — effectuez maintenant votre virement.</div>'; });
+        // Afficher OU PAYER : RIB + reference + montant
+        afficherInstructionsPaiement(mode, montant, ref, codeJoueurActuel);
+      }
       document.querySelectorAll('[id="joueur-pion-montant"]').forEach(function(e){ e.value = ''; });
       document.querySelectorAll('[id="joueur-pion-calcul"]').forEach(function(e){ e.style.display = 'none'; });
       document.querySelectorAll('[id="joueur-pion-mode"]').forEach(function(e){ e.value = ''; });
       document.querySelectorAll('[id="joueur-pion-ref"]').forEach(function(e){ e.value = ''; });
+      document.querySelectorAll('[id="bloc-org-cible"]').forEach(function(e){ e.style.display = 'none'; });
+      document.querySelectorAll('[id="joueur-org-coords"]').forEach(function(e){ e.style.display = 'none'; });
       valeurPionJoueur = 0;
       document.querySelectorAll('.pion-val-j').forEach(function(p){
         p.style.borderColor = 'var(--bd)';
@@ -5450,6 +5505,45 @@ async function commanderPionsJoueur(){
       alert(d.msg || 'Erreur');
     }
   }catch(e){ alert('Erreur de connexion'); }
+}
+
+function onModePionChange(){
+  var mode = _valVisible('joueur-pion-mode') || '';
+  var estOrg = (mode.indexOf('ORG:') === 0);
+  document.querySelectorAll('[id="bloc-org-cible"]').forEach(function(b){ b.style.display = estOrg ? 'block' : 'none'; });
+  if(estOrg){
+    document.querySelectorAll('[id="joueur-org-cible"]').forEach(function(i){ if(!i.value && typeof MON_ORG !== 'undefined' && MON_ORG) i.value = MON_ORG; });
+  }
+  majCoordonneesOrg();
+  calcPionsJoueur();
+}
+
+async function majCoordonneesOrg(){
+  var mode = _valVisible('joueur-pion-mode') || '';
+  var estOrg = (mode.indexOf('ORG:') === 0);
+  var boxes = document.querySelectorAll('[id="joueur-org-coords"]');
+  if(!estOrg){ boxes.forEach(function(b){ b.style.display = 'none'; }); return; }
+  var modeClean = mode.replace('ORG:','');
+  if(modeClean === 'Especes'){
+    boxes.forEach(function(b){ b.style.display = 'block'; b.innerHTML = '💵 Remets l\'argent en main propre à ton organisateur. Il validera tes pions sur place.'; });
+    return;
+  }
+  var code = (_valVisible('joueur-org-cible') || '').toUpperCase().trim();
+  if(!code || code.length < 4){ boxes.forEach(function(b){ b.style.display = 'none'; }); return; }
+  try{
+    var r = await fetch('/api/organisateur/coordonnees/' + encodeURIComponent(code));
+    var d = await r.json();
+    if(!d.ok){ boxes.forEach(function(b){ b.style.display = 'block'; b.innerHTML = '⚠️ Code organisateur introuvable.'; }); return; }
+    var coord = (modeClean === 'Virement') ? (d.rib || '') : (d.deblock || '');
+    var label = (modeClean === 'Virement') ? 'RIB / virement' : 'Deblock';
+    var html;
+    if(coord){
+      html = '🎯 Paie <b>' + (d.nom || 'ton organisateur') + '</b> · ' + label + ' :<br><b style="color:#fff;font-size:13px;letter-spacing:1px">' + coord + '</b>';
+    } else {
+      html = '🎯 Organisateur : <b>' + (d.nom || '') + '</b>. Demande-lui son ' + label + ' directement (non renseigné).';
+    }
+    boxes.forEach(function(b){ b.style.display = 'block'; b.innerHTML = html; });
+  }catch(e){ boxes.forEach(function(b){ b.style.display = 'none'; }); }
 }
 
 function chargerSoldesPionsJoueur(code, tentative){
@@ -7007,11 +7101,13 @@ async function resetDonneesAdmin(){
 async function genCode(){
   const nom=document.getElementById("a-nom").value.trim();
   const email=document.getElementById("a-email").value.trim();
+  const rib=(document.getElementById("a-rib")?.value||"").trim();
+  const deblock=(document.getElementById("a-deblock")?.value||"").trim();
   if(!nom){toast("toast-adm","Entrez le nom du client",false);return;}
   try{
-    const r=await fetch("/api/admin/generer",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({nom,email,duree:planSel})});
+    const r=await fetch("/api/admin/generer",{method:"POST",headers:{"Content-Type":"application/json","X-Token":TOKEN},body:JSON.stringify({nom,email,rib,deblock,duree:planSel})});
     const d=await r.json();
-    if(d.ok){document.getElementById("code-result").innerHTML=`<div class="code-box"><div style="font-size:12px;color:var(--mu);margin-bottom:8px">Code pour ${d.nom} — ${d.duree} jours</div><div class="code-val">${d.code}</div><div style="font-size:11px;color:var(--mu);margin-top:8px">Envoyez par WhatsApp</div></div>`;document.getElementById("a-nom").value="";document.getElementById("a-email").value="";loadCodes();toast("toast-adm","Code généré !");}
+    if(d.ok){document.getElementById("code-result").innerHTML=`<div class="code-box"><div style="font-size:12px;color:var(--mu);margin-bottom:8px">Code pour ${d.nom} — ${d.duree} jours</div><div class="code-val">${d.code}</div><div style="font-size:11px;color:var(--mu);margin-top:8px">Envoyez par WhatsApp</div></div>`;document.getElementById("a-nom").value="";document.getElementById("a-email").value="";if(document.getElementById("a-rib"))document.getElementById("a-rib").value="";if(document.getElementById("a-deblock"))document.getElementById("a-deblock").value="";loadCodes();toast("toast-adm","Code généré !");}
   }catch(e){toast("toast-adm","Erreur",false);}
 }
 
