@@ -55,16 +55,16 @@ SMALL_H = GROUP_H * 0.24
 RANGES = [(1,15),(16,30),(31,45),(46,60),(61,75)]
 
 
-def _gen_grille():
+def _gen_grille(rng):
     """Génère une grille unique : 5 groupes × 3 numéros."""
     grille = []
     for (lo, hi) in RANGES:
-        nums = sorted(random.sample(range(lo, hi + 1), 3))
+        nums = sorted(rng.sample(range(lo, hi + 1), 3))
         grille.append(nums)
     return grille
 
 
-def _draw_ticket(c, serie: int, color_hex: str):
+def _draw_ticket(c, serie: int, color_hex: str, rng):
     """Dessine 1 ticket sur la page courante du canvas."""
     col = colors.HexColor(color_hex)
 
@@ -87,7 +87,7 @@ def _draw_ticket(c, serie: int, color_hex: str):
     c.drawCentredString(CARD_X + CARD_W / 2, hdr_y + HDR_H * 0.18, f'N° {serie:05d}')
 
     # ── 5 GROUPES ───────────────────────────────────────────────────────────
-    grille = _gen_grille()
+    grille = _gen_grille(rng)
 
     for g_idx, nums in enumerate(grille):
         group_bottom = CARD_Y + CARD_H - HDR_H - (g_idx + 1) * GROUP_H
@@ -155,11 +155,12 @@ def generate_pdf(
         output_path = f'/data/{game_name}_{serie_start:05d}.pdf'
 
     c = canvas.Canvas(output_path, pagesize=(PAGE_W, PAGE_H))
+    rng = random.Random(700000 + int(serie_start))
 
     for i in range(nb_tickets):
         serie      = serie_start + i
         color_hex  = RAINBOW[i % len(RAINBOW)]
-        _draw_ticket(c, serie, color_hex)
+        _draw_ticket(c, serie, color_hex, rng)
         c.showPage()
 
     c.save()
