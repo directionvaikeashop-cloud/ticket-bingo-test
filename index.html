@@ -1152,60 +1152,6 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
         <button onclick="genererJeuUniversel()" id="btn-genu" style="width:100%;padding:10px;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;margin-top:6px">⚡ Générer le PDF</button>
         <div id="genu-result" style="margin-top:6px"></div>
       </div>
-      <div style="background:linear-gradient(135deg,rgba(30,136,229,rgba(30,136,229,.1));border:1px solid rgba(30,136,229,.3);border-radius:10px;padding:14px;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:600;color:#64b5f6;margin-bottom:10px">🎯 TRIPLE ACTION 75</div>
-        <div class="g2">
-          <div><div class="lbl">Nb tickets</div><input id="ta75-nb" type="number" value="500" min="1" max="1000"/></div>
-          <div><div class="lbl">Série départ</div><input id="ta75-serie" type="number" value="1" min="1"/></div>
-        </div>
-        <button onclick="genererJeu('ta75','generer-ta75')" id="btn-ta75" style="width:100%;padding:10px;background:linear-gradient(135deg,#64b5f6,#3949ab);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer TRIPLE ACTION 75</button>
-        <div id="ta75-result" style="margin-top:6px"></div>
-      </div>
-      <div style="background:linear-gradient(135deg,rgba(229,57,53,rgba(229,57,53,.1));border:1px solid rgba(229,57,53,.3);border-radius:10px;padding:14px;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:600;color:#ef5350;margin-bottom:10px">🎱 60 BOULES</div>
-        <div class="g2">
-          <div><div class="lbl">Nb tickets</div><input id="60b-nb" type="number" value="500" min="1" max="1000"/></div>
-          <div><div class="lbl">Série départ</div><input id="60b-serie" type="number" value="1" min="1"/></div>
-        </div>
-        <button onclick="genererJeu('60b','generer-60-boules')" id="btn-60b" style="width:100%;padding:10px;background:linear-gradient(135deg,#ef5350,#b71c1c);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer 60 BOULES</button>
-        <div id="60b-result" style="margin-top:6px"></div>
-      </div>
-      <div style="background:linear-gradient(135deg,rgba(67,160,71,rgba(67,160,71,.1));border:1px solid rgba(67,160,71,.3);border-radius:10px;padding:14px;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:600;color:#66bb6a;margin-bottom:10px">🎳 40 BOULES</div>
-        <div class="g2">
-          <div><div class="lbl">Nb tickets</div><input id="40b-nb" type="number" value="500" min="1" max="1000"/></div>
-          <div><div class="lbl">Série départ</div><input id="40b-serie" type="number" value="1" min="1"/></div>
-        </div>
-        <button onclick="genererJeu('40b','generer-40-boules')" id="btn-40b" style="width:100%;padding:10px;background:linear-gradient(135deg,#66bb6a,#1b5e20);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer 40 BOULES</button>
-        <div id="40b-result" style="margin-top:6px"></div>
-      </div>
-      <div style="background:linear-gradient(135deg,rgba(251,140,0,rgba(251,140,0,.1));border:1px solid rgba(251,140,0,.3);border-radius:10px;padding:14px;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:600;color:#ffa726;margin-bottom:10px">🪙 4 COINS</div>
-        <div class="g2">
-          <div><div class="lbl">Nb tickets</div><input id="4coins-nb" type="number" value="500" min="1" max="1000"/></div>
-          <div><div class="lbl">Série départ</div><input id="4coins-serie" type="number" value="1" min="1"/></div>
-        </div>
-        <button onclick="genererJeu('4coins','generer-4-coins')" id="btn-4coins" style="width:100%;padding:10px;background:linear-gradient(135deg,#ffa726,#e65100);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer 4 COINS</button>
-        <div id="4coins-result" style="margin-top:6px"></div>
-      </div>
-      <div style="background:linear-gradient(135deg,rgba(142,36,170,rgba(142,36,170,.1));border:1px solid rgba(142,36,170,.3);border-radius:10px;padding:14px;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:600;color:#ab47bc;margin-bottom:10px">💵 500 FRANCS</div>
-        <div class="g2">
-          <div><div class="lbl">Nb tickets</div><input id="500f-nb" type="number" value="500" min="1" max="1000"/></div>
-          <div><div class="lbl">Série départ</div><input id="500f-serie" type="number" value="1" min="1"/></div>
-        </div>
-        <button onclick="genererJeu('500f','generer-500-francs')" id="btn-500f" style="width:100%;padding:10px;background:linear-gradient(135deg,#ab47bc,#4a148c);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer 500 FRANCS</button>
-        <div id="500f-result" style="margin-top:6px"></div>
-      </div>
-      <div style="background:linear-gradient(135deg,rgba(0,172,193,rgba(0,172,193,.1));border:1px solid rgba(0,172,193,.3);border-radius:10px;padding:14px;margin-bottom:10px">
-        <div style="font-size:13px;font-weight:600;color:#26c6da;margin-bottom:10px">💰 1 DOLLAR</div>
-        <div class="g2">
-          <div><div class="lbl">Nb tickets</div><input id="1dollar-nb" type="number" value="500" min="1" max="1000"/></div>
-          <div><div class="lbl">Série départ</div><input id="1dollar-serie" type="number" value="1" min="1"/></div>
-        </div>
-        <button onclick="genererJeu('1dollar','generer-1-dollar')" id="btn-1dollar" style="width:100%;padding:10px;background:linear-gradient(135deg,#26c6da,#006064);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:6px">⚡ Générer 1 DOLLAR</button>
-        <div id="1dollar-result" style="margin-top:6px"></div>
-      </div>
 
       <!-- PAIEMENTS STRIPE -->
       <div class="card" style="margin-bottom:14px;background:linear-gradient(135deg,rgba(99,102,241,.1),rgba(139,92,246,.05));border:1px solid rgba(99,102,241,.2)">
@@ -1269,7 +1215,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
 </div>
 
 <script>
-let TOKEN="", ADMIN=false, USER_NOM="", CODE_ORG="", CODE_ORG_JOUEUR="";
+let TOKEN="", ADMIN=false, USER_NOM="", CODE_ORG="";
 let pk=100, qty=1, planSel=30;
 let docFile=null, docType=null;
 let tDocFile=null, tDocType=null;
@@ -1303,7 +1249,6 @@ async function accesJoueurDirect(){
     if(d.ok){
       const t = d.ticket;
       codeJoueurActuel = code;
-      CODE_ORG_JOUEUR = t.code_org || '';
       // Afficher directement le ticket sans connexion
       document.getElementById("s-login").classList.remove("active");
       document.getElementById("s-joueur").classList.add("active");
@@ -1335,34 +1280,11 @@ async function accesJoueurDirect(){
               <button onclick="ouvrirPDFJoueur('${t.pdf_url}','${t.acheteur}','ticket_${t.id}','${t.page_debut||1}','${t.page_fin||9999}','${t.jeu}','${t.serie}')" style="width:100%;padding:12px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600">🎯 Jouer maintenant !</button>
             </div>`:""}
           ${!t.pdf_url?`<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">🎱 Bienvenue ! Consultez l'onglet 🪙 Mes Pions pour commander vos pions.</div>`:""}
-        </div>
-        <div id="cagnotte-publique-joueur" style="margin-top:12px"></div>`;
-      chargerCagnottePublique();
-      setInterval(chargerCagnottePublique, 12000);
+        </div>`;
     } else {
       alert("Code invalide ou introuvable");
     }
   }catch(e){alert("Erreur de connexion");}
-}
-
-async function chargerCagnottePublique(){
-  if(!CODE_ORG_JOUEUR) return;
-  try{
-    var r = await fetch('/api/cagnotte/publique?code_org=' + encodeURIComponent(CODE_ORG_JOUEUR));
-    var d = await r.json();
-    var el = document.getElementById('cagnotte-publique-joueur');
-    if(!el) return;
-    if(!d || !d.ok || !d.jeu){ el.innerHTML = ''; return; }
-    var cag = (d.cagnotte_80 || 0).toLocaleString('fr-FR');
-    el.innerHTML =
-      '<div style="background:linear-gradient(135deg,rgba(16,185,129,.14),rgba(99,102,241,.12));border:1px solid rgba(16,185,129,.4);border-radius:12px;padding:14px">'
-      + '<div style="font-size:12px;color:var(--mu);text-align:center;margin-bottom:10px">🔍 Transparence du tournoi — ' + d.jeu + '</div>'
-      + '<div style="display:flex;justify-content:space-around;text-align:center;gap:8px">'
-      + '<div><div style="font-size:19px;font-weight:800;color:#34d399">' + (d.nb_tickets || 0) + '</div><div style="font-size:11px;color:var(--mu)">tickets vendus</div></div>'
-      + '<div><div style="font-size:19px;font-weight:800;color:#818cf8">' + (d.joueuses || 0) + '</div><div style="font-size:11px;color:var(--mu)">joueurs</div></div>'
-      + '<div><div style="font-size:19px;font-weight:800;color:#fbbf24">' + cag + ' F</div><div style="font-size:11px;color:var(--mu)">cagnotte gagnant</div></div>'
-      + '</div></div>';
-  }catch(e){}
 }
 
 async function doLogin(){
@@ -3595,7 +3517,7 @@ async function validerBingo(alerteId, statut){
       demarrerEffacement(10);
       var resetDiv = document.getElementById('reset-tournoi-zone');
       if(resetDiv) resetDiv.style.display = 'block';
-      toast('toast-t','🏆 Gagnant validé ! PDFs effacés dans 10 minutes.');
+      toast('toast-t','🏆 Gagnant validé ! Les cartes de ce tournoi s\'effacent dans 3 minutes.');
     }
   }catch(e){}
 }
