@@ -7367,26 +7367,76 @@ def _ohana_cellules(serie_start, serial_cible):
         produits += 1
     return None
 
-def _serie_start_pour(jeu, serial):
-    """Retrouve la série de départ du lot d'où vient ce ticket (via DB['commandes']).
-    Privilégie la bonne famille de jeu (et, pour OHANA, la variante ORIGINAL)."""
-    serial = int(serial)
-    ju = (jeu or "").upper()
-    fam = "OHANA" if "OHANA" in ju else ("P6" if "P6" in ju else (ju.split()[0] if ju else ""))
-    candidats = []
-    for c in DB.get("commandes", []):
-        cj = (c.get("jeu") or "").upper()
-        if int(c.get("serie_start", 0)) <= serial <= int(c.get("serie_end", 0)):
-            candidats.append((cj, int(c.get("serie_start"))))
-    if not candidats:
+def _ohana10b_lignes(serie_start, serial_cible):
+    """OHANA 75 — 10 BOULES : 5 lignes × 2 numéros. Graine 750000."""
+    serie_start = int(serie_start); serial_cible = int(serial_cible)
+    if serial_cible < serie_start:
         return None
-    for cj, ss in candidats:  # 1) famille + variante OHANA ORIGINAL
-        if fam and fam in cj and ("OHANA" not in ju or "ORIGINAL" in cj or "NORMAL" in cj):
+    rng = _rnd_verif.Random(750000 + serie_start)
+    vus = set(); produits = 0; cible = serial_cible - serie_start; garde = 0
+    while garde < 6000:
+        garde += 1
+        nums = {l: sorted(rng.sample(range(a, b + 1), 2)) for l, a, b in _OHANA_COLS}
+        sig = tuple(tuple(nums[l]) for l, _, _ in _OHANA_COLS)
+        if sig in vus:
+            continue
+        vus.add(sig)
+        if produits == cible:
+            return [(l, nums[l][0], nums[l][1]) for l, _, _ in _OHANA_COLS]
+        produits += 1
+    return None
+
+def _ohana8b_lignes(serie_start, serial_cible):
+    """OHANA 75 — 8 BOULES : 4 plages sur 5 (plage absente aléatoire) × 2. Graine 758000."""
+    serie_start = int(serie_start); serial_cible = int(serial_cible)
+    if serial_cible < serie_start:
+        return None
+    rng = _rnd_verif.Random(758000 + serie_start)
+    vus = set(); produits = 0; cible = serial_cible - serie_start; garde = 0
+    while garde < 6000:
+        garde += 1
+        sautee = rng.randrange(5)
+        grille = []
+        for idx, (lettre, a, b) in enumerate(_OHANA_COLS):
+            if idx == sautee:
+                continue
+            grille.append((lettre, tuple(sorted(rng.sample(range(a, b + 1), 2)))))
+        sig = tuple(grille)
+        if sig in vus:
+            continue
+        vus.add(sig)
+        if produits == cible:
+            return [(l, p[0], p[1]) for (l, p) in grille]
+        produits += 1
+    return None
+
+def _variante_cle(jeu):
+    ju = (jeu or "").upper()
+    if "P6" in ju:
+        return "P6"
+    if "OHANA" in ju:
+        if "8 BOULE" in ju:
+            return "OHANA8"
+        if "10 BOULE" in ju:
+            return "OHANA10"
+        return "OHANAORIG"
+    return ju.split()[0] if ju.strip() else ""
+
+def _serie_start_pour(jeu, serial):
+    """Retrouve la série de départ du lot, en privilégiant la MÊME variante de jeu
+    (les graines diffèrent : P6/OHANA original/10b/8b)."""
+    serial = int(serial)
+    cle = _variante_cle(jeu)
+    couvrants = []
+    for c in DB.get("commandes", []):
+        if int(c.get("serie_start", 0)) <= serial <= int(c.get("serie_end", 0)):
+            couvrants.append((_variante_cle(c.get("jeu", "")), int(c.get("serie_start"))))
+    if not couvrants:
+        return None
+    for vc, ss in couvrants:
+        if vc == cle:
             return ss
-    for cj, ss in candidats:  # 2) même famille
-        if fam and fam in cj:
-            return ss
-    return candidats[0][1]    # 3) à défaut, le premier lot couvrant ce numéro
+    return couvrants[0][1]
 
 @app.route("/api/bingo/verifier-carton", methods=["POST"])
 def verifier_carton():
@@ -7422,42 +7472,51 @@ def verifier_carton():
             pass
 
     resultats = []
-    ju = jeu.upper()
+    cle = _variante_cle(jeu)
     for serial in serials:
         ss = _serie_start_pour(jeu, serial)
         if ss is None:
             resultats.append({"serial": serial, "trouve": False, "msg": "Lot introuvable pour ce numéro"})
             continue
-        if "OHANA" in ju:
-            cellules = _ohana_cellules(ss, serial)
+        cellules = None   # jeux "une boule pour 2" : liste de (lettre, n1, n2)
+        nums = None       # jeux "une boule" : liste de numéros
+        nom = jeu
+        if cle == "OHANAORIG":
+            cellules = _ohana_cellules(ss, serial); nom = "OHANA 75 (carte 24)"
+        elif cle == "OHANA10":
+            cellules = _ohana10b_lignes(ss, serial); nom = "OHANA 75 10 boules"
+        elif cle == "OHANA8":
+            cellules = _ohana8b_lignes(ss, serial); nom = "OHANA 75 8 boules"
+        elif cle == "P6":
+            nums = _p6_numeros(ss, serial); nom = "P6"
+        else:
+            resultats.append({"serial": serial, "trouve": False, "msg": "Jeu non encore pris en charge"})
+            continue
+        if cellules is not None:
             if not cellules:
                 resultats.append({"serial": serial, "trouve": False, "msg": "Recalcul impossible"})
                 continue
-            # Une case est cochée si AU MOINS UN de ses 2 numéros est sorti
             manquants = [f"{l}:{n1}/{n2}" for (l, n1, n2) in cellules
                          if (n1 not in tirage and n2 not in tirage)]
             total = len(cellules)
             resultats.append({
-                "serial": serial, "trouve": True, "jeu": "OHANA 75",
+                "serial": serial, "trouve": True, "jeu": nom,
                 "complet": len(manquants) == 0,
                 "sortis": total - len(manquants), "total": total,
                 "manquants": manquants,
             })
-        elif "P6" in ju:
-            nums = _p6_numeros(ss, serial)
+        else:
             if not nums:
                 resultats.append({"serial": serial, "trouve": False, "msg": "Recalcul impossible"})
                 continue
             manquants_n = sorted([n for n in nums if n not in tirage])
             resultats.append({
-                "serial": serial, "trouve": True, "jeu": "P6",
+                "serial": serial, "trouve": True, "jeu": nom,
                 "complet": len(manquants_n) == 0,
                 "sortis": len(nums) - len(manquants_n), "total": len(nums),
                 "manquants": [str(n) for n in manquants_n],
                 "numeros": sorted(nums),
             })
-        else:
-            resultats.append({"serial": serial, "trouve": False, "msg": "Jeu non encore pris en charge"})
     gagnant = any(r.get("complet") for r in resultats)
     return jsonify({"ok": True, "gagnant": gagnant, "boules_tirees": len(tirage), "resultats": resultats})
 
