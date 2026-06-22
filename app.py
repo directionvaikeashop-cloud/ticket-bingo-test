@@ -1320,47 +1320,52 @@ def get_alertes_bingo():
 
 import threading
 
-def effacer_pdfs_apres_tournoi(code_org, delai_secondes=10800):
-    """Efface les PDFs 3 heures après validation du gagnant"""
+def effacer_pdfs_apres_tournoi(code_org, delai_secondes=180):
+    """Efface, X secondes apres la validation du gagnant, UNIQUEMENT les PDF
+    du tournoi qui vient de se terminer. La liste des fichiers est FIGEE a
+    l'instant de la validation (avant l'attente) : ainsi un nouveau tournoi
+    dont les cartes seraient generees pendant ces minutes n'est JAMAIS touche.
+    On n'efface plus jamais tout le dossier /data (c'etait l'ancien bug qui
+    supprimait des cartes en plein jeu)."""
     import time
+    # 1) FIGER la liste des PDF a effacer MAINTENANT (avant d'attendre)
+    a_effacer = []
+    try:
+        d0 = load_data()
+        for ticket in d0.get("tickets", []):
+            if ticket.get("code_org") == code_org:
+                pdf_url = ticket.get("pdf_url", "") or ""
+                if pdf_url:
+                    pdf_id = pdf_url.split("/")[-1].replace(".pdf", "")
+                    p = f"/data/pdfs/{pdf_id}.pdf"
+                    if p not in a_effacer:
+                        a_effacer.append(p)
+        for commande in d0.get("commandes", []):
+            if commande.get("code_org") == code_org:
+                p = commande.get("pdf_path", "") or ""
+                if p and p not in a_effacer:
+                    a_effacer.append(p)
+    except Exception as e:
+        print(f"[AUTO-EFFACEMENT] preparation impossible: {e}")
+        return
+
+    # 2) Attendre le delai (3 minutes par defaut)
     time.sleep(delai_secondes)
+
+    # 3) Effacer SEULEMENT les fichiers figes a l'etape 1
+    pdfs_supprimes = []
+    for p in a_effacer:
+        try:
+            if os.path.exists(p):
+                os.remove(p)
+                pdfs_supprimes.append(p)
+        except Exception:
+            pass
+
+    # 4) Journaliser
     try:
         global DB
         DB = load_data()
-        
-        pdfs_supprimes = []
-        
-        # Effacer les PDFs de cet organisateur
-        tickets = [t for t in DB.get("tickets", []) if t.get("code_org") == code_org]
-        for ticket in tickets:
-            pdf_url = ticket.get("pdf_url", "")
-            if pdf_url:
-                # Extraire l'ID du PDF depuis l'URL
-                pdf_id = pdf_url.split("/")[-1].replace(".pdf", "")
-                pdf_path = f"/data/pdfs/{pdf_id}.pdf"
-                if os.path.exists(pdf_path):
-                    os.remove(pdf_path)
-                    pdfs_supprimes.append(pdf_path)
-        
-        # Effacer les PDFs de commandes
-        commandes = [c for c in DB.get("commandes", []) if c.get("code_org") == code_org]
-        for commande in commandes:
-            pdf_path = commande.get("pdf_path", "")
-            if pdf_path and os.path.exists(pdf_path):
-                os.remove(pdf_path)
-                pdfs_supprimes.append(pdf_path)
-        
-        # Effacer aussi les PDFs dans /data/*.pdf liés à cet organisateur
-        if os.path.exists("/data"):
-            for f in os.listdir("/data"):
-                if f.endswith(".pdf"):
-                    try:
-                        os.remove(f"/data/{f}")
-                        pdfs_supprimes.append(f"/data/{f}")
-                    except:
-                        pass
-        
-        # Enregistrer dans DB
         if "historique_effacement" not in DB:
             DB["historique_effacement"] = []
         DB["historique_effacement"].append({
@@ -1370,7 +1375,7 @@ def effacer_pdfs_apres_tournoi(code_org, delai_secondes=10800):
             "pdfs": pdfs_supprimes
         })
         save_data()
-        print(f"[AUTO-EFFACEMENT] {len(pdfs_supprimes)} PDFs effacés pour {code_org}")
+        print(f"[AUTO-EFFACEMENT] {len(pdfs_supprimes)} PDF effaces pour {code_org} (liste figee a la validation)")
     except Exception as e:
         print(f"[AUTO-EFFACEMENT ERR] {e}")
 
@@ -2049,17 +2054,22 @@ def valider_bingo():
         "code_org": code_org,
         "alerte_id": alerte_id,
         "date_fin": datetime.datetime.now().isoformat(),
-        "effacement_prevu": (datetime.datetime.now() + datetime.timedelta(minutes=10)).isoformat()
+        "effacement_prevu": (datetime.datetime.now() + datetime.timedelta(minutes=3)).isoformat()
     })
     save_data()
     
-    # Lancer le timer d'effacement automatique (3 heures = 10800 secondes)
+    # Effacement automatique SÛR : 3 minutes apres la validation du gagnant.
+    # La liste des cartes a effacer est figee MAINTENANT (dans la fonction, avant
+    # l'attente), donc un nouveau tournoi lance entre-temps n'est jamais touche.
     if statut == "valide":
-        # ⚠️ AUTO-EFFACEMENT DÉSACTIVÉ — il supprimait les cartes en plein tournoi !
-        # Les PDFs sont désormais conservés. Ils ne s'effacent QUE manuellement.
-        print(f"[INFO] Gagnant validé pour {code_org} — cartes conservées (auto-effacement désactivé)")
+        threading.Thread(
+            target=effacer_pdfs_apres_tournoi,
+            args=(code_org, 180),
+            daemon=True
+        ).start()
+        print(f"[INFO] Gagnant validé pour {code_org} — cartes de CE tournoi effacées dans 3 min")
     
-    return jsonify({"ok": True, "message": "Gagnant validé ! Les cartes sont conservées."})
+    return jsonify({"ok": True, "message": "Gagnant validé ! Les cartes de ce tournoi s'effaceront dans 3 minutes."})
 
 @app.route("/api/tirage", methods=["POST"])
 def sauvegarder_tirage():
@@ -2305,20 +2315,38 @@ def calculer_cagnotte():
         "part_org": part_org
     })
 
-def _cagnotte_pour_org(code_org):
-    """Calcule la cagnotte du tournoi en cours d'un organisateur (mises, tickets, joueurs)."""
+@app.route("/api/cagnotte/total-auto")
+def cagnotte_total_auto():
+    """CALCUL AUTOMATIQUE de la cagnotte : additionne tout seul les mises du jeu
+    en cours de l'organisateur, a partir des commandes de tickets recues.
+    Plus besoin de compter a la main sur une feuille."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    code_org = s["code"]
+
+    # 1) Le "jeu en cours" = l'annonce active de cet organisateur (la plus recente).
+    #    Les annonces sont inserees en tete de liste, donc la 1ere trouvee est la bonne.
     mon_annonce = None
     for a in DB.get("annonces_jeux", []):
         if a.get("code_org") == code_org:
             mon_annonce = a
             break
+
     vide = {"ok": True, "jeu": "", "total_mises": 0, "nb_tickets": 0,
             "nb_commandes": 0, "nb_validees": 0, "nb_attente": 0,
             "cagnotte_80": 0, "part_org_20": 0, "joueuses": 0}
     if not mon_annonce:
-        return vide
+        return jsonify(vide)
+
     jeu = mon_annonce.get("jeu", "")
     date_debut = mon_annonce.get("date", "")
+
+    # 2) Additionner les mises de CE jeu, depuis l'annonce, en ignorant
+    #    les commandes annulees ou remboursees.
     total_mises = 0
     nb_tickets = 0
     nb_validees = 0
@@ -2349,36 +2377,19 @@ def _cagnotte_pour_org(code_org):
             nb_attente += 1
         if c.get("code_joueur"):
             joueuses.add(c.get("code_joueur"))
-    return {
-        "ok": True, "jeu": jeu, "total_mises": total_mises, "nb_tickets": nb_tickets,
-        "nb_commandes": nb_validees + nb_attente, "nb_validees": nb_validees,
-        "nb_attente": nb_attente, "cagnotte_80": round(total_mises * 0.80),
-        "part_org_20": round(total_mises * 0.20), "joueuses": len(joueuses),
-    }
 
-@app.route("/api/cagnotte/total-auto")
-def cagnotte_total_auto():
-    """CALCUL AUTOMATIQUE de la cagnotte pour l'organisateur connecté."""
-    global DB
-    DB = load_data()
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s:
-        return jsonify({"ok": False}), 403
-    return jsonify(_cagnotte_pour_org(s["code"]))
-
-@app.route("/api/cagnotte/publique")
-def cagnotte_publique():
-    """Vue PUBLIQUE (joueurs) : tickets vendus + cagnotte du tournoi en cours.
-    Transparence — ne renvoie PAS la part organisateur."""
-    global DB
-    DB = load_data()
-    code_org = (request.args.get("code_org", "") or "").strip()
-    if not code_org:
-        return jsonify({"ok": False, "msg": "code_org requis"}), 400
-    info = _cagnotte_pour_org(code_org)
-    return jsonify({"ok": True, "jeu": info["jeu"], "nb_tickets": info["nb_tickets"],
-                    "joueuses": info["joueuses"], "cagnotte_80": info["cagnotte_80"]})
+    return jsonify({
+        "ok": True,
+        "jeu": jeu,
+        "total_mises": total_mises,
+        "nb_tickets": nb_tickets,
+        "nb_commandes": nb_validees + nb_attente,
+        "nb_validees": nb_validees,
+        "nb_attente": nb_attente,
+        "cagnotte_80": round(total_mises * 0.80),
+        "part_org_20": round(total_mises * 0.20),
+        "joueuses": len(joueuses),
+    })
 
 @app.route("/api/gain/enregistrer", methods=["POST"])
 def enregistrer_gain():
