@@ -2305,38 +2305,20 @@ def calculer_cagnotte():
         "part_org": part_org
     })
 
-@app.route("/api/cagnotte/total-auto")
-def cagnotte_total_auto():
-    """CALCUL AUTOMATIQUE de la cagnotte : additionne tout seul les mises du jeu
-    en cours de l'organisateur, a partir des commandes de tickets recues.
-    Plus besoin de compter a la main sur une feuille."""
-    global DB
-    DB = load_data()
-    token = request.headers.get("X-Token", "")
-    s = verif_session(token)
-    if not s:
-        return jsonify({"ok": False}), 403
-    code_org = s["code"]
-
-    # 1) Le "jeu en cours" = l'annonce active de cet organisateur (la plus recente).
-    #    Les annonces sont inserees en tete de liste, donc la 1ere trouvee est la bonne.
+def _cagnotte_pour_org(code_org):
+    """Calcule la cagnotte du tournoi en cours d'un organisateur (mises, tickets, joueurs)."""
     mon_annonce = None
     for a in DB.get("annonces_jeux", []):
         if a.get("code_org") == code_org:
             mon_annonce = a
             break
-
     vide = {"ok": True, "jeu": "", "total_mises": 0, "nb_tickets": 0,
             "nb_commandes": 0, "nb_validees": 0, "nb_attente": 0,
             "cagnotte_80": 0, "part_org_20": 0, "joueuses": 0}
     if not mon_annonce:
-        return jsonify(vide)
-
+        return vide
     jeu = mon_annonce.get("jeu", "")
     date_debut = mon_annonce.get("date", "")
-
-    # 2) Additionner les mises de CE jeu, depuis l'annonce, en ignorant
-    #    les commandes annulees ou remboursees.
     total_mises = 0
     nb_tickets = 0
     nb_validees = 0
@@ -2367,19 +2349,36 @@ def cagnotte_total_auto():
             nb_attente += 1
         if c.get("code_joueur"):
             joueuses.add(c.get("code_joueur"))
+    return {
+        "ok": True, "jeu": jeu, "total_mises": total_mises, "nb_tickets": nb_tickets,
+        "nb_commandes": nb_validees + nb_attente, "nb_validees": nb_validees,
+        "nb_attente": nb_attente, "cagnotte_80": round(total_mises * 0.80),
+        "part_org_20": round(total_mises * 0.20), "joueuses": len(joueuses),
+    }
 
-    return jsonify({
-        "ok": True,
-        "jeu": jeu,
-        "total_mises": total_mises,
-        "nb_tickets": nb_tickets,
-        "nb_commandes": nb_validees + nb_attente,
-        "nb_validees": nb_validees,
-        "nb_attente": nb_attente,
-        "cagnotte_80": round(total_mises * 0.80),
-        "part_org_20": round(total_mises * 0.20),
-        "joueuses": len(joueuses),
-    })
+@app.route("/api/cagnotte/total-auto")
+def cagnotte_total_auto():
+    """CALCUL AUTOMATIQUE de la cagnotte pour l'organisateur connecté."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False}), 403
+    return jsonify(_cagnotte_pour_org(s["code"]))
+
+@app.route("/api/cagnotte/publique")
+def cagnotte_publique():
+    """Vue PUBLIQUE (joueurs) : tickets vendus + cagnotte du tournoi en cours.
+    Transparence — ne renvoie PAS la part organisateur."""
+    global DB
+    DB = load_data()
+    code_org = (request.args.get("code_org", "") or "").strip()
+    if not code_org:
+        return jsonify({"ok": False, "msg": "code_org requis"}), 400
+    info = _cagnotte_pour_org(code_org)
+    return jsonify({"ok": True, "jeu": info["jeu"], "nb_tickets": info["nb_tickets"],
+                    "joueuses": info["joueuses"], "cagnotte_80": info["cagnotte_80"]})
 
 @app.route("/api/gain/enregistrer", methods=["POST"])
 def enregistrer_gain():
