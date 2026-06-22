@@ -1145,11 +1145,14 @@ def admin_generer():
     nom = d.get("nom", "Client").strip()
     duree = int(d.get("duree", 30))
     email_org = d.get("email", "")
+    rib_org = (d.get("rib", "") or "").strip()
+    deblock_org = (d.get("deblock", "") or "").strip()
     code = gen_code()
     while code in DB["codes"]:
         code = gen_code()
     DB["codes"][code] = {
         "duree": duree, "nom": nom, "actif": True, "email": email_org,
+        "rib": rib_org, "deblock": deblock_org,
         "created": datetime.datetime.now().isoformat(),
         "expire": (datetime.datetime.now() + datetime.timedelta(days=duree)).isoformat()
     }
@@ -2915,6 +2918,22 @@ def valider_ticket_pions():
     save_data(immediat=True)
     return jsonify({"ok": True, "ticket": ticket})
 
+@app.route("/api/organisateur/coordonnees/<code_org>")
+def coordonnees_organisateur(code_org):
+    """Coordonnées de paiement d'un organisateur (pour le circuit joueur->organisateur)."""
+    global DB
+    DB = load_data()
+    code_org = (code_org or "").upper().strip()
+    info = DB.get("codes", {}).get(code_org)
+    if not info:
+        return jsonify({"ok": False, "msg": "Organisateur introuvable"}), 404
+    return jsonify({
+        "ok": True,
+        "nom": info.get("nom", ""),
+        "rib": info.get("rib", ""),
+        "deblock": info.get("deblock", "")
+    })
+
 @app.route("/api/pions/commande-joueur", methods=["POST"])
 def commande_pions_joueur():
     global DB
@@ -2926,13 +2945,25 @@ def commande_pions_joueur():
     valeur_pion = int(d.get("valeur_pion", 0))
     montant_paye = float(d.get("montant_paye", 0))
     mode_paiement = d.get("mode_paiement", "")
-    # RECALCUL COTE SERVEUR (anti-triche) : 5% electronique, 0% especes
-    commission = calculer_frais_service(montant_paye, mode_paiement)
+    # CIRCUIT : "organisateur" (0% de frais, validation par l'organisateur cible)
+    # ou "tukea" (a distance : 5% electronique / 0% especes boutique). (21/06/2026)
+    circuit = (d.get("circuit", "") or "tukea").lower().strip()
+    code_org_cible = (d.get("code_org", "") or "").upper().strip()
+    if circuit == "organisateur":
+        # Le joueur paie directement son organisateur : aucun frais de service.
+        commission = 0
+    else:
+        circuit = "tukea"
+        # RECALCUL COTE SERVEUR (anti-triche) : 5% electronique, 0% especes
+        commission = calculer_frais_service(montant_paye, mode_paiement)
     nb_pions = int((montant_paye - commission) // valeur_pion) if valeur_pion else 0
     ref_paiement = d.get("ref_paiement", "")
     
     if not code_joueur or not valeur_pion or montant_paye < 500:
         return jsonify({"ok": False, "msg": "Données invalides"}), 400
+    # Circuit organisateur : un organisateur cible valide doit etre fourni.
+    if circuit == "organisateur" and code_org_cible not in DB.get("codes", {}):
+        return jsonify({"ok": False, "msg": "Code organisateur introuvable"}), 400
     
     if "commandes_pions_joueurs" not in DB:
         DB["commandes_pions_joueurs"] = []
@@ -2946,6 +2977,8 @@ def commande_pions_joueur():
         "nb_pions": nb_pions,
         "mode_paiement": mode_paiement,
         "ref_paiement": ref_paiement,
+        "circuit": circuit,
+        "code_org": code_org_cible,
         "statut": "en_attente_validation",
         "date": datetime.datetime.now().isoformat()
     }
@@ -3096,8 +3129,20 @@ def valider_pions_joueur():
         return jsonify({"ok": False}), 403
     
     commande_id = request.json.get("commande_id", "")
+    est_admin = bool(s.get("admin"))
+    mon_code = (s.get("code", "") or "").upper().strip()
     for c in DB.get("commandes_pions_joueurs", []):
         if c["id"] == commande_id:
+            # CONTROLE CIBLAGE : un organisateur ne peut valider qu'une demande
+            # du circuit organisateur qui lui est adressee (ou une ancienne sans
+            # circuit). Les demandes Tukea sont reservees a l'admin. L'admin valide tout. (21/06/2026)
+            circ = (c.get("circuit") or "").lower().strip()
+            cible = (c.get("code_org") or "").upper().strip()
+            if not est_admin:
+                if circ == "tukea":
+                    return jsonify({"ok": False, "msg": "Cette demande est à valider par Tukea (administration)"}), 403
+                if circ == "organisateur" and cible != mon_code:
+                    return jsonify({"ok": False, "msg": "Cette demande est adressée à un autre organisateur"}), 403
             # ANTI DOUBLE-CREDIT : on ne credite que si pas deja validee
             if c.get("statut") == "validee":
                 return jsonify({"ok": False, "msg": "Cette commande a déjà été créditée"}), 400
@@ -4102,7 +4147,23 @@ def get_commandes_joueurs():
     # pour débloquer leurs joueurs en direct pendant le tournoi (20/06/2026).
     if not s:
         return jsonify([])
-    return jsonify(DB.get("commandes_pions_joueurs", []))
+    toutes = DB.get("commandes_pions_joueurs", [])
+    # L'admin voit tout. Un organisateur ne voit que les demandes du CIRCUIT
+    # organisateur qui lui sont adressees. Les demandes Tukea (payees a Tukea)
+    # restent reservees a l'admin. Les anciennes demandes sans circuit restent
+    # visibles (compatibilite). (21/06/2026)
+    if s.get("admin"):
+        return jsonify(toutes)
+    mon_code = (s.get("code", "") or "").upper().strip()
+    def _visible(c):
+        circ = (c.get("circuit") or "").lower().strip()
+        cible = (c.get("code_org") or "").upper().strip()
+        if circ == "organisateur":
+            return cible == mon_code
+        if circ == "tukea":
+            return False
+        return True
+    return jsonify([c for c in toutes if _visible(c)])
 
 # === WEBSOCKET MICRO ===
 # Connectés WebSocket : {code_org: [ws_connections]}
