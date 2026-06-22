@@ -7613,6 +7613,59 @@ def verifier_carton():
     gagnant = any(r.get("complet") for r in resultats)
     return jsonify({"ok": True, "gagnant": gagnant, "boules_tirees": len(tirage), "resultats": resultats})
 
+def _structure_carton(jeu, serial):
+    """Renvoie les GROUPES (cases) d'une carte : liste de listes de numéros.
+    'une boule' -> chaque numéro seul [[n],...] ; 'boule pour 2/3' -> cases [[a,b],...]."""
+    cle = _variante_cle(jeu)
+    ss = _serie_start_pour(jeu, serial)
+    if ss is None:
+        return None
+    if cle == "OHANAORIG":
+        c = _ohana_cellules(ss, serial)
+        return [list(ns) for (l, ns) in c] if c else None
+    if cle == "OHANA10":
+        c = _ohana10b_lignes(ss, serial)
+        return [list(ns) for (l, ns) in c] if c else None
+    if cle == "OHANA8":
+        c = _ohana8b_lignes(ss, serial)
+        return [list(ns) for (l, ns) in c] if c else None
+    if cle == "TA75":
+        c = _ta75_groupes(ss, serial)
+        return [list(ns) for (l, ns) in c] if c else None
+    if cle == "P6":
+        n = _p6_numeros(ss, serial)
+        return [[x] for x in n] if n else None
+    if cle in _JEUX_PLATS:
+        n = _regen_plat(cle, ss, serial)
+        return [[x] for x in n] if n else None
+    if cle == "4COIN":
+        n = _regen_4coin(ss, serial)
+        return [[x] for x in n] if n else None
+    return None
+
+@app.route("/api/bingo/structure-carton", methods=["POST"])
+def structure_carton():
+    """Donne au joueur la structure de sa/ses carte(s) pour le pointage automatique
+    (quels numéros forment une même case → 'une boule pour 2/3'). Lecture seule."""
+    global DB
+    DB = load_data()
+    d = request.json or {}
+    jeu = (d.get("jeu") or "").strip()
+    serials = d.get("serials")
+    if not serials:
+        un = d.get("serial")
+        serials = [un] if un not in (None, "") else []
+    out = {}
+    for sx in serials:
+        try:
+            si = int(str(sx).strip().lstrip("Ss"))
+        except Exception:
+            continue
+        g = _structure_carton(jeu, si)
+        if g is not None:
+            out[str(si)] = g
+    return jsonify({"ok": True, "structures": out})
+
 @app.route("/verif-bingo")
 def page_verif_bingo():
     """Petite page pour tester la vérification : entre un numéro de série -> verdict."""
