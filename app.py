@@ -8021,6 +8021,77 @@ def diag_campagnes():
       <div style="margin-top:14px;color:#94a3b8;font-size:12px">« mini » = affiche P6 50 000 · « premier » = affiche OHANA 500 000. Mets ton budget pub sur la meilleure.</div>
     </div></body></html>'''
 
+@app.route("/diag-achats")
+def diag_achats():
+    """RAPPORT — Achats de tickets/PDF par organisateur (pour remboursement).
+    ?cle=CODE_ADMIN. Optionnel &org=CODE pour filtrer un seul organisateur."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN a l'adresse.", status=403, mimetype="text/plain; charset=utf-8")
+    org_filtre = (request.args.get("org", "") or "").strip().upper()
+    codes_info = DB.get("codes", {})
+    fv = DB.get("feuilles_vendues", {})
+
+    par_org = {}
+    for v in DB.get("ventes", []):
+        co = (v.get("code_org") or "").upper()
+        if not co or co == "ADMIN":
+            continue
+        if org_filtre and co != org_filtre:
+            continue
+        par_org.setdefault(co, []).append(v)
+
+    def total_org(vs):
+        return sum(int(x.get("total", 0) or 0) for x in vs)
+
+    grand_total = 0
+    blocs = ""
+    for co in sorted(par_org.keys(), key=lambda c: -total_org(par_org[c])):
+        vs = par_org[co]
+        nom = codes_info.get(co, {}).get("nom", "") or "(sans nom)"
+        tot = total_org(vs)
+        grand_total += tot
+        tot_feuilles = sum(int(x.get("total_feuilles", 0) or 0) for x in vs)
+        vendues = sum(len(p) for p in fv.get(co, {}).values())
+        lignes = ""
+        for v in sorted(vs, key=lambda x: x.get("date", ""), reverse=True):
+            dte = (v.get("date", "") or "")[:10]
+            lignes += ('<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                       f'<td style="padding:7px;color:#94a3b8;white-space:nowrap">{dte}</td>'
+                       f'<td style="padding:7px">{v.get("jeu","")}</td>'
+                       f'<td style="padding:7px;color:#94a3b8">{v.get("serie","")}</td>'
+                       f'<td style="padding:7px;text-align:right">{int(v.get("total_feuilles",0) or 0)}</td>'
+                       f'<td style="padding:7px;text-align:right;color:#34d399;font-weight:600">{int(v.get("total",0) or 0):,} F</td>'
+                       f'<td style="padding:7px;color:#c4b5fd">{(v.get("client","") or "")[:18]}</td></tr>')
+        blocs += ('<div style="background:#1a1830;border-radius:12px;padding:14px;margin-bottom:14px">'
+                  f'<div style="font-size:17px;font-weight:700;color:#fbbf24">{nom} <span style="font-size:12px;color:#94a3b8;font-weight:400">({co})</span></div>'
+                  f'<div style="font-size:15px;color:#fff;margin:6px 0 4px">💰 Total : <b style="color:#34d399">{tot:,} F</b></div>'
+                  f'<div style="font-size:12px;color:#94a3b8;margin-bottom:8px">{len(vs)} ligne(s) · {tot_feuilles:,} feuilles · {vendues:,} feuilles vendues aux joueurs</div>'
+                  '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+                  '<tr style="color:#a78bfa;text-align:left"><th style="padding:7px">Date</th><th style="padding:7px">Jeu</th><th style="padding:7px">Série</th><th style="padding:7px;text-align:right">Feuilles</th><th style="padding:7px;text-align:right">Montant</th><th style="padding:7px">Client</th></tr>'
+                  f'{lignes}</table></div></div>')
+
+    if not blocs:
+        blocs = ('<div style="color:#94a3b8;padding:20px;text-align:center">Aucun achat trouvé'
+                 + (f' pour {org_filtre}' if org_filtre else '') + '.</div>')
+
+    titre_filtre = ''
+    if org_filtre:
+        titre_filtre = ' — ' + (codes_info.get(org_filtre, {}).get("nom", "") or org_filtre)
+
+    return f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport d'achats</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff">
+    <div style="max-width:780px;margin:0 auto">
+      <h1 style="font-size:20px;color:#34d399">🧾 Rapport d'achats de tickets{titre_filtre}</h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:16px">Ce que chaque organisateur a reçu de l'administrateur, pour le remboursement.</div>
+      {blocs}
+      <div style="background:#0d2818;border:1px solid #10b981;border-radius:12px;padding:14px;margin-top:4px;font-size:16px">TOTAL GÉNÉRAL : <b style="color:#34d399">{grand_total:,} F</b></div>
+      <div style="margin-top:14px;color:#9ca3af;font-size:12px;line-height:1.5">📌 La colonne <b>Client</b> t'aide à distinguer : les lignes sans client (ou avec le nom de l'organisateur) = ce qu'il t'a acheté ; les lignes avec un nom de joueur = ce qu'il a revendu.<br>Astuce : ajoute <b>&org=CODE</b> à l'adresse pour un seul organisateur (ex : <b>&org=CPFRD66H</b> pour HEINI).</div>
+    </div></body></html>'''
+
 @app.route("/diag-pions")
 def diag_pions():
     """Diagnostic LECTURE SEULE des pions d'un joueur : solde dépensable réel,
