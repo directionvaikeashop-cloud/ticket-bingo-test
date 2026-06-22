@@ -7362,7 +7362,7 @@ def _ohana_cellules(serie_start, serial_cible):
             cellules = []
             for l, _, _ in _OHANA_COLS:
                 for paire in carte[l]:
-                    cellules.append((l, paire[0], paire[1]))
+                    cellules.append((l, [paire[0], paire[1]]))
             return cellules  # 24 cases (B5 + I5 + N4 + G5 + O5)
         produits += 1
     return None
@@ -7382,7 +7382,7 @@ def _ohana10b_lignes(serie_start, serial_cible):
             continue
         vus.add(sig)
         if produits == cible:
-            return [(l, nums[l][0], nums[l][1]) for l, _, _ in _OHANA_COLS]
+            return [(l, [nums[l][0], nums[l][1]]) for l, _, _ in _OHANA_COLS]
         produits += 1
     return None
 
@@ -7406,7 +7406,7 @@ def _ohana8b_lignes(serie_start, serial_cible):
             continue
         vus.add(sig)
         if produits == cible:
-            return [(l, p[0], p[1]) for (l, p) in grille]
+            return [(l, [p[0], p[1]]) for (l, p) in grille]
         produits += 1
     return None
 
@@ -7430,6 +7430,8 @@ def _variante_cle(jeu):
         return "B60"
     if "COIN" in ju:
         return "4COIN"
+    if "TRIPLE" in ju or "ACTION" in ju or "TA75" in ju:
+        return "TA75"
     return ju.split()[0] if ju.strip() else ""
 
 # Jeux "une boule" (1 numéro = 1 case), reproductibles depuis la réparation (graine).
@@ -7477,6 +7479,23 @@ def _regen_4coin(serie_start, serial_cible):
         if cset:
             nums.extend(cset)
     return nums  # 16 numéros
+
+# TRIPLE ACTION 75 : 5 groupes × 3 numéros (plages 1-15/16-30/31-45/46-60/61-75).
+# 15 numéros, "une boule", carton plein. Graine 700000 (doit coller au générateur réparé).
+_TA75_RANGES = [(1, 15), (16, 30), (31, 45), (46, 60), (61, 75)]
+
+def _ta75_groupes(serie_start, serial_cible):
+    """TRIPLE ACTION 75 : 5 groupes de 3 numéros. Un groupe est coché si UN de ses
+    3 numéros sort (boule pour 3). Renvoie [(label, [n1,n2,n3]), ...]."""
+    serie_start = int(serie_start); serial_cible = int(serial_cible)
+    if serial_cible < serie_start:
+        return None
+    rng = _rnd_verif.Random(700000 + serie_start)
+    grille = None
+    for _ in range((serial_cible - serie_start) + 1):
+        grille = [sorted(rng.sample(range(lo, hi + 1), 3)) for (lo, hi) in _TA75_RANGES]
+    labels = ["B", "I", "N", "G", "O"]
+    return [(labels[i], grille[i]) for i in range(5)]  # 5 groupes de 3
 
 def _serie_start_pour(jeu, serial):
     """Retrouve la série de départ du lot, en privilégiant la MÊME variante de jeu
@@ -7550,6 +7569,8 @@ def verifier_carton():
             nom = {"DOLLAR": "1 dollar", "F500": "500 francs", "B40": "40 boules", "B60": "60 boules"}.get(cle, jeu)
         elif cle == "4COIN":
             nums = _regen_4coin(ss, serial); nom = "4 COIN"
+        elif cle == "TA75":
+            cellules = _ta75_groupes(ss, serial); nom = "TRIPLE ACTION 75"
         else:
             resultats.append({"serial": serial, "trouve": False, "msg": "Jeu non encore pris en charge"})
             continue
@@ -7557,8 +7578,8 @@ def verifier_carton():
             if not cellules:
                 resultats.append({"serial": serial, "trouve": False, "msg": "Recalcul impossible"})
                 continue
-            manquants = [f"{l}:{n1}/{n2}" for (l, n1, n2) in cellules
-                         if (n1 not in tirage and n2 not in tirage)]
+            manquants = [f"{l}:{'/'.join(str(n) for n in ns)}" for (l, ns) in cellules
+                         if not any(n in tirage for n in ns)]
             total = len(cellules)
             resultats.append({
                 "serial": serial, "trouve": True, "jeu": nom,
