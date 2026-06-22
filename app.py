@@ -7349,7 +7349,12 @@ def verifier_carton():
     token = request.headers.get("X-Token", "")
     s = verif_session(token)
     if not s:
-        return jsonify({"ok": False, "msg": "Acces refuse"}), 403
+        # Page de test (lecture seule) : accepter aussi un code organisateur/admin valide
+        code_h = (token or "").upper().strip()
+        if code_h and code_h in DB.get("codes", {}):
+            s = {"code": code_h, "admin": bool(DB["codes"][code_h].get("admin"))}
+        else:
+            return jsonify({"ok": False, "msg": "Code organisateur non reconnu"}), 403
     d = request.json or {}
     jeu = (d.get("jeu") or "P6").strip()
     serials = d.get("serials")
