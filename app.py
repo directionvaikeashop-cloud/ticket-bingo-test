@@ -7285,6 +7285,152 @@ def page_rejoindre():
     return page_premier()
 
 
+import random as _rnd_verif
+
+# === MOTEUR DE VERIFICATION AUTOMATIQUE (style EuroMillions) ===
+# Le serveur RECALCULE les numéros d'un ticket à partir de son numéro de série,
+# exactement comme le générateur, puis compare aux boules tirées. Fiable, instantané.
+
+_P6_COLS = [("B", 1, 15), ("I", 16, 30), ("N", 31, 45), ("G", 46, 60), ("O", 61, 75)]
+
+def _p6_gen_carte(rng):
+    carte = {}
+    for lettre, a, b in _P6_COLS:
+        nb = 4 if lettre == "N" else 5
+        carte[lettre] = tuple(rng.sample(range(a, b + 1), nb))
+    return carte
+
+def _p6_signature(carte):
+    return tuple(carte[l] for l, _, _ in _P6_COLS)
+
+def _p6_numeros(serie_start, serial_cible):
+    """Recalcule les 24 numéros du ticket P6 pour ce serial (même logique que generate_p6)."""
+    serie_start = int(serie_start); serial_cible = int(serial_cible)
+    if serial_cible < serie_start:
+        return None
+    rng = _rnd_verif.Random(600000 + serie_start)
+    vus = set()
+    produits = 0
+    cible = serial_cible - serie_start
+    garde = 0
+    while garde < 6000:
+        garde += 1
+        carte = _p6_gen_carte(rng)
+        sig = _p6_signature(carte)
+        if sig in vus:
+            continue
+        vus.add(sig)
+        if produits == cible:
+            nums = []
+            for l, _, _ in _P6_COLS:
+                nums.extend(carte[l])
+            return nums
+        produits += 1
+    return None
+
+def _serie_start_pour(jeu, serial):
+    """Retrouve la série de départ du lot d'où vient ce ticket (via DB['commandes'])."""
+    serial = int(serial)
+    jeu_h = (jeu or "").upper()
+    for c in DB.get("commandes", []):
+        cj = (c.get("jeu") or "").upper()
+        if jeu_h and jeu_h.split()[0] not in cj:
+            continue
+        if int(c.get("serie_start", 0)) <= serial <= int(c.get("serie_end", 0)):
+            return int(c.get("serie_start"))
+    return None
+
+@app.route("/api/bingo/verifier-carton", methods=["POST"])
+def verifier_carton():
+    """Vérifie automatiquement si un (ou plusieurs) ticket P6 a son CARTON PLEIN.
+    Entrée : {jeu, serial} ou {jeu, serials:[...]}. Réservé Admin/Organisateur."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Acces refuse"}), 403
+    d = request.json or {}
+    jeu = (d.get("jeu") or "P6").strip()
+    serials = d.get("serials")
+    if not serials:
+        un = d.get("serial")
+        serials = [un] if un not in (None, "") else []
+    try:
+        serials = [int(str(x).strip().lstrip("Ss")) for x in serials if str(x).strip()]
+    except Exception:
+        return jsonify({"ok": False, "msg": "Numéro de série invalide"}), 400
+
+    tirage = set()
+    for x in DB.get("tirage", []):
+        try:
+            tirage.add(int(x))
+        except Exception:
+            pass
+
+    resultats = []
+    for serial in serials:
+        ss = _serie_start_pour(jeu, serial)
+        if ss is None:
+            resultats.append({"serial": serial, "trouve": False, "msg": "Lot introuvable pour ce numéro"})
+            continue
+        if "P6" in jeu.upper():
+            nums = _p6_numeros(ss, serial)
+        else:
+            nums = None
+        if not nums:
+            resultats.append({"serial": serial, "trouve": False, "msg": "Jeu non encore pris en charge"})
+            continue
+        manquants = sorted([n for n in nums if n not in tirage])
+        resultats.append({
+            "serial": serial,
+            "trouve": True,
+            "complet": len(manquants) == 0,
+            "sortis": len(nums) - len(manquants),
+            "total": len(nums),
+            "manquants": manquants,
+            "numeros": sorted(nums),
+        })
+    gagnant = any(r.get("complet") for r in resultats)
+    return jsonify({"ok": True, "gagnant": gagnant, "boules_tirees": len(tirage), "resultats": resultats})
+
+@app.route("/verif-bingo")
+def page_verif_bingo():
+    """Petite page pour tester la vérification : entre un numéro de série -> verdict."""
+    return '''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vérif Bingo</title></head>
+<body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:18px;color:#fff">
+<div style="max-width:480px;margin:0 auto">
+  <h1 style="font-size:20px;color:#a855f7">🤖 Vérification automatique du carton</h1>
+  <p style="color:#94a3b8;font-size:13px">Entre ton code organisateur et le numéro de série du ticket. Le serveur recalcule ses 24 numéros et dit s'il a le carton plein.</p>
+  <input id="tok" placeholder="Ton code organisateur" style="width:100%;padding:12px;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-bottom:8px;box-sizing:border-box">
+  <input id="jeu" value="P6" style="width:100%;padding:12px;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-bottom:8px;box-sizing:border-box">
+  <input id="ser" placeholder="N° de série (ex : 42)" style="width:100%;padding:12px;border-radius:10px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-bottom:10px;box-sizing:border-box">
+  <button onclick="verif()" style="width:100%;padding:14px;background:linear-gradient(90deg,#a855f7,#7c3aed);color:#fff;border:0;border-radius:50px;font-size:16px;font-weight:800;cursor:pointer">VÉRIFIER</button>
+  <div id="res" style="margin-top:14px"></div>
+</div>
+<script>
+async function verif(){
+  var tok=document.getElementById('tok').value.trim();
+  var jeu=document.getElementById('jeu').value.trim();
+  var ser=document.getElementById('ser').value.trim();
+  var res=document.getElementById('res');
+  res.innerHTML='<div style="color:#94a3b8">Calcul…</div>';
+  try{
+    var r=await fetch('/api/bingo/verifier-carton',{method:'POST',headers:{'Content-Type':'application/json','X-Token':tok},body:JSON.stringify({jeu:jeu,serial:ser})});
+    var d=await r.json();
+    if(!d.ok){res.innerHTML='<div style="color:#f87171">'+(d.msg||'Erreur')+'</div>';return;}
+    var x=d.resultats[0]||{};
+    if(!x.trouve){res.innerHTML='<div style="color:#fbbf24">'+(x.msg||'Introuvable')+'</div>';return;}
+    if(x.complet){
+      res.innerHTML='<div style="background:rgba(16,185,129,.15);border:1px solid #10b981;border-radius:12px;padding:16px;text-align:center"><div style="font-size:22px;font-weight:800;color:#34d399">✅ CARTON PLEIN — GAGNANT !</div><div style="font-size:12px;color:#94a3b8;margin-top:6px">Les 24 numéros sont sortis. ('+d.boules_tirees+' boules tirées)</div></div>';
+    } else {
+      res.innerHTML='<div style="background:rgba(239,68,68,.12);border:1px solid #f87171;border-radius:12px;padding:16px"><div style="font-size:18px;font-weight:800;color:#fca5a5;text-align:center">❌ PAS ENCORE</div><div style="font-size:13px;color:#fff;margin-top:8px">'+x.sortis+'/'+x.total+' numéros sortis. Il manque :</div><div style="font-size:16px;font-weight:700;color:#fbbf24;margin-top:6px">'+x.manquants.join(' · ')+'</div></div>';
+    }
+  }catch(e){res.innerHTML='<div style="color:#f87171">Erreur de connexion</div>';}
+}
+</script>
+</body></html>'''
+
 @app.route("/diag-ecarts")
 def diag_ecarts():
     """Réconciliation des GAINS : pour chaque gagnant, compare ce qu'il devrait
