@@ -7762,6 +7762,75 @@ def diag_tickets():
       </div>
     </div></body></html>'''
 
+
+@app.route("/recherche-joueur")
+def recherche_joueur():
+    """Recherche LECTURE SEULE : tickets reçus par une joueuse (par code).
+    ?cle=CODE_ADMIN requis ; ?code=CODE_JOUEUR pour chercher."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info_cle = DB.get("codes", {}).get(cle)
+    if not (info_cle and info_cle.get("admin")):
+        return Response(
+            "Acces reserve. Ajoute ?cle=TON_CODE_ADMIN a l'adresse "
+            "(ex: /recherche-joueur?cle=TONCODE&code=64AUO4).",
+            status=403, mimetype="text/plain; charset=utf-8")
+
+    code_j = (request.args.get("code", "") or "").strip().upper()
+    resultat = ""
+    if code_j:
+        tks = [t for t in DB.get("tickets", []) if (t.get("code_acheteur", "") or "").upper() == code_j]
+        if not tks:
+            resultat = ('<div style="background:#7f1d1d;color:#fecaca;padding:14px 18px;border-radius:10px;'
+                        f'font-size:15px">Aucun ticket trouvé pour le code <b>{code_j}</b>.</div>')
+        else:
+            cartes = ""
+            total = 0
+            for t in tks:
+                pd_ = t.get("page_debut")
+                pf_ = t.get("page_fin")
+                try:
+                    nb = int(pf_) - int(pd_) + 1
+                except Exception:
+                    nb = None
+                if isinstance(nb, int):
+                    total += nb
+                    nb_txt = str(nb)
+                else:
+                    nb_txt = '<span style="color:#fca5a5">tout le PDF (plage non définie)</span>'
+                date_c = (t.get("date", "") or "")[:16].replace("T", " ")
+                cartes += ('<div style="background:#1a1830;border:1px solid #3730a3;border-radius:12px;'
+                           'padding:16px 18px;margin-bottom:12px">'
+                           '<div style="font-size:13px;color:#a78bfa;margin-bottom:6px">Jeu</div>'
+                           f'<div style="font-size:22px;font-weight:800;color:#c4b5fd;margin-bottom:10px">{t.get("jeu", "?")}</div>'
+                           '<div style="display:flex;gap:24px;flex-wrap:wrap;font-size:14px">'
+                           f'<div><span style="color:#94a3b8">Tickets reçus :</span> <b style="color:#6ee7b7;font-size:18px">{nb_txt}</b></div>'
+                           f'<div><span style="color:#94a3b8">Série :</span> <span style="color:#fff">{t.get("serie", "?")}</span></div>'
+                           f'<div><span style="color:#94a3b8">Pages :</span> <span style="color:#fff">{t.get("page_debut", "?")} → {t.get("page_fin", "?")}</span></div>'
+                           f'<div><span style="color:#94a3b8">Date :</span> <span style="color:#64748b">{date_c}</span></div>'
+                           '</div></div>')
+            nom = tks[0].get("acheteur", "?")
+            resultat = ('<div style="background:#14532d;color:#bbf7d0;padding:16px 18px;border-radius:12px;'
+                        f'margin-bottom:16px;font-size:16px">✅ <b>{nom}</b> (code {code_j}) a reçu '
+                        f'<b style="font-size:20px">{total}</b> ticket(s) au total.</div>' + cartes)
+
+    return f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1"><title>Recherche joueuse</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff">
+    <div style="max-width:720px;margin:0 auto">
+      <h1 style="font-size:20px;color:#a855f7;margin:4px 0 16px">🔍 Tickets reçus par une joueuse</h1>
+      <form method="get" style="display:flex;gap:8px;margin-bottom:20px;flex-wrap:wrap">
+        <input type="hidden" name="cle" value="{cle}">
+        <input name="code" value="{code_j}" placeholder="Code joueuse (ex: 64AUO4)" autofocus
+          style="flex:1;min-width:180px;padding:12px 14px;border-radius:10px;border:1px solid #3730a3;background:#1a1830;color:#fff;font-size:16px;text-transform:uppercase">
+        <button type="submit" style="padding:12px 22px;border:0;border-radius:10px;background:#6366f1;color:#fff;font-size:15px;font-weight:700;cursor:pointer">Rechercher</button>
+      </form>
+      {resultat}
+      <div style="text-align:center;margin-top:20px;font-size:12px;color:#64748b">Page admin · lecture seule</div>
+    </div></body></html>'''
+
+
 @app.route("/api/rejoindre", methods=["POST"])
 def api_rejoindre():
     """Inscription automatique depuis la pub (page /rejoindre).
