@@ -78,6 +78,7 @@ _enregistrer_jeu("P6", "6️⃣", "generate_p6")
 _enregistrer_jeu("ALOHA 75", "🌴", "generate_aloha75")
 _enregistrer_jeu("BINGO BALL", "🔵", "generate_bingo_ball")
 _enregistrer_jeu("BROWN 8 BOULES", "🤎", "generate_brown8")
+_enregistrer_jeu("KAI", "🍽️", "generate_kai")
 # --- Ajouter les futurs jeux ici, une ligne chacun : ---
 # _enregistrer_jeu("OHANA 90", "🌺", "generate_ohana_90")
 # _enregistrer_jeu("QUINES 90", "🎲", "generate_quines_90")
