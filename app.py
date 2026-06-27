@@ -4426,7 +4426,7 @@ def crediter_masse():
     valeur = str(int(d.get("valeur_pion", 0)))
     nb = int(d.get("nb_pions", 0))
     profil = d.get("profil", "joueur")  # joueur ou organisateur
-    if not codes or valeur not in ["20", "50", "100"] or nb == 0:
+    if not codes or valeur not in ["10", "20", "50", "100"] or nb == 0:
         return jsonify({"ok": False, "msg": "Données invalides"}), 400
     if len(codes) > 200:
         return jsonify({"ok": False, "msg": "Maximum 200 codes à la fois"}), 400
@@ -4468,7 +4468,7 @@ def recrediter_pions_joueur():
     code_joueur = d.get("code_joueur", "").upper().strip()
     valeur = str(int(d.get("valeur_pion", 0)))
     nb = int(d.get("nb_pions", 0))
-    if not code_joueur or valeur not in ["20", "50", "100"] or nb == 0:
+    if not code_joueur or valeur not in ["10", "20", "50", "100"] or nb == 0:
         return jsonify({"ok": False, "msg": "Données invalides"}), 400
     if "pions_joueurs" not in DB:
         DB["pions_joueurs"] = {}
@@ -8847,6 +8847,133 @@ def diag_ecarts():
 
       <div style="margin-top:16px;color:#94a3b8;font-size:12px;line-height:1.5">Pour recréditer : outil admin « Recréditer joueur », avec la décomposition indiquée. Le mouvement est tracé (Crédit admin) et la ligne disparaît d'ici.</div>
     </div></body></html>'''
+
+@app.route("/fusion-codes")
+def fusion_codes():
+    """ADMIN — Fusionne un code FANTÔME (de) dans le VRAI code (vers) :
+    déplace les pions et rattache tous les mouvements. Aperçu d'abord ;
+    rien n'est modifié sans &confirme=1.
+    Usage : /fusion-codes?cle=ADMIN&de=CODE_FANTOME&vers=CODE_REEL[&confirme=1]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    de = (request.args.get("de", "") or "").strip()
+    vers = (request.args.get("vers", "") or "").strip()
+    confirme = request.args.get("confirme", "") == "1"
+
+    def page(msg):
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fusion de codes</title></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff">
+        <div style="max-width:720px;margin:0 auto">{msg}</div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    if not de or not vers:
+        return page('<h1 style="color:#a855f7;font-size:20px">🔁 Fusion de codes</h1>'
+                    '<p style="color:#94a3b8">Ajoute à l\'adresse : <code style="color:#fde68a">&de=CODE_FANTOME&vers=CODE_REEL</code></p>'
+                    '<p style="color:#94a3b8;font-size:13px">Le code <b>vers</b> doit être celui où la joueuse <b>peut se connecter</b>.</p>')
+
+    if de == vers:
+        return page('<p style="color:#fca5a5">Les deux codes sont identiques.</p>')
+
+    def solde(code):
+        p = DB.get("pions_joueurs", {}).get(code, {})
+        return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
+
+    acces_de = de in DB.get("tickets_acheteurs", {})
+    acces_vers = vers in DB.get("tickets_acheteurs", {})
+
+    # Recense ce qui sera rattaché (par champ code_joueur / code_gagnant / gagnant / codes)
+    plans = []
+    def compte_cj(cle_db):
+        return sum(1 for x in DB.get(cle_db, []) if isinstance(x, dict) and x.get("code_joueur") == de)
+    for k in ["commandes_pions_joueurs", "commandes_tickets_pions", "transactions_joueur_org",
+              "demandes_retrait", "corrections_pions", "credits_admin"]:
+        n = compte_cj(k)
+        if n: plans.append((k, n))
+    n_gains = sum(1 for g in DB.get("gains_finaux", []) if isinstance(g, dict) and g.get("code_gagnant") == de)
+    if n_gains: plans.append(("gains_finaux", n_gains))
+    n_vir = sum(1 for v in DB.get("virements_gagnants", []) if isinstance(v, dict) and (v.get("gagnant") or "") == de)
+    if n_vir: plans.append(("virements_gagnants", n_vir))
+    n_remb = sum(1 for rb in DB.get("remboursements_tournoi", []) if isinstance(rb, dict)
+                 for det in (rb.get("detail") or []) if isinstance(det, dict) and det.get("code_joueur") == de)
+    if n_remb: plans.append(("remboursements_tournoi", n_remb))
+    n_masse = sum(1 for c in DB.get("credits_masse", []) if isinstance(c, dict) and de in (c.get("codes") or []))
+    if n_masse: plans.append(("credits_masse", n_masse))
+
+    badge = lambda ok: ('<span style="color:#6ee7b7">✅ accès</span>' if ok else '<span style="color:#fca5a5">❌ pas d\'accès</span>')
+    recap = (f'<table style="width:100%;border-collapse:collapse;font-size:14px;margin:12px 0">'
+             f'<tr style="border-bottom:1px solid #333"><td style="padding:8px;color:#94a3b8">FANTÔME (source)</td>'
+             f'<td style="padding:8px;font-family:monospace;color:#fca5a5">{de}</td><td style="padding:8px">{solde(de)} XPF · {badge(acces_de)}</td></tr>'
+             f'<tr><td style="padding:8px;color:#94a3b8">VRAI (destination)</td>'
+             f'<td style="padding:8px;font-family:monospace;color:#6ee7b7">{vers}</td><td style="padding:8px">{solde(vers)} XPF · {badge(acces_vers)}</td></tr></table>')
+    liste = "".join(f'<li style="margin:3px 0"><b>{n}</b> dans <code style="color:#a78bfa">{k}</code></li>' for k, n in plans) or '<li style="color:#94a3b8">aucun mouvement à rattacher</li>'
+
+    if not confirme:
+        avert = ""
+        if not acces_vers:
+            avert = '<div style="background:rgba(252,165,165,.1);border:1px solid #ef4444;border-radius:8px;padding:10px;margin:10px 0;color:#fca5a5">⚠️ Le code destination n\'a PAS d\'accès. Vérifie que c\'est bien le bon sens (vers = celui où elle se connecte).</div>'
+        url_ok = f"/fusion-codes?cle={cle}&de={de}&vers={vers}&confirme=1"
+        return page(f'<h1 style="color:#a855f7;font-size:20px">🔁 Aperçu de la fusion</h1>{recap}{avert}'
+                    f'<div style="color:#fff;margin-top:10px">Vont être déplacés de <code style="color:#fca5a5">{de}</code> vers <code style="color:#6ee7b7">{vers}</code> :</div>'
+                    f'<ul style="font-size:13px;color:#fff">{liste}</ul>'
+                    f'<div style="color:#94a3b8;font-size:13px;margin:10px 0">Solde final de <b>{vers}</b> : <b style="color:#6ee7b7">{solde(de)+solde(vers)} XPF</b>. Le code {de} sera vidé.</div>'
+                    f'<a href="{url_ok}" style="display:inline-block;margin-top:8px;background:#ef4444;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">✅ Confirmer la fusion</a>'
+                    f'<div style="color:#6b7280;font-size:12px;margin-top:8px">Action tracée. Rien n\'est supprimé, tout est rattaché.</div>')
+
+    # === EXECUTION ===
+    pj = DB.setdefault("pions_joueurs", {})
+    src = pj.get(de, {})
+    dst = pj.setdefault(vers, {})
+    for v in ["100", "50", "20", "10"]:
+        if src.get(v):
+            dst[v] = dst.get(v, 0) + src.get(v, 0)
+    pjb = DB.setdefault("pions_bonus_joueurs", {})
+    if de in pjb:
+        b = pjb.get(de, {})
+        db_ = pjb.setdefault(vers, {})
+        for v in ["100", "50", "20", "10"]:
+            if b.get(v):
+                db_[v] = db_.get(v, 0) + b.get(v, 0)
+        pjb.pop(de, None)
+    if de in pj:
+        pj.pop(de, None)
+
+    deplaces = 0
+    for k in ["commandes_pions_joueurs", "commandes_tickets_pions", "transactions_joueur_org",
+              "demandes_retrait", "corrections_pions", "credits_admin"]:
+        for x in DB.get(k, []):
+            if isinstance(x, dict) and x.get("code_joueur") == de:
+                x["code_joueur"] = vers; deplaces += 1
+    for g in DB.get("gains_finaux", []):
+        if isinstance(g, dict) and g.get("code_gagnant") == de:
+            g["code_gagnant"] = vers; deplaces += 1
+    for v in DB.get("virements_gagnants", []):
+        if isinstance(v, dict) and (v.get("gagnant") or "") == de:
+            v["gagnant"] = vers; deplaces += 1
+    for rb in DB.get("remboursements_tournoi", []):
+        if isinstance(rb, dict):
+            for det in (rb.get("detail") or []):
+                if isinstance(det, dict) and det.get("code_joueur") == de:
+                    det["code_joueur"] = vers; deplaces += 1
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict) and de in (c.get("codes") or []):
+            c["codes"] = [vers if x == de else x for x in c["codes"]]; deplaces += 1
+    # Le code fantôme cesse d'exister (registre d'accès)
+    if de in DB.get("tickets_acheteurs", {}):
+        DB["tickets_acheteurs"].pop(de, None)
+
+    DB.setdefault("fusions_codes", []).insert(0, {
+        "de": de, "vers": vers, "mouvements_deplaces": deplaces,
+        "par": cle, "date": datetime.datetime.now().isoformat()
+    })
+    save_data(immediat=True)
+    return page(f'<h1 style="color:#6ee7b7;font-size:20px">✅ Fusion effectuée</h1>'
+                f'<p style="color:#fff">Tout a été déplacé de <code style="color:#fca5a5">{de}</code> vers <code style="color:#6ee7b7">{vers}</code>.</p>'
+                f'<p style="color:#94a3b8">Solde de <b>{vers}</b> : <b style="color:#6ee7b7">{solde(vers)} XPF</b> · {deplaces} mouvement(s) rattaché(s).</p>'
+                f'<p style="margin-top:10px"><a href="/diag-ecarts?cle={cle}" style="color:#a78bfa">← Revoir la réconciliation</a></p>')
 
 @app.route("/diag-campagnes")
 def diag_campagnes():
