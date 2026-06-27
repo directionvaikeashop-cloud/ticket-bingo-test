@@ -6759,10 +6759,17 @@ def releve_financier_joueur(code):
         _ent = sum(l["entree"] for l in lignes)
         _sor = sum(l["sortie"] for l in lignes)
         ajustement = solde_pions - (_ent - _sor)
+        _bloque = code in DB.get("codes_bloques", [])
+        if _bloque:
+            _type_reg = "Régularisation"
+            _desc_reg = "Autres mouvements (à vérifier — ne pas recréditer sans audit)"
+        else:
+            _type_reg = "Solde antérieur"
+            _desc_reg = "Solde des tournois précédents (avant la mise en place des relevés détaillés)"
         if ajustement > 0:
-            lignes.append({"date": "", "type": "Régularisation", "desc": "Autres mouvements (à vérifier — ne pas recréditer sans audit)", "entree": ajustement, "sortie": 0})
+            lignes.append({"date": "", "type": _type_reg, "desc": _desc_reg, "entree": ajustement, "sortie": 0})
         elif ajustement < 0:
-            lignes.append({"date": "", "type": "Régularisation", "desc": "Autres mouvements (à vérifier — ne pas recréditer sans audit)", "entree": 0, "sortie": -ajustement})
+            lignes.append({"date": "", "type": _type_reg, "desc": _desc_reg, "entree": 0, "sortie": -ajustement})
 
     lignes.sort(key=lambda x: str(x["date"]), reverse=True)
 
