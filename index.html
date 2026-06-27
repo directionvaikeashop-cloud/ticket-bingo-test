@@ -1296,6 +1296,18 @@ async function accesJoueurDirect(){
     const r = await fetch(`/api/ticket/acheteur/${code}`);
     const d = await r.json();
     if(d.ok){
+      // === PIN optionnel : si ce code en a un, on le demande (sinon, accès comme avant) ===
+      try{
+        const er = await fetch('/api/joueur/pin/etat?code='+encodeURIComponent(code));
+        const ed = await er.json();
+        if(ed && ed.a_pin){
+          const pin = prompt("🔒 Entrez votre code PIN à 4 chiffres :");
+          if(pin===null) return;
+          const vr = await fetch('/api/joueur/pin/verifier',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:code,pin:pin})});
+          const vd = await vr.json();
+          if(!vd || !vd.ok){ alert("PIN incorrect."); return; }
+        }
+      }catch(e){ /* fail-open : aucun blocage si le contrôle échoue */ }
       const t = d.ticket;
       codeJoueurActuel = code;
       if(t && t.code_org) MON_ORG = t.code_org;
@@ -1329,11 +1341,33 @@ async function accesJoueurDirect(){
               <button onclick="ouvrirPDFJoueur('${t.pdf_url}','${t.acheteur}','ticket_${t.id}','${t.page_debut||1}','${t.page_fin||9999}','${t.jeu}','${t.serie}')" style="width:100%;padding:12px;background:var(--ac);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:15px;font-weight:600">🎯 Jouer maintenant !</button>
             </div>`:""}
           ${!t.pdf_url?`<div style="text-align:center;padding:20px;font-size:14px;color:var(--mu)">🎱 Bienvenue ! Consultez l'onglet 🪙 Mes Pions pour commander vos pions.</div>`:""}
+          <button onclick="definirMonPin()" style="width:100%;padding:10px;background:rgba(255,255,255,.08);color:var(--ac2);border:.5px solid var(--ac);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600;margin-top:10px">🔒 Définir / changer mon code PIN</button>
         </div>`;
     } else {
       alert("Code invalide ou introuvable");
     }
   }catch(e){alert("Erreur de connexion");}
+}
+
+async function definirMonPin(){
+  if(!codeJoueurActuel){alert("Connectez-vous d'abord avec votre code.");return;}
+  let ancien = "";
+  try{
+    const er = await fetch('/api/joueur/pin/etat?code='+encodeURIComponent(codeJoueurActuel));
+    const ed = await er.json();
+    if(ed && ed.a_pin){
+      ancien = prompt("Entrez votre PIN ACTUEL (4 chiffres) :");
+      if(ancien===null) return;
+    }
+  }catch(e){}
+  const pin = prompt("Choisissez votre nouveau PIN (4 chiffres) :");
+  if(pin===null) return;
+  if(!/^[0-9]{4}$/.test(pin)){ alert("Le PIN doit faire exactement 4 chiffres."); return; }
+  try{
+    const r = await fetch('/api/joueur/pin/definir',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code:codeJoueurActuel,pin:pin,ancien_pin:ancien})});
+    const d = await r.json();
+    alert(d.ok ? "✅ PIN enregistré. Il vous sera demandé à votre prochaine connexion." : ("❌ "+(d.msg||"Erreur")));
+  }catch(e){ alert("Erreur réseau, réessayez."); }
 }
 
 async function doLogin(){
