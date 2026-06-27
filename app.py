@@ -11198,6 +11198,9 @@ def liste_reclamations():
     is_admin = bool(s.get("admin"))
     out = [r for r in DB.get("reclamations", []) if is_admin or r.get("code_org") == s["code"]]
     out.sort(key=lambda r: (0 if r.get("statut") == "ouverte" else 1,))
+    for r in out:
+        if r.get("statut") == "ouverte":
+            r["verif"] = _verifier_doleance(r.get("code_joueur"), r.get("message"))
     return jsonify(out)
 
 
@@ -11225,6 +11228,98 @@ def traiter_reclamation():
 
 
 # === COMMENTAIRES MICRO (joueuse -> organisatrice) ===
+def _verifier_doleance(code, message):
+    """ANTI-MENSONGE — Vérifie une affirmation de joueuse contre les vraies données.
+    Renvoie {sujet, statut, detail} ; statut = 'dementi' (contredit), 'confirme'
+    (exact) ou 'indetermine'. Renvoie None si aucune affirmation détectée."""
+    global DB
+    try:
+        m = (message or "").lower()
+        code = (code or "").upper().strip()
+        if not code:
+            return None
+        nie = any(x in m for x in ["pas ", "rien", "jamais", "manque", "aucun", "non recu", "pas recu", "pas reçu", "n'ai pas", "peux pas", "arrive pas", "marche pas"])
+        # 1) "Je n'ai pas reçu mes pions"
+        if ("pion" in m or "credit" in m or "crédit" in m or "solde" in m) and nie:
+            pions = DB.get("pions_joueurs", {}).get(code, {})
+            bonus = DB.get("pions_bonus_joueurs", {}).get(code, {})
+            total = _xpf_total_pions(pions) + _xpf_total_pions(bonus)
+            cand = []
+            for t in DB.get("transactions_joueur_org", []):
+                if (t.get("code_joueur", "") or "").upper() == code:
+                    cand.append((t.get("date", ""), int(t.get("montant_total", 0) or 0), "organisatrice"))
+            for c in DB.get("credits_admin", []):
+                if (c.get("code_joueur", "") or "").upper() == code:
+                    cand.append((c.get("date", ""), int(c.get("valeur_pion", 0) or 0) * int(c.get("nb_pions", 0) or 0), "admin"))
+            for c in DB.get("credits_masse", []):
+                if code in [str(x).upper() for x in (c.get("codes") or [])]:
+                    cand.append((c.get("date", ""), int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0), "groupe"))
+            cand.sort(key=lambda x: str(x[0]), reverse=True)
+            if total > 0 or cand:
+                det = f"Portefeuille actuel : {total} XPF de pions."
+                if cand:
+                    d0 = cand[0]
+                    det += f" Dernier crédit : {d0[1]} XPF ({d0[2]}) le {str(d0[0])[:16].replace('T',' ')}."
+                return {"sujet": "Pions reçus", "statut": "dementi", "detail": det}
+            return {"sujet": "Pions reçus", "statut": "confirme", "detail": "Aucun pion ni crédit trouvé pour ce code — l'affirmation semble exacte."}
+        # 2) "Je n'arrive pas à ouvrir le PDF"
+        if "pdf" in m or "feuille" in m or "ouvr" in m or "telecharg" in m or "télécharg" in m:
+            tk = None
+            for t in DB.get("tickets", []):
+                if (t.get("code_acheteur", "") or "").upper() == code:
+                    tk = t
+                    if t.get("pdf_url"):
+                        break
+            if tk and tk.get("pdf_url"):
+                return {"sujet": "PDF du ticket", "statut": "dementi", "detail": f"Le ticket existe AVEC un PDF ({tk.get('jeu','?')} · série {tk.get('serie','?')}). Souci d'appareil/connexion plutôt que d'attribution."}
+            if tk:
+                return {"sujet": "PDF du ticket", "statut": "confirme", "detail": "Le ticket existe mais SANS PDF rattaché — l'affirmation semble exacte (PDF à régénérer)."}
+            return {"sujet": "PDF du ticket", "statut": "indetermine", "detail": "Aucun ticket trouvé pour ce code."}
+        # 3) "Je n'ai pas pointé mon ticket"
+        if ("point" in m or "coch" in m) and nie:
+            coches = DB.get("coches", {})
+            n = 0
+            if isinstance(coches, dict):
+                v = coches.get(code)
+                if isinstance(v, (list, dict)):
+                    n = len(v)
+            if n > 0:
+                return {"sujet": "Pointage", "statut": "dementi", "detail": f"{n} case(s) pointée(s) enregistrée(s) pour ce code."}
+            return {"sujet": "Pointage", "statut": "indetermine", "detail": "Aucun pointage enregistré côté serveur — à vérifier (le pointage est souvent local au téléphone)."}
+        return None
+    except Exception:
+        return None
+
+
+def _reponse_robot_joueur(code, message):
+    """ROBOT — Réponse automatique amicale affichée à la joueuse, basée sur la
+    vérification des données réelles."""
+    try:
+        v = _verifier_doleance(code, message)
+        if not v:
+            return "🤖 Merci, ton message a bien été transmis à l'organisatrice. Elle te répondra dès que possible."
+        sujet = v.get("sujet")
+        st = v.get("statut")
+        det = v.get("detail", "")
+        if sujet == "Pions reçus":
+            if st == "dementi":
+                return "🤖 Bonne nouvelle : tes pions sont bien là ! " + det + " Ouvre l'onglet 🪙 Mes Pions pour les voir."
+            return "🤖 Je ne vois aucun pion crédité à ton code pour l'instant. J'ai prévenu l'organisatrice, elle va vérifier."
+        if sujet == "PDF du ticket":
+            if st == "dementi":
+                return "🤖 Ton ticket et son PDF existent bien. Réessaie le bouton 🎯 Jouer et vérifie ta connexion internet. Si ça bloque encore, l'organisatrice peut te le renvoyer."
+            if st == "confirme":
+                return "🤖 Ton ticket n'a pas encore de PDF rattaché. J'ai prévenu l'organisatrice, elle va le régénérer pour toi."
+            return "🤖 Je ne trouve pas encore ton ticket. Vérifie bien ton code, ou demande à l'organisatrice."
+        if sujet == "Pointage":
+            if st == "dementi":
+                return "🤖 Ton pointage est bien enregistré, tout est bon !"
+            return "🤖 Le pointage se fait sur ton téléphone : entre ton code dans ton ticket et les numéros se cochent tout seuls au tirage."
+        return "🤖 Merci, l'organisatrice a bien reçu ton message."
+    except Exception:
+        return "🤖 Merci, ton message a bien été transmis à l'organisatrice."
+
+
 @app.route("/api/micro/commentaire", methods=["POST"])
 def creer_commentaire_micro():
     """JOUEUSE — Envoie un commentaire en réponse aux questions micro de l'organisatrice."""
@@ -11252,7 +11347,7 @@ def creer_commentaire_micro():
     })
     DB["commentaires_micro"] = DB["commentaires_micro"][:300]  # garder les 300 derniers
     save_data()
-    return jsonify({"ok": True})
+    return jsonify({"ok": True, "reponse": _reponse_robot_joueur(code, message)})
 
 
 @app.route("/api/micro/commentaires")
@@ -11266,6 +11361,9 @@ def liste_commentaires_micro():
     is_admin = bool(s.get("admin"))
     out = [c for c in DB.get("commentaires_micro", []) if is_admin or c.get("code_org") == s["code"]]
     out.sort(key=lambda c: (0 if c.get("statut") == "ouvert" else 1,))
+    for c in out:
+        if c.get("statut") == "ouvert":
+            c["verif"] = _verifier_doleance(c.get("code_joueur"), c.get("message"))
     return jsonify(out)
 
 
