@@ -12774,3 +12774,144 @@ def codes_par_org():
       {rows}</table></div>
       {orph_html}
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/dossier-fraude")
+def dossier_fraude():
+    """ADMIN — Génère un dossier de preuves IMPRIMABLE (fond blanc) à partir des
+    données réelles : mécanisme, réseau, IP+dates, montants, mesures prises.
+    Pour dépôt de plainte. ?cle=ADMIN"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
+
+    trans = [t for t in DB.get("transferts_pions", []) if isinstance(t, dict) and not t.get("admin")]
+    bloques = set(DB.get("codes_bloques", []))
+
+    # Collecteurs
+    collecteurs = {}
+    for t in trans:
+        v = (t.get("vers") or "").upper(); d = (t.get("de") or "").upper()
+        if not v or not d: continue
+        c = collecteurs.setdefault(v, {"sources": set(), "total": 0})
+        c["sources"].add(d); c["total"] += int(t.get("montant", 0) or 0)
+    collecteurs = {k: x for k, x in collecteurs.items() if len(x["sources"]) >= 2}
+
+    # IP -> détails (dates, comptes, montant)
+    ips = {}
+    for t in trans:
+        ip = t.get("ip")
+        if not ip: continue
+        x = ips.setdefault(ip, {"de": set(), "vers": set(), "total": 0, "dates": [], "n": 0})
+        if t.get("de"): x["de"].add((t.get("de") or "").upper())
+        if t.get("vers"): x["vers"].add((t.get("vers") or "").upper())
+        x["total"] += int(t.get("montant", 0) or 0); x["n"] += 1
+        if t.get("date"): x["dates"].append(str(t.get("date")))
+    ips_susp = {k: x for k, x in ips.items() if len(x["de"]) >= 2}
+
+    # Codes impliqués
+    codes_susp = set(collecteurs.keys())
+    for x in collecteurs.values(): codes_susp |= x["sources"]
+    for x in ips_susp.values(): codes_susp |= x["de"] | x["vers"]
+    codes_susp.discard(cle)
+
+    # Origine des pions
+    achats = recred = gains = credorg = 0
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict) and (c.get("code_joueur") or "").upper() in codes_susp and c.get("statut") == "validee":
+            achats += int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0) or int(c.get("montant_net", 0) or 0)
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict) and (c.get("code_joueur") or "").upper() in codes_susp:
+            m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+            if m > 0: recred += m
+    for g in DB.get("gains_finaux", []):
+        if isinstance(g, dict) and (g.get("code_gagnant") or "").upper() in codes_susp and not g.get("annule"):
+            gains += int(g.get("montant_credite", 0) or 0)
+    for t in DB.get("transactions_joueur_org", []):
+        if isinstance(t, dict) and (t.get("code_joueur") or "").upper() in codes_susp:
+            credorg += int(t.get("montant_total", 0) or 0)
+
+    # Retraits
+    retr_valide = retr_attente = 0
+    for r in DB.get("demandes_retrait", []):
+        if isinstance(r, dict) and (r.get("code_joueur") or "").upper() in codes_susp:
+            m = int(r.get("montant_demande", 0) or 0)
+            if r.get("statut") == "validee": retr_valide += m
+            elif r.get("statut") in (None, "", "en_attente"): retr_attente += m
+
+    total_gele = sum(solde(c) for c in codes_susp)
+    import datetime as _dt
+    maintenant = _dt.datetime.now().strftime("%d/%m/%Y à %H:%M")
+
+    # Tableau IP
+    rip = ""
+    for ip in sorted(ips_susp.keys(), key=lambda k: -ips_susp[k]["total"]):
+        x = ips_susp[ip]
+        ds = sorted(x["dates"])
+        periode = (ds[0][:16].replace("T", " ") + " → " + ds[-1][:16].replace("T", " ")) if ds else "—"
+        rip += (f'<tr><td style="border:1px solid #ccc;padding:6px;font-family:monospace">{ip}</td>'
+                f'<td style="border:1px solid #ccc;padding:6px;text-align:center">{len(x["de"])}</td>'
+                f'<td style="border:1px solid #ccc;padding:6px;text-align:right">{format(x["total"], ",")} F</td>'
+                f'<td style="border:1px solid #ccc;padding:6px;font-size:11px">{periode}</td>'
+                f'<td style="border:1px solid #ccc;padding:6px;font-family:monospace;font-size:10px">{", ".join(sorted(x["de"]))}</td></tr>')
+
+    rcol = ""
+    for v in sorted(collecteurs.keys(), key=lambda k: -collecteurs[k]["total"]):
+        d = collecteurs[v]
+        rcol += (f'<tr><td style="border:1px solid #ccc;padding:6px;font-family:monospace">{v}</td>'
+                 f'<td style="border:1px solid #ccc;padding:6px;text-align:center">{len(d["sources"])}</td>'
+                 f'<td style="border:1px solid #ccc;padding:6px;text-align:right">{format(d["total"], ",")} F</td>'
+                 f'<td style="border:1px solid #ccc;padding:6px;font-family:monospace;font-size:10px">{", ".join(sorted(d["sources"]))}</td></tr>')
+
+    codes_list = ", ".join(sorted(codes_susp))
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Dossier de preuves — Fraude Ticket Bingo</title>
+    <style>@media print{{.noprint{{display:none}}}} body{{background:#fff;color:#111;font-family:Georgia,serif;line-height:1.5}} h1{{font-size:20px}} h2{{font-size:15px;border-bottom:2px solid #111;padding-bottom:3px;margin-top:22px}} table{{border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:12px;margin:8px 0}} th{{border:1px solid #ccc;padding:6px;background:#f0f0f0;text-align:left}}</style></head>
+    <body style="margin:0;padding:24px"><div style="max-width:800px;margin:0 auto">
+      <button onclick="window.print()" class="noprint" style="background:#111;color:#fff;border:0;padding:10px 18px;border-radius:6px;font-size:14px;cursor:pointer;margin-bottom:16px">🖨️ Imprimer / Enregistrer en PDF</button>
+      <h1>DOSSIER DE PREUVES — FRAUDE INFORMATIQUE</h1>
+      <p style="font-size:13px;color:#444">Plateforme : <b>Ticket Bingo</b> (ticket-bingo-production.up.railway.app / ticketbingo.space)<br>
+      Exploitant : <b>EI TUKEA IMPORT</b> — N° Tahiti B90121, Papeete, Polynésie française<br>
+      Document généré le {maintenant} · Référence : audit interne automatisé</p>
+
+      <h2>1. Résumé des faits</h2>
+      <p style="font-size:13px">Une fraude organisée a été détectée sur la plateforme de jeu Ticket Bingo. Un ou plusieurs auteurs, opérant depuis des adresses IP masquées (VPN), ont créé un réseau de <b>{len(codes_susp)} comptes</b> de joueuses afin de faire circuler artificiellement des pions (monnaie interne du jeu, 1 pion = 1 XPF) et de provoquer des « écarts » de solde, dans le but de se faire recréditer indûment puis de demander des retraits en argent réel.</p>
+      <ul style="font-size:13px">
+        <li>Comptes frauduleux identifiés et gelés : <b>{len(codes_susp)}</b></li>
+        <li>Comptes « collecteurs » centralisant les pions : <b>{len(collecteurs)}</b></li>
+        <li>Adresses IP pilotant plusieurs comptes : <b>{len(ips_susp)}</b></li>
+        <li>Valeur en pions gelée sur le réseau : <b>{format(total_gele, ",")} XPF</b></li>
+        <li>Retraits frauduleux EN ATTENTE, bloqués avant paiement : <b>{format(retr_attente, ",")} XPF</b></li>
+        <li>Argent réellement décaissé par l'exploitant au profit des auteurs : <b>{format(retr_valide, ",")} XPF</b></li>
+      </ul>
+
+      <h2>2. Mécanisme de la fraude</h2>
+      <p style="font-size:13px">(1) Création de nombreux comptes anonymes. (2) Utilisation d'une fonction de transfert de pions entre comptes (depuis fermée) pour concentrer les pions sur des comptes « collecteurs ». (3) Création volontaire d'écarts de solde pour solliciter des recrédits de réconciliation auprès de l'administration. (4) Tentatives de retrait en argent réel. Répartition de l'origine des pions du réseau : achats réels {format(achats, ",")} XPF · recrédits administratifs {format(recred, ",")} XPF · gains de jeu {format(gains, ",")} XPF · crédits organisatrices {format(credorg, ",")} XPF.</p>
+
+      <h2>3. Adresses IP impliquées (preuve technique horodatée)</h2>
+      <table><tr><th>Adresse IP</th><th>Nb comptes pilotés</th><th>Total transféré</th><th>Période</th><th>Comptes sources</th></tr>{rip}</table>
+
+      <h2>4. Comptes collecteurs</h2>
+      <table><tr><th>Compte collecteur</th><th>Nb sources</th><th>Total reçu</th><th>Comptes sources</th></tr>{rcol}</table>
+
+      <h2>5. Liste des comptes frauduleux gelés</h2>
+      <p style="font-size:11px;font-family:monospace;word-break:break-all">{codes_list}</p>
+
+      <h2>6. Mesures conservatoires prises par l'exploitant</h2>
+      <ul style="font-size:13px">
+        <li>Gel (blocage) immédiat des {len(bloques)} comptes concernés : connexion, transfert et retrait impossibles.</li>
+        <li>Fermeture de la fonction de transfert de pions entre joueuses.</li>
+        <li>Blocage de tous les retraits frauduleux en attente ({format(retr_attente, ",")} XPF) avant tout paiement.</li>
+        <li>Mise en place d'outils de réconciliation et d'audit anti-fraude.</li>
+        <li>Sécurisation des accès administrateur.</li>
+      </ul>
+      <p style="font-size:12px;color:#444;margin-top:18px">Les journaux techniques (connexions, transferts, horodatages, adresses IP) sont conservés et peuvent être communiqués à l'autorité judiciaire sur réquisition. L'identification des abonnés derrière les adresses IP relève des fournisseurs d'accès, sur réquisition.</p>
+      <p style="font-size:12px;margin-top:24px">Fait à Papeete, le {maintenant}.<br>Signature : ______________________________</p>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
