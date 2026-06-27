@@ -11166,6 +11166,10 @@ def creer_reclamation():
     if not code or not message:
         return jsonify({"ok": False, "msg": "Message vide."}), 400
     message = message[:2000]
+    # Hors fenêtre tournoi : le robot répond, rien n'est transmis à l'organisatrice
+    ouvert, _, _ = _fenetre_tournoi()
+    if not ouvert:
+        return jsonify({"ok": True, "hors_fenetre": True, "reponse": _robot_repond(code, message)})
     code_org = ""
     nom = ""
     for t in DB.get("tickets", []):
@@ -11320,6 +11324,110 @@ def _reponse_robot_joueur(code, message):
         return "🤖 Merci, ton message a bien été transmis à l'organisatrice."
 
 
+# Horaire HABITUEL des tournois (début, fin). weekday() : lundi=0 ... dimanche=6
+_HORAIRES_TOURNOI = {
+    0: ("17:30", "23:30"),  # lundi
+    1: ("17:30", "23:30"),  # mardi
+    2: ("17:30", "23:30"),  # mercredi
+    3: ("17:30", "23:30"),  # jeudi
+    4: ("17:30", "23:30"),  # vendredi
+    5: ("13:00", "23:59"),  # samedi — jusqu'à minuit
+    6: ("13:00", "19:00"),  # dimanche
+}
+
+
+def _fenetre_tournoi():
+    """Renvoie (ouvert, prochain_iso, message). L'app est OUVERTE aux joueuses de
+    1h avant le début du tournoi du jour jusqu'à 6h après. Horaire habituel :
+    lundi→vendredi 17h30, samedi→dimanche 13h00. Les tournois programmés (spéciaux)
+    ouvrent aussi la fenêtre. En cas de doute -> ouvert (on ne bloque jamais)."""
+    try:
+        now = datetime.datetime.now()
+        prochain = None
+
+        def _fenetre_de(debut):
+            return (debut - datetime.timedelta(hours=1), debut + datetime.timedelta(hours=6))
+
+        # 1) Horaire HABITUEL du jour
+        hs = _HORAIRES_TOURNOI.get(now.weekday())
+        if hs:
+            sh, sm = [int(x) for x in hs[0].split(":")]
+            eh, em = [int(x) for x in hs[1].split(":")]
+            debut = now.replace(hour=sh, minute=sm, second=0, microsecond=0)
+            fin = now.replace(hour=eh, minute=em, second=59, microsecond=0)
+            ouv = debut - datetime.timedelta(hours=1)
+            if ouv <= now <= fin:
+                return True, debut.isoformat(), ""
+            if now < ouv:
+                prochain = debut
+
+        # 2) Tournois PROGRAMMÉS (spéciaux, à un autre horaire)
+        for t in DB.get("tournois_programmes", []):
+            if not isinstance(t, dict):
+                continue
+            try:
+                dt = datetime.datetime.fromisoformat(str(t.get("date_heure", "")).replace("Z", ""))
+            except Exception:
+                continue
+            ouv, fin = _fenetre_de(dt)
+            if ouv <= now <= fin:
+                return True, dt.isoformat(), ""
+            if now < ouv and (prochain is None or dt < prochain):
+                prochain = dt
+
+        # 3) Sinon, prochain tournoi habituel (aujourd'hui plus tard, ou un jour suivant)
+        if prochain is None:
+            for i in range(1, 8):
+                j = now + datetime.timedelta(days=i)
+                hsj = _HORAIRES_TOURNOI.get(j.weekday())
+                if hsj:
+                    hh, mm = [int(x) for x in hsj[0].split(":")]
+                    prochain = j.replace(hour=hh, minute=mm, second=0, microsecond=0)
+                    break
+
+        if prochain is not None:
+            return False, prochain.isoformat(), "L'application ouvre 1h avant le tournoi (le " + prochain.strftime("%d/%m à %H:%M") + ")."
+        return False, None, "Aucun tournoi programmé pour le moment."
+    except Exception:
+        return True, None, ""
+
+
+def _robot_repond(code, message):
+    """ROBOT-GUIDE — Répond aux questions des joueuses toute la journée (FAQ +
+    vérification des données)."""
+    try:
+        m = (message or "").lower()
+        ouvert, prochain_iso, _ = _fenetre_tournoi()
+        if any(w in m for w in ["quand", "heure", "prochain tournoi", "a quelle", "à quelle", "c'est quand", "date du tournoi"]):
+            if prochain_iso:
+                try:
+                    dt = datetime.datetime.fromisoformat(prochain_iso)
+                    return "🤖 Le prochain tournoi est le " + dt.strftime("%d/%m à %H:%M") + ". L'application s'ouvre 1h avant. À très vite ! 🌺"
+                except Exception:
+                    pass
+            return "🤖 Aucun tournoi n'est programmé pour le moment. Surveille les annonces de l'organisatrice ! 🌺"
+        if ("achet" in m or "command" in m or "recharg" in m) and "pion" in m:
+            return "🤖 Pour acheter des pions : ouvre l'onglet 🪙 Mes Pions, choisis le montant et confirme. L'organisatrice valide ton paiement et tes pions arrivent. 💛"
+        if "comment" in m and ("jou" in m or "march" in m or "fonctionn" in m):
+            return "🤖 C'est simple : 1) achète tes pions, 2) achète tes tickets pour le jeu annoncé, 3) ton ticket se coche tout seul au tirage. Bonne chance ! 🍀"
+        if "retir" in m or "encaiss" in m or ("gagn" in m and "argent" in m):
+            return "🤖 Quand tu gagnes, tes gains arrivent en pions. Pour récupérer en argent, fais une demande de retrait : l'organisatrice te paie. 💰"
+        if ("pdf" in m or "feuille" in m) and ("comment" in m or "ouvr" in m or "trouv" in m):
+            return "🤖 Pour ouvrir ton ticket : onglet 🎮 ton ticket, puis bouton 🎯 Jouer. Si le PDF tarde, vérifie ta connexion internet. 📄"
+        return _reponse_robot_joueur(code, message)
+    except Exception:
+        return "🤖 Merci, ton message a bien été reçu."
+
+
+@app.route("/api/app/etat")
+def etat_application():
+    """État d'ouverture de l'app pour les joueuses (banni\u00e8re + robot)."""
+    global DB
+    DB = load_data()
+    ouvert, prochain, message = _fenetre_tournoi()
+    return jsonify({"ok": True, "ouvert": bool(ouvert), "prochain": prochain, "message": message})
+
+
 @app.route("/api/micro/commentaire", methods=["POST"])
 def creer_commentaire_micro():
     """JOUEUSE — Envoie un commentaire en réponse aux questions micro de l'organisatrice."""
@@ -11330,6 +11438,10 @@ def creer_commentaire_micro():
     message = (d.get("message", "") or "").strip()[:500]
     if not code or not message:
         return jsonify({"ok": False, "msg": "Message vide."}), 400
+    # Hors fenêtre tournoi : le robot répond, mais rien n'est transmis à l'organisatrice
+    ouvert, _, _ = _fenetre_tournoi()
+    if not ouvert:
+        return jsonify({"ok": True, "hors_fenetre": True, "reponse": _robot_repond(code, message)})
     code_org = ""
     nom = ""
     for t in DB.get("tickets", []):
@@ -11347,7 +11459,7 @@ def creer_commentaire_micro():
     })
     DB["commentaires_micro"] = DB["commentaires_micro"][:300]  # garder les 300 derniers
     save_data()
-    return jsonify({"ok": True, "reponse": _reponse_robot_joueur(code, message)})
+    return jsonify({"ok": True, "reponse": _robot_repond(code, message)})
 
 
 @app.route("/api/micro/commentaires")
