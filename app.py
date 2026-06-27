@@ -13145,3 +13145,74 @@ def annuler_credits_fraude():
       {rows}</table></div>
       <div style="color:#94a3b8;font-size:12px;margin-top:10px">« À retirer » = ce que l'admin a injecté, plafonné au solde actuel (on ne descend jamais sous 0). Le reste du solde (achats réels du fraudeur) reste gelé sur le compte bloqué.</div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/bilan-bloques")
+def bilan_bloques():
+    """ADMIN — Bilan : liste des comptes BLOQUÉS reliée à l'audit (solde actuel,
+    total recrédité par l'admin, pions reçus/envoyés par transfert). ?cle=ADMIN"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    bloques = sorted(DB.get("codes_bloques", []))
+
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
+    def nom_de(c):
+        return DB.get("codes", {}).get(c, {}).get("nom", "") or ""
+
+    # Pré-calcul recrédits admin par code
+    cred = {}
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict):
+            code = (c.get("code_joueur") or "").upper()
+            m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+            if m > 0: cred[code] = cred.get(code, 0) + m
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict):
+            m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+            for code in (c.get("codes") or []):
+                code = (code or "").upper()
+                if m > 0: cred[code] = cred.get(code, 0) + m
+    recu = {}; envoye = {}
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict):
+            v = (t.get("vers") or "").upper(); d = (t.get("de") or "").upper()
+            m = int(t.get("montant", 0) or 0)
+            if v: recu[v] = recu.get(v, 0) + m
+            if d: envoye[d] = envoye.get(d, 0) + m
+
+    rows = ""
+    t_solde = t_cred = t_recu = t_env = 0
+    for c in sorted(bloques, key=lambda x: -solde(x)):
+        s = solde(c); cr = cred.get(c, 0); rc = recu.get(c, 0); en = envoye.get(c, 0)
+        t_solde += s; t_cred += cr; t_recu += rc; t_env += en
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:7px;font-family:monospace;color:#a78bfa">{c}</td>'
+                 f'<td style="padding:7px;color:#94a3b8;font-size:12px">{nom_de(c)}</td>'
+                 f'<td style="padding:7px;text-align:right;color:#34d399;font-weight:600">{format(s, ",")} F</td>'
+                 f'<td style="padding:7px;text-align:right;color:#f87171">{format(cr, ",")} F</td>'
+                 f'<td style="padding:7px;text-align:right;color:#6ee7b7">{format(rc, ",")} F</td>'
+                 f'<td style="padding:7px;text-align:right;color:#fca5a5">{format(en, ",")} F</td></tr>')
+    if not rows:
+        rows = '<tr><td colspan="6" style="padding:16px;text-align:center;color:#34d399">Aucun code bloqué.</td></tr>'
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bilan comptes bloqués</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:900px;margin:0 auto">
+      <h1 style="font-size:21px;color:#f87171;margin-bottom:10px">🔒 Bilan des comptes bloqués (relié à l'audit)</h1>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px 14px"><div style="color:#94a3b8;font-size:12px">Comptes bloqués</div><div style="color:#f87171;font-size:18px;font-weight:700">{len(bloques)}</div></div>
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px 14px"><div style="color:#94a3b8;font-size:12px">💚 Solde gelé restant</div><div style="color:#34d399;font-size:18px;font-weight:700">{format(t_solde, ",")} F</div></div>
+        <div style="background:rgba(239,68,68,.12);border:1px solid #f87171;border-radius:8px;padding:10px 14px"><div style="color:#94a3b8;font-size:12px">🔧 Total recrédité (admin)</div><div style="color:#f87171;font-size:18px;font-weight:700">{format(t_cred, ",")} F</div></div>
+      </div>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:10px">« Recrédité admin » = ce que l'admin a injecté en tout (même si déjà retiré/circulé). « Reçu/Envoyé » = pions déplacés par transferts. Tout est gelé.</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:620px">
+      <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:7px;color:#fca5a5">Code</th><th style="padding:7px;color:#fca5a5">Nom</th><th style="padding:7px;color:#fca5a5;text-align:right">Solde actuel</th><th style="padding:7px;color:#fca5a5;text-align:right">Recrédité admin</th><th style="padding:7px;color:#fca5a5;text-align:right">Reçu (transf.)</th><th style="padding:7px;color:#fca5a5;text-align:right">Envoyé (transf.)</th></tr>
+      {rows}
+      <tr style="border-top:2px solid #7f1d1d;font-weight:700"><td style="padding:8px" colspan="2">TOTAUX</td><td style="padding:8px;text-align:right;color:#34d399">{format(t_solde, ",")} F</td><td style="padding:8px;text-align:right;color:#f87171">{format(t_cred, ",")} F</td><td style="padding:8px;text-align:right;color:#6ee7b7">{format(t_recu, ",")} F</td><td style="padding:8px;text-align:right;color:#fca5a5">{format(t_env, ",")} F</td></tr>
+      </table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
