@@ -12302,3 +12302,144 @@ def empreinte_fraude():
       <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:8px;color:#a78bfa">Code</th><th style="padding:8px;color:#a78bfa">Nom</th><th style="padding:8px;color:#a78bfa;text-align:right">Solde</th><th style="padding:8px;color:#a78bfa;text-align:center">Nb IP</th><th style="padding:8px;color:#a78bfa">État</th><th style="padding:8px;color:#a78bfa;text-align:right">Action</th></tr>
       {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/audit-fraude")
+def audit_fraude_global():
+    """ADMIN — Audit fraude GLOBAL sur toute l'appli : détecte tous les comptes
+    collecteurs (reçoivent de >=2 sources) et toutes les IP qui pilotent >=2
+    comptes. Basé sur les TRANSFERTS (hors admin) pour éviter les faux positifs
+    de WiFi partagé. ?cle=ADMIN[&bloquer=CODE][&debloquer=CODE]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    DB.setdefault("codes_bloques", [])
+    msg = ""
+    blq = (request.args.get("bloquer", "") or "").strip().upper()
+    if blq:
+        if blq not in DB["codes_bloques"]:
+            DB["codes_bloques"].append(blq); save_data(immediat=True)
+        msg = f"🔒 {blq} BLOQUÉ."
+    deb = (request.args.get("debloquer", "") or "").strip().upper()
+    if deb:
+        DB["codes_bloques"] = [c for c in DB["codes_bloques"] if c != deb]; save_data(immediat=True)
+        msg = f"🔓 {deb} débloqué."
+
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
+
+    # Transferts joueuse (hors admin)
+    trans = [t for t in DB.get("transferts_pions", []) if isinstance(t, dict) and not t.get("admin")]
+
+    # 1) COLLECTEURS : vers -> sources distinctes
+    collecteurs = {}  # vers -> {"sources": set, "total": int, "ips": set}
+    for t in trans:
+        v = (t.get("vers") or "").upper(); d = (t.get("de") or "").upper()
+        if not v or not d:
+            continue
+        c = collecteurs.setdefault(v, {"sources": set(), "total": 0, "ips": set()})
+        c["sources"].add(d); c["total"] += int(t.get("montant", 0) or 0)
+        if t.get("ip"): c["ips"].add(t.get("ip"))
+    collecteurs = {k: v for k, v in collecteurs.items() if len(v["sources"]) >= 2}
+
+    # 2) IP VIDEUSES : ip -> codes sources distincts
+    ip_videuses = {}  # ip -> {"sources": set, "total": int}
+    for t in trans:
+        ip = t.get("ip"); d = (t.get("de") or "").upper()
+        if not ip or not d:
+            continue
+        x = ip_videuses.setdefault(ip, {"sources": set(), "total": 0, "cibles": set()})
+        x["sources"].add(d); x["total"] += int(t.get("montant", 0) or 0)
+        if t.get("vers"): x["cibles"].add((t.get("vers") or "").upper())
+    ip_videuses = {k: v for k, v in ip_videuses.items() if len(v["sources"]) >= 2}
+
+    # Ensemble des codes impliqués
+    codes_suspects = set(collecteurs.keys())
+    for v in collecteurs.values(): codes_suspects |= v["sources"]
+    for v in ip_videuses.values(): codes_suspects |= v["sources"] | v.get("cibles", set())
+
+    def lien_bloc(c):
+        if c == cle:
+            return '<span style="color:#64748b">toi</span>'
+        if c in DB["codes_bloques"]:
+            return f'<a href="/audit-fraude?cle={cle}&debloquer={c}" style="color:#93c5fd;text-decoration:none">débloquer</a>'
+        return f'<a href="/audit-fraude?cle={cle}&bloquer={c}" style="color:#fca5a5;font-weight:700;text-decoration:none">🔒 BLOQUER</a>'
+
+    def badge_bloc(c):
+        return '🔒' if c in DB["codes_bloques"] else ''
+
+    # Tableau collecteurs
+    rc = ""
+    for v in sorted(collecteurs.keys(), key=lambda k: -collecteurs[k]["total"]):
+        d = collecteurs[v]
+        srcs = ", ".join(sorted(d["sources"]))
+        rc += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+               f'<td style="padding:8px;font-family:monospace;color:#fca5a5;font-weight:700">{v} {badge_bloc(v)}</td>'
+               f'<td style="padding:8px;text-align:center;color:#fbbf24">{len(d["sources"])}</td>'
+               f'<td style="padding:8px;text-align:right;color:#f87171;font-weight:700">{format(d["total"], ",")} F</td>'
+               f'<td style="padding:8px;text-align:right;color:#34d399">{format(solde(v), ",")} F</td>'
+               f'<td style="padding:8px;font-family:monospace;color:#a78bfa;font-size:11px">{srcs}</td>'
+               f'<td style="padding:8px;text-align:right">{lien_bloc(v)}</td></tr>')
+    if not rc:
+        rc = '<tr><td colspan="6" style="padding:16px;text-align:center;color:#34d399">✅ Aucun compte collecteur détecté.</td></tr>'
+
+    # Tableau IP videuses
+    ri = ""
+    for ip in sorted(ip_videuses.keys(), key=lambda k: -len(ip_videuses[k]["sources"])):
+        d = ip_videuses[ip]
+        srcs = ", ".join(sorted(d["sources"]))
+        cibs = ", ".join(sorted(d.get("cibles", set())))
+        ri += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+               f'<td style="padding:8px;font-family:monospace;color:#fca5a5">{ip}</td>'
+               f'<td style="padding:8px;text-align:center;color:#fbbf24">{len(d["sources"])}</td>'
+               f'<td style="padding:8px;text-align:right;color:#f87171">{format(d["total"], ",")} F</td>'
+               f'<td style="padding:8px;font-family:monospace;color:#a78bfa;font-size:11px">{srcs}</td>'
+               f'<td style="padding:8px;font-family:monospace;color:#6ee7b7;font-size:11px">{cibs}</td></tr>')
+    if not ri:
+        ri = '<tr><td colspan="5" style="padding:16px;text-align:center;color:#34d399">✅ Aucune IP pilotant plusieurs comptes.</td></tr>'
+
+    # Tableau de tous les codes suspects à bloquer
+    rs = ""
+    for c in sorted(codes_suspects, key=lambda x: -solde(x)):
+        if c == cle:
+            continue
+        etat = '<span style="color:#f87171;font-weight:700">🔒 BLOQUÉ</span>' if c in DB["codes_bloques"] else '<span style="color:#34d399">🔓 actif</span>'
+        rs += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+               f'<td style="padding:8px;font-family:monospace;color:#a78bfa">{c}</td>'
+               f'<td style="padding:8px;text-align:right;color:#34d399">{format(solde(c), ",")} F</td>'
+               f'<td style="padding:8px">{etat}</td>'
+               f'<td style="padding:8px;text-align:right">{lien_bloc(c)}</td></tr>')
+    if not rs:
+        rs = '<tr><td colspan="4" style="padding:16px;text-align:center;color:#34d399">✅ Rien à bloquer.</td></tr>'
+
+    nb_suspects = len([c for c in codes_suspects if c != cle])
+    total_gele = sum(solde(c) for c in codes_suspects if c != cle)
+    msg_html = f'<div style="background:rgba(99,102,241,.15);border:1px solid #6366f1;border-radius:8px;padding:10px;margin-bottom:12px;color:#c7d2fe;font-weight:700">{msg}</div>' if msg else ""
+    resume = (f'<div style="background:rgba(239,68,68,.12);border:1px solid #f87171;border-radius:8px;padding:12px;margin-bottom:14px;color:#fca5a5;font-size:14px;font-weight:700">'
+              f'🚨 {len(collecteurs)} collecteur(s) · {len(ip_videuses)} IP suspecte(s) · {nb_suspects} code(s) impliqué(s) · {format(total_gele, ",")} XPF concernés.</div>'
+              if (collecteurs or ip_videuses) else
+              '<div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:8px;padding:12px;margin-bottom:14px;color:#34d399;font-size:14px;font-weight:700">✅ Aucun réseau de fraude détecté dans toute l\'application.</div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Audit fraude global</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:960px;margin:0 auto">
+      <h1 style="font-size:21px;color:#f87171;margin-bottom:8px">🛡️ Audit fraude — TOUTE l'application</h1>
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:10px">Basé sur les transferts (hors admin). Ne flague PAS le WiFi partagé d'une salle (qui ne génère pas de transferts).</div>
+      {msg_html}{resume}
+      <h2 style="font-size:16px;color:#fca5a5;margin:16px 0 6px">🎯 Comptes collecteurs (reçoivent de ≥2 sources)</h2>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:680px">
+      <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:8px;color:#fca5a5">Collecteur</th><th style="padding:8px;color:#fca5a5;text-align:center">Nb sources</th><th style="padding:8px;color:#fca5a5;text-align:right">Total reçu</th><th style="padding:8px;color:#fca5a5;text-align:right">Solde actuel</th><th style="padding:8px;color:#fca5a5">Sources</th><th style="padding:8px;color:#fca5a5;text-align:right">Action</th></tr>
+      {rc}</table></div>
+      <h2 style="font-size:16px;color:#fca5a5;margin:20px 0 6px">📍 IP qui pilotent plusieurs comptes</h2>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:680px">
+      <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:8px;color:#fca5a5">IP</th><th style="padding:8px;color:#fca5a5;text-align:center">Nb comptes vidés</th><th style="padding:8px;color:#fca5a5;text-align:right">Total transféré</th><th style="padding:8px;color:#fca5a5">Comptes sources</th><th style="padding:8px;color:#fca5a5">Vers</th></tr>
+      {ri}</table></div>
+      <h2 style="font-size:16px;color:#fff;margin:20px 0 6px">🔒 Tous les codes impliqués — à bloquer</h2>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:480px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:8px;color:#a78bfa">Code</th><th style="padding:8px;color:#a78bfa;text-align:right">Solde</th><th style="padding:8px;color:#a78bfa">État</th><th style="padding:8px;color:#a78bfa;text-align:right">Action</th></tr>
+      {rs}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
