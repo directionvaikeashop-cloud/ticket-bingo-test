@@ -499,13 +499,14 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       
       <!-- Notification micro organisateur -->
       <div id="alerte-perturbateur-joueur" style="display:none;margin:10px 0;padding:12px 16px;border-radius:12px;text-align:center;font-weight:700;font-size:14px"></div>
+      <div id="app-etat-joueur" style="display:none;margin:10px 0;padding:12px 16px;border-radius:12px;text-align:center;font-size:13px;font-weight:600;background:rgba(99,102,241,.12);border:0.5px solid rgba(99,102,241,.4);color:#c7d2fe"></div>
       <div id="micro-notif-joueur" style="display:none;background:linear-gradient(135deg,#6366f1,#7c3aed);padding:12px 16px;margin:10px 0;border-radius:12px;text-align:center">
         <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:4px">🎤 Message de l'organisateur</div>
         <div id="micro-message-joueur" style="font-size:15px;font-weight:700;color:#fff"></div>
       </div>
 
       <div id="commentaire-micro-joueur" style="display:none;background:var(--s2);border:0.5px solid rgba(99,102,241,.4);border-radius:12px;padding:12px;margin:10px 0">
-        <div style="font-size:13px;font-weight:700;color:#a5b4fc;margin-bottom:8px">💬 Répondre à l'organisatrice</div>
+        <div id="commentaire-micro-titre" style="font-size:13px;font-weight:700;color:#a5b4fc;margin-bottom:8px">💬 Répondre à l'organisatrice</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">
           <button onclick="envoyerCommentaireRapide('✅ Oui')" style="flex:1;min-width:70px;padding:8px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid rgba(16,185,129,.4);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">✅ Oui</button>
           <button onclick="envoyerCommentaireRapide('❌ Non')" style="flex:1;min-width:70px;padding:8px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:8px;cursor:pointer;font-size:13px;font-weight:600">❌ Non</button>
@@ -3017,7 +3018,15 @@ function envoyerReclamation(){
     var c = document.getElementById('reclamation-confirme');
     if(d && d.ok){
       if(ta) ta.value = '';
-      if(c){ c.textContent = 'Réclamation envoyée ✅ — elle sera traitée à la fin du tournoi'; c.style.display = 'block'; setTimeout(function(){ if(c) c.style.display = 'none'; }, 5000); }
+      if(c){
+        if(d.hors_fenetre && d.reponse){
+          c.innerHTML = echapHtmlRec(d.reponse);
+        } else {
+          c.textContent = 'Réclamation envoyée ✅ — elle sera traitée à la fin du tournoi';
+        }
+        c.style.display = 'block';
+        setTimeout(function(){ if(c) c.style.display = 'none'; }, d.hors_fenetre ? 14000 : 5000);
+      }
     } else { alert((d && d.msg) || 'Erreur'); }
   }).catch(function(){});
 }
@@ -3677,13 +3686,53 @@ function setBingoTicket(acheteur, jeu, serie, ticketId, pdfUrl, pageDebut, pageF
 
 async function declarerBingo(){
   if(!bingoTicketActuel){return;}
+  // Construire la liste des cartons de la joueuse (un carton par feuille)
+  var base = (typeof serieBasePointage !== 'undefined' && serieBasePointage) ? serieBasePointage : (parseInt((String(bingoTicketActuel.serie||'').match(/\d+/)||['0'])[0],10) || 0);
+  var pDeb = (typeof pageDebutActuel !== 'undefined' && pageDebutActuel) ? pageDebutActuel : (parseInt(bingoTicketActuel.page_debut) || 1);
+  var pFin = (typeof pageFinActuel !== 'undefined' && pageFinActuel) ? pageFinActuel : (parseInt(bingoTicketActuel.page_fin) || pDeb);
+  try{ if(typeof pdfDoc !== 'undefined' && pdfDoc && pdfDoc.numPages){ pFin = Math.min(pFin, pDeb + pdfDoc.numPages - 1); } }catch(e){}
+  var cartons = [];
+  for(var p = pDeb; p <= pFin && cartons.length < 200; p++){ cartons.push({serial: base + (p - pDeb), page: p}); }
+  if(!base || cartons.length === 0){ envoyerBingo(''); return; }   // sécurité : on envoie tel quel
+  if(cartons.length === 1){ envoyerBingo(String(cartons[0].serial)); return; }  // un seul carton -> direct
+  afficherChoixCartonBingo(cartons);
+}
+
+function afficherChoixCartonBingo(cartons){
+  var ov = document.createElement('div');
+  ov.id = 'choix-carton-bingo';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:2100;display:flex;align-items:center;justify-content:center;padding:20px';
+  var opts = cartons.map(function(c){ return '<option value="'+c.serial+'">Carton N° '+c.serial+'  (feuille '+c.page+')</option>'; }).join('');
+  ov.innerHTML = '<div style="background:#161427;border:1px solid rgba(245,158,11,.5);border-radius:16px;padding:24px;max-width:340px;width:100%;text-align:center">'
+    + '<div style="font-size:44px">🎯</div>'
+    + '<div style="font-size:18px;font-weight:800;color:#fff;margin:8px 0">Quel carton a fait BINGO ?</div>'
+    + '<div style="font-size:13px;color:#94a3b8;margin-bottom:14px">Choisis ton carton gagnant dans la liste</div>'
+    + '<select id="select-carton-bingo" style="width:100%;padding:12px;font-size:15px;border-radius:10px;border:1px solid rgba(255,255,255,.2);background:#0f0e1f;color:#fff;margin-bottom:16px">'+opts+'</select>'
+    + '<div style="display:flex;gap:10px">'
+    + '<button onclick="document.getElementById(\'choix-carton-bingo\').remove()" style="flex:1;padding:12px;background:rgba(255,255,255,.1);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:14px">Annuler</button>'
+    + '<button onclick="validerChoixCartonBingo()" style="flex:2;padding:12px;background:linear-gradient(135deg,#f59e0b,#ef4444);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:15px;font-weight:800">🎉 BINGO !</button>'
+    + '</div></div>';
+  document.body.appendChild(ov);
+}
+
+function validerChoixCartonBingo(){
+  var sel = document.getElementById('select-carton-bingo');
+  var serial = sel ? sel.value : '';
+  var ov = document.getElementById('choix-carton-bingo');
+  if(ov) ov.remove();
+  envoyerBingo(serial);
+}
+
+async function envoyerBingo(serieGagnante){
   const btn = document.getElementById('bingo-btn');
   if(btn){btn.disabled=true;btn.textContent='⏳ Envoi...';}
   try{
     // Recuperer les coches du joueur
     const cochesObj = cleCochesActuel ? JSON.parse(localStorage.getItem(cleCochesActuel)||"{}") : {};
     const cochesNums = Object.keys(cochesObj).map(Number);
-    const payload = Object.assign({}, bingoTicketActuel, {coches: cochesNums});
+    var ticketBingo = Object.assign({}, bingoTicketActuel);
+    if(serieGagnante){ ticketBingo.serie = String(serieGagnante); } // un seul carton à vérifier
+    const payload = Object.assign({}, ticketBingo, {coches: cochesNums});
     const r = await fetch('/api/bingo', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -3748,7 +3797,7 @@ async function loadAlertesBingo(){
         ? `<div style="background:rgba(16,185,129,.15);border:1px solid #10b981;border-radius:8px;padding:10px;margin-bottom:8px;text-align:center"><div style="font-size:15px;font-weight:800;color:#34d399">✅ VÉRIFIÉ GAGNANT</div><div style="font-size:11px;color:var(--mu);margin-top:2px">${a.verif.jeu} · ${a.verif.sortis}/${a.verif.total} · ${a.verif.boules} boules tirées</div></div>`
         : `<div style="background:rgba(239,68,68,.12);border:1px solid #f87171;border-radius:8px;padding:10px;margin-bottom:8px"><div style="font-size:14px;font-weight:800;color:#fca5a5;text-align:center">❌ PAS ENCORE — ${a.verif.sortis}/${a.verif.total}</div><div style="font-size:12px;color:#fbbf24;margin-top:4px;text-align:center">il manque : ${(a.verif.manquants||[]).join(' · ')}</div></div>`)
         : `<div style="background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.4);border-radius:8px;padding:8px;margin-bottom:8px;font-size:12px;color:var(--mu);text-align:center">⚠️ Série non vérifiable automatiquement — vérifie à la main</div>`) : ''}
-      ${a.pdf_url?`<button onclick="ouvrirPDFJoueur('${a.pdf_url}','${a.acheteur}','bingo_${a.id}','${a.page_debut||1}','${a.page_fin||9999}')" style="width:100%;padding:8px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:13px;margin-bottom:8px">📄 Voir la feuille du joueur</button>`:''}
+      ${a.pdf_url?`<button onclick="ouvrirPDFJoueur('${a.pdf_url}','${a.acheteur}','bingo_${a.id}','${a.page_debut||1}','${a.page_fin||9999}','${(a.jeu||'').replace(/'/g,"\\'")}','${a.serie||''}')" style="width:100%;padding:8px;background:rgba(99,102,241,.2);color:#818cf8;border:0.5px solid #6366f1;border-radius:6px;cursor:pointer;font-size:13px;margin-bottom:8px">📄 Voir la feuille (boules cochées auto)</button>`:''}
       ${a.statut==='en_attente'?`<button onclick="verifierBingoAuto('${a.jeu}','${a.serie}','${a.id}')" style="width:100%;padding:8px;background:rgba(245,158,11,.2);color:#fbbf24;border:0.5px solid rgba(245,158,11,.4);border-radius:6px;cursor:pointer;font-size:13px;margin-bottom:8px">⚡ Re-vérifier en direct</button>`:''}
       <div id="verif-auto-${a.id}"></div>
       ${a.statut==='en_attente'?`<div style="display:flex;gap:8px">
@@ -6068,6 +6117,7 @@ async function checkMicroJoueur(){
     }
 
     // Alerte anti-perturbateur
+    try{ majEtatApp(); }catch(e){}
     if(typeof codeJoueurActuel !== 'undefined' && codeJoueurActuel){
       try{
         const ra = await fetch('/api/joueur/mon-alerte?code=' + encodeURIComponent(codeJoueurActuel));
@@ -6093,6 +6143,23 @@ async function checkMicroJoueur(){
 var joueurMicroWs = null;
 
 function envoyerCommentaireRapide(txt){ _envoyerCommentaireMicro(txt); }
+
+async function majEtatApp(){
+  try{
+    const r = await fetch('/api/app/etat');
+    const d = await r.json();
+    if(!d || !d.ok) return;
+    const ban = document.getElementById('app-etat-joueur');
+    const titre = document.getElementById('commentaire-micro-titre');
+    if(d.ouvert){
+      if(ban) ban.style.display = 'none';
+      if(titre) titre.textContent = "💬 Répondre à l'organisatrice";
+    } else {
+      if(ban){ ban.style.display = 'block'; ban.innerHTML = '🤖 ' + echapHtmlRec(d.message || "L'application ouvre 1h avant le tournoi.") + ' En attendant, pose tes questions au robot ci-dessous, il te répond tout de suite !'; }
+      if(titre) titre.textContent = "🤖 Pose ta question au robot (disponible toute la journée)";
+    }
+  }catch(e){}
+}
 async function envoyerCommentaireMicro(){
   var inp = document.getElementById('commentaire-micro-input');
   if(!inp) return;
