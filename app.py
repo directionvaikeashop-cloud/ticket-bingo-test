@@ -7915,10 +7915,20 @@ def trace_pions():
                 mv.append((t.get("date", ""), "Transfert ENVOYÉ", f"→ vers {t.get('vers','?')}", -_i(t.get("montant"))))
             if (t.get("vers") or "").upper() == code:
                 mv.append((t.get("date", ""), "Transfert REÇU", f"← de {t.get('de','?')}", _i(t.get("montant"))))
+        # Cadeau d'inscription : la campagne "semaine" crédite 500 F de bonus
+        # directement à l'inscription (non journalisé ailleurs). On le retrace ici.
+        for x in DB.get("rejoindre_log", []):
+            if (x.get("code", "") or "").upper() == code and (x.get("campagne", "") or "") == "semaine":
+                mv.append((x.get("date", ""), "Cadeau inscription",
+                           "Bonus 500 F offert à l'inscription (QR semaine)", 500))
+                break
 
         mv.sort(key=lambda x: str(x[0]))
         pj = DB.get("pions_joueurs", {}).get(code, {})
-        solde_reel = pj.get("100", 0) * 100 + pj.get("50", 0) * 50 + pj.get("20", 0) * 20 + pj.get("10", 0) * 10
+        pb = DB.get("pions_bonus_joueurs", {}).get(code, {})
+        solde_pions = pj.get("100", 0) * 100 + pj.get("50", 0) * 50 + pj.get("20", 0) * 20 + pj.get("10", 0) * 10
+        solde_bonus = pb.get("100", 0) * 100 + pb.get("50", 0) * 50 + pb.get("20", 0) * 20 + pb.get("10", 0) * 10
+        solde_reel = solde_pions + solde_bonus
 
         run = 0
         total_in = 0
@@ -7943,15 +7953,18 @@ def trace_pions():
 
         solde_theorique = run
         ecart = solde_reel - solde_theorique
-        bloc_ecart = ('<div style="background:#14532d;color:#bbf7d0;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:15px;font-weight:600">✅ Tout est tracé : aucun écart, le solde réel correspond exactement aux mouvements.</div>'
-                      if ecart == 0 else
-                      f'<div style="background:#7f1d1d;color:#fecaca;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:15px;font-weight:600">⚠️ Écart non tracé : <b>{format(ecart, ",")} XPF</b> (solde réel − somme des mouvements tracés). Ces pions ont bougé sans aucun enregistrement.</div>')
+        if ecart == 0:
+            bloc_ecart = '<div style="background:#14532d;color:#bbf7d0;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:15px;font-weight:600">✅ Tout est tracé : le solde réel (pions + bonus) correspond exactement aux mouvements.</div>'
+        elif ecart > 0:
+            bloc_ecart = f'<div style="background:#0c4a6e;color:#bae6fd;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:15px;font-weight:600">ℹ️ Solde supérieur de <b>{format(ecart, ",")} XPF</b> aux mouvements tracés. C\'est généralement un cadeau ou un crédit non journalisé — <b>pas une perte</b>.</div>'
+        else:
+            bloc_ecart = f'<div style="background:#7f1d1d;color:#fecaca;padding:12px 16px;border-radius:10px;margin-bottom:16px;font-size:15px;font-weight:600">⚠️ Solde réel inférieur de <b>{format(-ecart, ",")} XPF</b> aux mouvements tracés (jeu d\'avant le journal détaillé, généralement).</div>'
         corps = (
             '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px">'
             f'<div style="background:#161b22;border-radius:10px;padding:12px;text-align:center"><div style="font-size:12px;color:#8b949e">Entrées tracées</div><div style="font-size:17px;font-weight:800;color:#3fb950">+{format(total_in, ",")}</div></div>'
             f'<div style="background:#161b22;border-radius:10px;padding:12px;text-align:center"><div style="font-size:12px;color:#8b949e">Sorties tracées</div><div style="font-size:17px;font-weight:800;color:#f85149">-{format(total_out, ",")}</div></div>'
             f'<div style="background:#161b22;border-radius:10px;padding:12px;text-align:center"><div style="font-size:12px;color:#8b949e">Solde théorique</div><div style="font-size:17px;font-weight:800;color:#58a6ff">{format(solde_theorique, ",")}</div></div>'
-            f'<div style="background:#161b22;border-radius:10px;padding:12px;text-align:center"><div style="font-size:12px;color:#8b949e">Solde réel</div><div style="font-size:17px;font-weight:800;color:#fff">{format(solde_reel, ",")}</div></div>'
+            f'<div style="background:#161b22;border-radius:10px;padding:12px;text-align:center"><div style="font-size:12px;color:#8b949e">Solde réel</div><div style="font-size:17px;font-weight:800;color:#fff">{format(solde_reel, ",")}</div><div style="font-size:10px;color:#8b949e;margin-top:2px">dont {format(solde_bonus, ",")} bonus</div></div>'
             '</div>'
             f'{bloc_ecart}'
             '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:640px">'
@@ -8870,6 +8883,68 @@ def diag_ecarts():
       <div style="margin-top:16px;color:#94a3b8;font-size:12px;line-height:1.5">Pour recréditer : outil admin « Recréditer joueur », avec la décomposition indiquée. Le mouvement est tracé (Crédit admin) et la ligne disparaît d'ici.</div>
     </div></body></html>'''
 
+@app.route("/corriger-double-bonus")
+def corriger_double_bonus():
+    """ADMIN — Retire le 2e bonus de 500 F chez les inscrites « semaine » qui l'ont
+    reçu DEUX fois (cadeau d'inscription + outil petits-jeux). Ne retire que chez
+    celles qui ont encore au moins 500 F de bonus (jamais en négatif). Aperçu d'abord."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    confirme = request.args.get("confirme", "") == "1"
+    log = DB.get("rejoindre_log", [])
+    deja = set(DB.get("bonus_petitsjeux_donne", []))
+    semaine = {(x.get("code", "") or "").upper() for x in log
+               if (x.get("campagne", "") or "") == "semaine" and x.get("code")}
+
+    def bonus_solde(code):
+        pb = DB.get("pions_bonus_joueurs", {}).get(code, {})
+        return pb.get("100", 0) * 100 + pb.get("50", 0) * 50 + pb.get("20", 0) * 20 + pb.get("10", 0) * 10
+
+    targets = [c for c in deja if c.upper() in semaine]
+    recuperables = [c for c in targets if bonus_solde(c) >= 500]
+    entames = [c for c in targets if bonus_solde(c) < 500]
+
+    def page(corps):
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Doublons bonus</title></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:18px;color:#fff">
+        <div style="max-width:600px;margin:0 auto">{corps}</div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    if not confirme:
+        if not targets:
+            return page('<h1 style="color:#34d399;font-size:20px">✅ Aucun doublon</h1><p style="color:#94a3b8">Personne n\'a reçu le bonus « semaine » deux fois. Rien à corriger.</p>')
+        url_ok = f"/corriger-double-bonus?cle={cle}&confirme=1"
+        return page(f'<h1 style="color:#a855f7;font-size:20px">🔁 Doublons de bonus « semaine »</h1>'
+                    f'<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;margin:12px 0;line-height:1.8">'
+                    f'Inscrites ayant reçu 500 F <b>deux fois</b> : <b>{len(targets)}</b><br>'
+                    f'\u2705 Encore récupérables (bonus \u2265 500) : <b style="color:#34d399">{len(recuperables)}</b> \u2192 on retire 500 F chacune<br>'
+                    f'\u26A0\uFE0F Déjà entamées (bonus < 500, jamais en négatif) : <b style="color:#fbbf24">{len(entames)}</b> \u2192 on n\'y touche pas<br>'
+                    f'Total à retirer : <b style="color:#fbbf24">{len(recuperables) * 500} F</b> de pions bonus (non retirables \u2014 aucun impact cash)</div>'
+                    f'<a href="{url_ok}" style="display:inline-block;background:#ef4444;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:700">✅ Retirer les doublons</a>'
+                    f'<p style="color:#6b7280;font-size:12px;margin-top:10px">Chaque inscrite garde son cadeau d\'inscription (500 F). On retire seulement le 2e crédit en trop.</p>')
+
+    # === EXECUTION ===
+    retires = 0
+    for code in recuperables:
+        poche = DB.setdefault("pions_bonus_joueurs", {}).get(code, {})
+        if _debiter_pions_montant(poche, 500):
+            DB["pions_bonus_joueurs"][code] = poche
+            for cm in DB.get("credits_masse", []):
+                if str(cm.get("motif", "")).startswith("Bonus 500F inscription QR") and code in (cm.get("codes") or []):
+                    cm["codes"] = [x for x in cm["codes"] if x != code]
+            deja.discard(code)
+            retires += 1
+    DB["bonus_petitsjeux_donne"] = list(deja)
+    save_data(immediat=True)
+    return page(f'<h1 style="color:#34d399;font-size:20px">✅ Doublons corrigés</h1>'
+                f'<p style="color:#fff"><b>{retires}</b> inscrite(s) : le 2e bonus de 500 F a été retiré (elles gardent leur cadeau d\'inscription).</p>'
+                f'<p style="color:#94a3b8"><b>{len(entames)}</b> déjà entamées : laissées telles quelles (aucun impact cash, bonus non retirable).</p>'
+                f'<p style="margin-top:10px"><a href="/crediter-petits-jeux?cle={cle}" style="color:#a78bfa">← Revenir aux campagnes</a></p>')
+
 @app.route("/crediter-petits-jeux")
 def crediter_petits_jeux():
     """ADMIN — Crédite 500 F de pions bonus aux inscrites d'une campagne (ex. QR
@@ -8928,7 +9003,8 @@ def crediter_petits_jeux():
 
     if not confirme:
         url_ok = f"/crediter-petits-jeux?cle={cle}&campagne={campagne}&confirme=1"
-        return page(f'<h1 style="color:#a855f7;font-size:20px">Aperçu — campagne « {campagne} »</h1>'
+        avert = ('<div style="background:rgba(251,191,36,.12);border:1px solid #f59e0b;border-radius:10px;padding:12px;margin:10px 0;color:#fcd34d;font-size:14px">\u26A0\uFE0F La campagne « semaine » donne <b>déjà 500 F à l\'inscription</b>. Créditer ici <b>doublerait</b> le bonus. À éviter sauf si tu es sûre qu\'elles ne l\'ont pas reçu.</div>' if campagne == "semaine" else '')
+        return page(f'<h1 style="color:#a855f7;font-size:20px">Aperçu — campagne « {campagne} »</h1>{avert}'
                     f'<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;margin:12px 0;line-height:1.8">'
                     f'Inscrites : <b>{len(cibles)}</b><br>'
                     f'Déjà créditées : <b>{len(cibles) - len(a_crediter)}</b><br>'
