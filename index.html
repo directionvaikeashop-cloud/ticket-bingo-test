@@ -498,6 +498,7 @@ document.addEventListener('keydown',e=>{if((e.ctrlKey||e.metaKey)&&(e.key==='s'|
       <div id="joueur-ticket-zone"></div>
       
       <!-- Notification micro organisateur -->
+      <div id="alerte-perturbateur-joueur" style="display:none;margin:10px 0;padding:12px 16px;border-radius:12px;text-align:center;font-weight:700;font-size:14px"></div>
       <div id="micro-notif-joueur" style="display:none;background:linear-gradient(135deg,#6366f1,#7c3aed);padding:12px 16px;margin:10px 0;border-radius:12px;text-align:center">
         <div style="font-size:13px;font-weight:600;color:#fff;margin-bottom:4px">🎤 Message de l'organisateur</div>
         <div id="micro-message-joueur" style="font-size:15px;font-weight:700;color:#fff"></div>
@@ -3052,6 +3053,7 @@ async function chargerReclamations(){
         + _renduVerif(x.verif)
         + '<div style="font-size:11px;color:var(--mu)">' + quand + (traitee ? ' · ✅ traitée' : '') + '</div>'
         + (traitee ? '' : '<button onclick="traiterReclamation(\'' + x.id + '\')" style="margin-top:8px;padding:6px 12px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid rgba(16,185,129,.5);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✓ Marquer comme traitée</button>')
+        + '<button onclick="avertirJoueur(\'' + x.code_joueur + '\')" style="margin-top:8px;margin-left:6px;padding:6px 12px;background:rgba(245,158,11,.2);color:#fbbf24;border:0.5px solid rgba(245,158,11,.5);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">⚠️ Avertir</button>'
         + '</div>';
     }).join('');
   }catch(e){}
@@ -3088,9 +3090,23 @@ async function chargerCommentairesMicro(){
         + _renduVerif(x.verif)
         + '<div style="font-size:11px;color:var(--mu)">' + quand + (traite ? ' · ✅ traité' : '') + '</div>'
         + (traite ? '' : '<button onclick="traiterCommentaireMicro(\'' + x.id + '\')" style="margin-top:8px;padding:6px 12px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid rgba(16,185,129,.5);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✓ Marquer comme traité</button>')
+        + '<button onclick="avertirJoueur(\'' + x.code_joueur + '\')" style="margin-top:8px;margin-left:6px;padding:6px 12px;background:rgba(245,158,11,.2);color:#fbbf24;border:0.5px solid rgba(245,158,11,.5);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">⚠️ Avertir</button>'
         + '</div>';
     }).join('');
   }catch(e){}
+}
+async function avertirJoueur(code){
+  var motif = prompt("Motif de l'avertissement (perturbation) :", "Perturbation du tournoi");
+  if(motif === null) return;
+  try{
+    var r = await fetch('/api/joueur/avertir', {method:'POST', headers:{'Content-Type':'application/json','X-Token':TOKEN}, body: JSON.stringify({code:code, motif:motif})});
+    var d = await r.json();
+    if(d && d.ok){
+      alert(d.bloque ? ('🚫 ' + code + ' a atteint 3 avertissements → BLOQUÉE du tournoi.') : ('⚠️ Avertissement ' + d.nb + '/3 envoyé à ' + code + '.'));
+      if(typeof chargerCommentairesMicro === 'function') chargerCommentairesMicro();
+      if(typeof chargerReclamations === 'function') chargerReclamations();
+    } else { alert((d && d.msg) || 'Erreur'); }
+  }catch(e){ alert('Erreur réseau, réessaie.'); }
 }
 async function traiterCommentaireMicro(id){
   try{
@@ -6049,6 +6065,26 @@ async function checkMicroJoueur(){
       dernierAudioTimestamp = audioData.timestamp;
       // Jouer l'audio reçu
       jouerAudioMicro(audioData.audio);
+    }
+
+    // Alerte anti-perturbateur
+    if(typeof codeJoueurActuel !== 'undefined' && codeJoueurActuel){
+      try{
+        const ra = await fetch('/api/joueur/mon-alerte?code=' + encodeURIComponent(codeJoueurActuel));
+        const da = await ra.json();
+        const ban = document.getElementById('alerte-perturbateur-joueur');
+        if(ban){
+          if(da && da.bloque){
+            ban.style.display='block'; ban.style.background='rgba(239,68,68,.2)'; ban.style.border='1px solid #f87171'; ban.style.color='#fca5a5';
+            ban.innerHTML='🚫 Tu as été bloquée du tournoi pour perturbation. Contacte l\'organisatrice.';
+          } else if(da && da.nb > 0){
+            ban.style.display='block'; ban.style.background='rgba(245,158,11,.18)'; ban.style.border='1px solid #fbbf24'; ban.style.color='#fbbf24';
+            ban.innerHTML='⚠️ Avertissement ' + da.nb + '/3 — écoute l\'organisatrice, sinon tu seras bloquée du tournoi.';
+          } else {
+            ban.style.display='none';
+          }
+        }
+      }catch(e){}
     }
   }catch(e){}
 }
