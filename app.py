@@ -11778,3 +11778,98 @@ def rapport_tournoi():
       <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:7px;color:#a78bfa">Heure</th><th style="padding:7px;color:#a78bfa">Opération</th><th style="padding:7px;color:#a78bfa">Joueuse</th><th style="padding:7px;color:#a78bfa;text-align:right">Montant</th><th style="padding:7px;color:#a78bfa">Détail</th></tr>
       {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/verif-mises-org")
+def verif_mises_org():
+    """ADMIN — Vérifie que chaque mise de ticket est bien créditée au compteur de
+    l'organisatrice. ?cle=ADMIN[&org=CODE]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    codes = DB.get("codes", {})
+    f_org = (request.args.get("org", "") or "").strip().upper()
+
+    def i(x):
+        try:
+            return int(float(x or 0))
+        except Exception:
+            return 0
+
+    def onom(o):
+        return codes.get(o, {}).get("nom", o) if o else "—"
+
+    # Agréger par organisatrice
+    par_org = {}
+    anomalies = []
+    for c in DB.get("commandes_tickets_pions", []):
+        if not isinstance(c, dict):
+            continue
+        o = (c.get("code_org") or "").upper()
+        if not o or (f_org and o != f_org):
+            continue
+        montant = i(c.get("total_pions"))
+        statut = c.get("statut", "")
+        creditee = bool(c.get("mise_creditee_org"))
+        p = par_org.setdefault(o, {"creditee": 0, "attente": 0, "rembourse": 0, "anomalie": 0})
+        if statut == "rembourse":
+            p["rembourse"] += montant
+        elif statut == "validee":
+            if creditee:
+                p["creditee"] += montant
+            else:
+                p["anomalie"] += montant
+                anomalies.append((o, c.get("code_joueur", ""), montant, c.get("jeu", ""), c.get("date", "")))
+        else:  # en_attente
+            p["attente"] += montant
+
+    # Solde réel actuel du compteur de chaque org
+    def solde_poche(o):
+        poche = DB.get("pions_org", {}).get(o, {})
+        return _xpf_total_pions(poche) if isinstance(poche, dict) else 0
+
+    rows = ""
+    for o in sorted(par_org.keys(), key=lambda x: onom(x).lower()):
+        p = par_org[o]
+        alerte = ""
+        if p["anomalie"] > 0:
+            alerte = f'<span style="color:#f87171;font-weight:700"> ⚠️ {format(p["anomalie"], ",")} F non crédités</span>'
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:9px;color:#fbbf24;font-weight:600">{onom(o)}{alerte}</td>'
+                 f'<td style="padding:9px;font-family:monospace;color:#a78bfa">{o}</td>'
+                 f'<td style="padding:9px;text-align:right;color:#34d399">{format(p["creditee"], ",")} F</td>'
+                 f'<td style="padding:9px;text-align:right;color:#fbbf24">{format(p["attente"], ",")} F</td>'
+                 f'<td style="padding:9px;text-align:right;color:#fca5a5">{format(p["rembourse"], ",")} F</td>'
+                 f'<td style="padding:9px;text-align:right;color:#c7d2fe">{format(solde_poche(o), ",")} F</td></tr>')
+    if not rows:
+        rows = '<tr><td colspan="6" style="padding:20px;text-align:center;color:#94a3b8">Aucune vente de ticket.</td></tr>'
+
+    anomalies.sort(key=lambda a: str(a[4]), reverse=True)
+    anom_html = ""
+    if anomalies:
+        lignes = ""
+        for o, cj, m, jeu, dt in anomalies[:100]:
+            lignes += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                       f'<td style="padding:7px;color:#fbbf24">{onom(o)}</td>'
+                       f'<td style="padding:7px;font-family:monospace;color:#a78bfa">{cj}</td>'
+                       f'<td style="padding:7px;text-align:right;font-weight:700">{format(m, ",")} F</td>'
+                       f'<td style="padding:7px;color:#94a3b8;font-size:11px">{jeu}</td>'
+                       f'<td style="padding:7px;color:#64748b;font-size:11px">{str(dt)[:16].replace("T"," ")}</td></tr>')
+        anom_html = (f'<h2 style="font-size:15px;color:#fca5a5;margin:20px 0 8px">⚠️ Tickets validés mais mise NON créditée ({len(anomalies)})</h2>'
+                     f'<div style="color:#94a3b8;font-size:12px;margin-bottom:8px">Ce sont d\'anciennes validations (avant la correction). Tu peux recréditer manuellement la poche de l\'organisatrice via /organisatrices ou m\'en parler.</div>'
+                     f'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px">'
+                     f'<tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:7px;color:#fca5a5">Organisatrice</th><th style="padding:7px;color:#fca5a5">Joueuse</th><th style="padding:7px;color:#fca5a5;text-align:right">Montant</th><th style="padding:7px;color:#fca5a5">Jeu</th><th style="padding:7px;color:#fca5a5">Date</th></tr>{lignes}</table></div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vérif mises organisatrices</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:920px;margin:0 auto">
+      <h1 style="font-size:21px;color:#a855f7;margin-bottom:6px">🔍 Vérification des mises → compteur organisatrice</h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:6px">Chaque mise de ticket est créditée au compteur de l'organisatrice <b style="color:#fff">au moment de la validation</b>.</div>
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:14px">🟢 Créditée = mise bien arrivée · 🟡 En attente = ticket pas encore validé (joueuse débitée, pas encore créditée) · 🔴 Remboursée · 🔵 Solde = compteur réel actuel.</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:9px;color:#a78bfa">Organisatrice</th><th style="padding:9px;color:#a78bfa">Code</th><th style="padding:9px;color:#a78bfa;text-align:right">🟢 Créditée</th><th style="padding:9px;color:#a78bfa;text-align:right">🟡 En attente</th><th style="padding:9px;color:#a78bfa;text-align:right">🔴 Remboursée</th><th style="padding:9px;color:#a78bfa;text-align:right">🔵 Solde compteur</th></tr>
+      {rows}</table></div>
+      {anom_html}
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
