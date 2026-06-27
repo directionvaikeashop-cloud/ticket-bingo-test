@@ -14443,3 +14443,81 @@ def sources_emetteurs():
       <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:6px;color:#fca5a5">Code</th><th style="padding:6px;color:#fca5a5">Nom</th><th style="padding:6px;color:#fca5a5;text-align:right">Achats réels</th><th style="padding:6px;color:#fca5a5;text-align:right">Gains</th><th style="padding:6px;color:#fca5a5;text-align:right">Bonus/Crédits</th><th style="padding:6px;color:#fca5a5;text-align:right">Reçus</th><th style="padding:6px;color:#fca5a5;text-align:right">A eu (total)</th><th style="padding:6px;color:#fca5a5;text-align:right">Envoyé</th><th style="padding:6px;color:#fca5a5;text-align:right">Verdict</th></tr>
       {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/chaine-fabrique")
+def chaine_fabrique():
+    """ADMIN — Trace la chaîne : pour chaque FABRICANT (a envoyé plus qu'il n'a eu),
+    liste vers QUI sont partis ses pions, avec montants et dates. Montre où
+    atterrissent les pions fabriqués. Lecture seule. ?cle=ADMIN"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
+            noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
+
+    achats = {}; gains = {}; bc = {}; recu = {}; envoye = {}
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict) and c.get("statut") == "validee" and c.get("code_joueur"):
+            cj = (c.get("code_joueur") or "").upper()
+            nbp = int(c.get("nb_pions", c.get("pions_credites", 0)) or 0); vp = int(c.get("valeur_pion", 0) or 0)
+            achats[cj] = achats.get(cj, 0) + ((nbp * vp) or int(c.get("montant_net", 0) or 0))
+    for g in DB.get("gains_finaux", []):
+        if isinstance(g, dict) and g.get("code"):
+            cj = (g.get("code") or "").upper(); gains[cj] = gains.get(cj, 0) + int(g.get("montant_gain", g.get("montant_credite", 0)) or 0)
+    for x in DB.get("rejoindre_log", []):
+        if isinstance(x, dict) and x.get("campagne","")=="semaine" and x.get("code"):
+            cj=(x.get("code") or "").upper(); bc[cj]=bc.get(cj,0)+500
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict) and c.get("code_joueur"):
+            cj=(c.get("code_joueur") or "").upper(); bc[cj]=bc.get(cj,0)+int(c.get("nb_pions",0) or 0)*int(c.get("valeur_pion",0) or 0)
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict):
+            m=int(c.get("nb_pions",0) or 0)*int(c.get("valeur_pion",0) or 0)
+            for cj in (c.get("codes") or []):
+                cj=(cj or "").upper(); bc[cj]=bc.get(cj,0)+m
+    transferts = [t for t in DB.get("transferts_pions", []) if isinstance(t, dict)]
+    for t in transferts:
+        de=(t.get("de") or "").upper(); vers=(t.get("vers") or "").upper(); m=int(t.get("montant",0) or 0)
+        if de: envoye[de]=envoye.get(de,0)+m
+        if vers: recu[vers]=recu.get(vers,0)+m
+
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100",0)*100+p.get("50",0)*50+p.get("20",0)*20+p.get("10",0)*10
+
+    # Les fabricants = envoyé > (achats+gains+bc+recu)
+    fab = []
+    for c in envoye:
+        eu = achats.get(c,0)+gains.get(c,0)+bc.get(c,0)+recu.get(c,0)
+        ec = envoye[c]-eu
+        if ec > 0: fab.append((c, ec))
+    fab.sort(key=lambda x:-x[1])
+
+    blocs = ""
+    for c, ec in fab:
+        dests = [t for t in transferts if (t.get("de") or "").upper()==c]
+        lignes_d = ""
+        for t in sorted(dests, key=lambda x:str(x.get("date","")), reverse=True):
+            v=(t.get("vers") or "").upper(); m=int(t.get("montant",0) or 0); d=str(t.get("date",""))[:16]
+            lignes_d += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.05)">'
+                         f'<td style="padding:4px 8px;color:#8b949e;font-size:11px">{d}</td>'
+                         f'<td style="padding:4px 8px;font-family:monospace;color:#fca5a5">→ {v}</td>'
+                         f'<td style="padding:4px 8px;color:#94a3b8;font-size:12px">{noms.get(v,"")}</td>'
+                         f'<td style="padding:4px 8px;text-align:right;color:#f87171;font-weight:700">{format(m, ",")}</td>'
+                         f'<td style="padding:4px 8px;text-align:right;color:#6ee7b7;font-size:11px">solde {v}: {format(solde(v), ",")}</td></tr>')
+        blocs += (f'<div style="background:#161b22;border:1px solid #7f1d1d;border-radius:10px;padding:12px;margin-bottom:12px">'
+                  f'<div style="color:#fca5a5;font-weight:700;margin-bottom:6px">🔴 {c} <span style="color:#94a3b8;font-weight:400">{noms.get(c,"")}</span> — a fabriqué <b>{format(ec, ",")} XPF</b> (acheté réel : {format(achats.get(c,0), ",")})</div>'
+                  f'<table style="width:100%;border-collapse:collapse">{lignes_d}</table></div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Chaîne des pions fabriqués</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:880px;margin:0 auto">
+      <h1 style="font-size:20px;color:#f0883e;margin-bottom:8px">🔗 Chaîne des pions fabriqués — où atterrissent-ils ?</h1>
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:14px">Pour chaque fabricant (a envoyé plus qu'il n'a eu), voici vers QUI sont partis ses pions. « solde X » = ce que le destinataire détient aujourd'hui.</div>
+      {blocs if blocs else '<div style="color:#34d399">Aucun fabricant trouvé.</div>'}
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
