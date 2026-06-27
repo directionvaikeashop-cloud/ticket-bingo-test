@@ -6794,13 +6794,7 @@ def releve_financier_joueur(code):
             elif _v == code and _d:
                 _lies_reg.add(_d)
         _bloque = code in DB.get("codes_bloques", [])
-        # Ligne d'équilibrage UNIQUEMENT pour les comptes du réseau (transferts).
-        # Les comptes normaux n'ont AUCUNE ligne d'ajustement (pas de "solde antérieur").
-        if (len(_lies_reg) >= 2 or _bloque) and ajustement != 0:
-            if ajustement > 0:
-                lignes.append({"date": "", "type": "Total", "desc": "", "entree": ajustement, "sortie": 0, "ajustement": True})
-            else:
-                lignes.append({"date": "", "type": "Total", "desc": "", "entree": 0, "sortie": -ajustement, "ajustement": True})
+        # AUCUNE ligne d'équilibrage pour personne : le solde = entrées − sorties brut.
 
     lignes.sort(key=lambda x: str(x["date"]), reverse=True)
 
@@ -6811,6 +6805,8 @@ def releve_financier_joueur(code):
     _ajust_sortie = sum(l["sortie"] for l in lignes if l.get("ajustement"))
     _ajust_net = _ajust_entree - _ajust_sortie  # négatif = pions retirés
     _ajust_label = next((l["type"] for l in lignes if l.get("ajustement")), "")
+    # RÈGLE SACRÉE : le solde affiché = ENTRÉES − SORTIES (+ ligne Total pour le réseau)
+    _solde_affiche = total_entrees - total_sorties + _ajust_net
     
     html = "<!DOCTYPE html><html><head><meta charset='utf-8'><meta name='viewport' content='width=device-width, initial-scale=1'><title>Mon releve</title><style>"
     html += "body{font-family:monospace;background:#0d1117;color:#e6edf3;padding:20px}h1{color:#58a6ff}"
@@ -6933,7 +6929,7 @@ def releve_financier_joueur(code):
                  + ("<div>&bull; Pions r&eacute;ellement achet&eacute;s (vrai paiement) : <b>" + format(_tot_achat_reel, ",") + " XPF</b></div>" if _tot_achat_reel else "<div>&bull; Pions r&eacute;ellement achet&eacute;s : <b>0 XPF</b> (aucun achat r&eacute;el)</div>")
                  + ("<div>&bull; Recr&eacute;dits administratifs re&ccedil;us : <b>" + format(_tot_cred, ",") + " XPF</b></div>" if _tot_cred else "")
                  + ((("<div style='margin-top:6px;padding:8px;background:rgba(248,81,73,.15);border-radius:6px'>&#128308; <b>Contr&ocirc;le d&eacute;bit : ce compte a envoy&eacute; " + format(_ecart_source, ",") + " XPF de PLUS qu'il n'en a jamais eu</b> (envoy&eacute; " + format(_tot_env, ",") + " / r&eacute;ellement eu " + format(_total_eu, ",") + "). Ces pions n'avaient pas de contrepartie r&eacute;elle.</div>") if _ecart_source > 0 else ("<div style='margin-top:6px;padding:8px;background:rgba(63,185,80,.1);border-radius:6px;color:#3fb950'>&#9989; D&eacute;bit coh&eacute;rent : ce compte a envoy&eacute; " + format(_tot_env, ",") + " XPF, couverts par ce qu'il a r&eacute;ellement eu (" + format(_total_eu, ",") + " XPF).</div>")) if _tot_env > 0 else "")
-                 + ((("<div style='margin-top:6px;padding:8px;background:rgba(248,81,73,.12);border-radius:6px'>&#128308; <b>Ce compte d&eacute;tient encore " + format(solde_pions, ",") + " XPF</b> de pions sur les transferts re&ccedil;us.</div>") if solde_pions > 0 else ("<div style='margin-top:6px;padding:8px;background:rgba(63,185,80,.12);border-radius:6px;color:#3fb950'>&#9989; <b>Ce compte ne d&eacute;tient plus de pions</b> (solde &agrave; 0). Les pions re&ccedil;us par transfert ne sont plus disponibles.</div>")) if _tot_recu > 0 else "")
+                 + ((("<div style='margin-top:6px;padding:8px;background:rgba(248,81,73,.12);border-radius:6px'>&#128308; <b>Ce compte d&eacute;tient encore " + format(_solde_affiche, ",") + " XPF</b> de pions sur les transferts re&ccedil;us.</div>") if _solde_affiche > 0 else ("<div style='margin-top:6px;padding:8px;background:rgba(63,185,80,.12);border-radius:6px;color:#3fb950'>&#9989; <b>Ce compte ne d&eacute;tient plus de pions</b> (solde &agrave; 0). Les pions re&ccedil;us par transfert ne sont plus disponibles.</div>")) if _tot_recu > 0 else "")
                  + "<div style='margin-top:8px;font-size:12px;color:#d4a857'>Toutes ces op&eacute;rations sont enregistr&eacute;es et document&eacute;es (dates, montants et adresses IP).</div></div>")
     html += "<form method='get' style='margin:10px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"
     html += "<span style='font-size:12px;color:#8b949e'>Periode :</span>"
@@ -6952,7 +6948,7 @@ def releve_financier_joueur(code):
         html += "<div><strong>Net periode</strong><br><span class='m sol'>" + ("+" if net >= 0 else "") + format(net, ",") + " XPF</span><br><span style='font-size:11px;color:#8b949e'>solde actuel : " + format(solde_pions, ",") + " XPF</span></div>"
     else:
         _note_bonus = ("dont " + format(solde_bonus, ",") + " F bonus jouable") if solde_bonus > 0 else "voir récapitulatif en bas"
-        html += "<div><strong>Solde actuel</strong><br><span class='m sol'>" + format(solde_pions, ",") + " XPF</span><br><span style='font-size:11px;color:#8b949e'>" + _note_bonus + "</span></div>"
+        html += "<div><strong>Solde actuel</strong><br><span class='m sol'>" + format(_solde_affiche, ",") + " XPF</span><br><span style='font-size:11px;color:#8b949e'>= entrees - sorties</span></div>"
     html += "</div>"
     
     if lignes:
@@ -6981,9 +6977,9 @@ def releve_financier_joueur(code):
                      "<b style='color:" + ("#f85149" if _ajust_net < 0 else "#3fb950") + "'>" + ("+" if _ajust_net >= 0 else "") + format(_ajust_net, ",") + " XPF</b></div>") if _ajust_net != 0 else "")
                  + "<div style='display:flex;justify-content:space-between;padding:10px 0 2px;font-size:16px'>"
                  "<span style='color:#e6edf3;font-weight:bold'>SOLDE ACTUEL du compte</span>"
-                 "<b style='color:#58a6ff'>" + format(solde_pions, ",") + " XPF</b></div>"
-                 + (("<div style='margin-top:8px;padding:8px;background:rgba(63,185,80,.1);border-radius:6px;font-size:12px;color:#3fb950'>✓ Vérification : " + format(total_entrees, ",") + " − " + format(total_sorties, ",") + (((" − " + format(-_ajust_net, ",")) if _ajust_net < 0 else (" + " + format(_ajust_net, ","))) if _ajust_net != 0 else "") + " = " + format(solde_pions, ",") + " XPF. Calcul équilibré.</div>")
-                    if (_solde_theorique + _ajust_net) == solde_pions else "")
+                 "<b style='color:#58a6ff'>" + format(_solde_affiche, ",") + " XPF</b></div>"
+                 + (("<div style='margin-top:8px;padding:8px;background:rgba(63,185,80,.1);border-radius:6px;font-size:12px;color:#3fb950'>✓ Vérification : " + format(total_entrees, ",") + " − " + format(total_sorties, ",") + (((" − " + format(-_ajust_net, ",")) if _ajust_net < 0 else (" + " + format(_ajust_net, ","))) if _ajust_net != 0 else "") + " = " + format(_solde_affiche, ",") + " XPF. Calcul équilibré.</div>")
+                    if (_solde_theorique + _ajust_net) == _solde_affiche else "")
                  + "</div>")
     else:
         html += "<p style='color:#8b949e;margin-top:20px'>Aucune operation pour le moment.</p>"
