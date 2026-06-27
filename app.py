@@ -6808,6 +6808,21 @@ def releve_financier_joueur(code):
                  "<div style='font-size:13px;color:#58a6ff;font-weight:bold;margin-bottom:6px'>&#128274; Connexions enregistrees sur ce compte</div>"
                  + _lignes_ip +
                  "<div style='font-size:11px;color:#8b949e;margin-top:6px'>Chaque acces a ce compte est enregistre (adresse IP, date et appareil) a des fins de securite.</div></div>")
+    # === COMPTES LIES (par transferts uniquement — JAMAIS par wifi partage) : nombre seul ===
+    _lies = set()
+    for _t in DB.get("transferts_pions", []):
+        if not isinstance(_t, dict):
+            continue
+        _de = (_t.get("de", "") or "").upper()
+        _vers = (_t.get("vers", "") or "").upper()
+        if _de == code and _vers:
+            _lies.add(_vers)
+        elif _vers == code and _de:
+            _lies.add(_de)
+    if _lies:
+        html += ("<div style='background:#2b1a00;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin:12px 0;color:#fde68a;font-size:13px'>"
+                 "&#9888; Ce compte a &eacute;chang&eacute; des pions avec <b>" + str(len(_lies)) + " autre(s) compte(s)</b>. "
+                 "Cette activit&eacute; est enregistr&eacute;e et trac&eacute;e.</div>")
     html += "<form method='get' style='margin:10px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"
     html += "<span style='font-size:12px;color:#8b949e'>Periode :</span>"
     html += "<input type='date' name='du' value='" + du + "' style='background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:6px'>"
