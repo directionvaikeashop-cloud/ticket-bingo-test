@@ -11383,3 +11383,108 @@ def traiter_commentaire_micro():
             save_data()
             return jsonify({"ok": True})
     return jsonify({"ok": False, "msg": "Commentaire introuvable."}), 404
+
+
+# === SYSTÈME ANTI-PERTURBATEUR (avertissements -> blocage auto à 3) ===
+@app.route("/api/joueur/avertir", methods=["POST"])
+def avertir_joueur():
+    """ORG/ADMIN — Avertit une joueuse perturbatrice. À 3 avertissements -> blocage auto."""
+    global DB
+    DB = load_data()
+    s = verif_session(request.headers.get("X-Token", ""))
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    d = request.get_json(silent=True) or {}
+    code = (d.get("code") or "").upper().strip()
+    motif = (d.get("motif") or "Perturbation du tournoi").strip()[:200]
+    if not code:
+        return jsonify({"ok": False, "msg": "Code obligatoire"}), 400
+    av = DB.setdefault("avertissements_joueurs", {})
+    rec = av.get(code) or {"nb": 0, "historique": []}
+    rec["nb"] = int(rec.get("nb", 0)) + 1
+    hist = (rec.get("historique") or [])[:9]
+    hist.insert(0, {"motif": motif, "par": s.get("code", "?"), "date": datetime.datetime.now().isoformat()})
+    rec["historique"] = hist
+    rec["dernier_motif"] = motif
+    rec["maj"] = datetime.datetime.now().isoformat()
+    bloque = False
+    if rec["nb"] >= 3:
+        DB.setdefault("codes_bloques", [])
+        if code not in DB["codes_bloques"]:
+            DB["codes_bloques"].append(code)
+        rec["bloque_le"] = datetime.datetime.now().isoformat()
+        bloque = True
+    av[code] = rec
+    save_data(immediat=True)
+    return jsonify({"ok": True, "nb": rec["nb"], "bloque": bloque,
+                    "msg": ("🚫 Bloquée (3/3)" if bloque else f"⚠️ Avertissement {rec['nb']}/3 envoyé")})
+
+
+@app.route("/api/joueur/mon-alerte")
+def mon_alerte_joueur():
+    """JOUEUSE — Son état d'avertissement / blocage (pour l'afficher dans son interface)."""
+    global DB
+    DB = load_data()
+    code = (request.args.get("code", "") or "").upper().strip()
+    if not code:
+        return jsonify({"ok": True, "nb": 0, "bloque": False})
+    av = DB.get("avertissements_joueurs", {}).get(code)
+    bloque = code in DB.get("codes_bloques", [])
+    return jsonify({"ok": True,
+                    "nb": (int(av.get("nb", 0)) if av else 0),
+                    "bloque": bloque,
+                    "motif": (av.get("dernier_motif", "") if av else "")})
+
+
+@app.route("/perturbateurs")
+def page_perturbateurs():
+    """ADMIN — Liste des avertissements et blocages. ?cle=ADMIN
+    Actions : &debloquer=CODE (débloque + remet les avertissements à zéro)."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    msg_action = ""
+    deb = (request.args.get("debloquer", "") or "").upper().strip()
+    if deb:
+        DB["codes_bloques"] = [c for c in DB.get("codes_bloques", []) if c != deb]
+        if deb in DB.get("avertissements_joueurs", {}):
+            DB["avertissements_joueurs"].pop(deb, None)
+        save_data(immediat=True)
+        msg_action = f"✅ {deb} débloquée et avertissements remis à zéro."
+    av = DB.get("avertissements_joueurs", {})
+    bloques = set(DB.get("codes_bloques", []))
+    lignes = []
+    for code, rec in av.items():
+        nb = int(rec.get("nb", 0))
+        est_bloque = code in bloques
+        lignes.append((code, nb, est_bloque, rec.get("dernier_motif", ""), rec.get("maj", "")))
+    # codes bloqués sans avertissement (bloqués à la main)
+    for code in bloques:
+        if code not in av:
+            lignes.append((code, 0, True, "(bloquée manuellement)", ""))
+    lignes.sort(key=lambda x: (0 if x[2] else 1, -x[1]))
+    rows = ""
+    for code, nb, est_bloque, motif, maj in lignes:
+        etat = '<span style="color:#f87171;font-weight:700">🚫 BLOQUÉE</span>' if est_bloque else f'<span style="color:#fbbf24;font-weight:700">⚠️ {nb}/3</span>'
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:8px;font-family:monospace;color:#a78bfa">{code}</td>'
+                 f'<td style="padding:8px">{etat}</td>'
+                 f'<td style="padding:8px;color:#94a3b8;font-size:12px">{motif}</td>'
+                 f'<td style="padding:8px;color:#64748b;font-size:11px">{str(maj)[:16].replace("T"," ")}</td>'
+                 f'<td style="padding:8px"><a href="/perturbateurs?cle={cle}&debloquer={code}" style="color:#34d399;text-decoration:none;font-weight:700">✅ Débloquer</a></td></tr>')
+    if not rows:
+        rows = '<tr><td colspan="5" style="padding:20px;text-align:center;color:#94a3b8">Aucune perturbatrice — tout est calme. 🌿</td></tr>'
+    banner = f'<div style="background:rgba(16,185,129,.15);border:1px solid #10b981;border-radius:8px;padding:10px;margin-bottom:12px;color:#34d399;font-weight:700">{msg_action}</div>' if msg_action else ""
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Perturbatrices</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff">
+    <div style="max-width:820px;margin:0 auto">
+      <h1 style="font-size:21px;color:#f87171;margin-bottom:8px">🚨 Anti-perturbateur</h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:12px">Avertissements et blocages. À 3 avertissements, la joueuse est bloquée automatiquement (connexion + pions inaccessibles).</div>
+      {banner}
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:560px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:8px;color:#a78bfa">Code</th><th style="padding:8px;color:#a78bfa">État</th><th style="padding:8px;color:#a78bfa">Dernier motif</th><th style="padding:8px;color:#a78bfa">Maj</th><th style="padding:8px;color:#a78bfa">Action</th></tr>
+      {rows}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
