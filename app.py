@@ -521,6 +521,12 @@ def _get_client_ip():
 _SECU_PATHS_TX = ("/api/pions/", "/api/ticket", "/api/gain/", "/api/retrait/")
 _SECU_CHAMPS_MONTANT = ("montant", "pions", "nb_pions", "montant_gain", "montant_paye", "prix")
 _SECU_MONTANT_MAX = 5000000
+import time as _t_secu
+_SECU_RL = {}        # identité -> [timestamps]  (limite anti-spam par joueuse)
+_SECU_DEDUP = {}     # empreinte -> timestamp     (anti double-clic)
+_SECU_RL_MAX = 15
+_SECU_RL_WIN = 10
+_SECU_DEDUP_WIN = 1.5
 
 @app.before_request
 def _garde_securite_transactions():
@@ -533,6 +539,7 @@ def _garde_securite_transactions():
         d = request.get_json(silent=True)
         if not isinstance(d, dict):
             return None
+        # 1) Bornes des montants : refuse négatif, non numérique, délirant
         for champ in _SECU_CHAMPS_MONTANT:
             v = d.get(champ)
             if champ in d and v is not None and v != "":
@@ -542,6 +549,32 @@ def _garde_securite_transactions():
                     return jsonify({"ok": False, "msg": "Montant invalide."}), 400
                 if val < 0 or val > _SECU_MONTANT_MAX:
                     return jsonify({"ok": False, "msg": "Montant hors limites."}), 400
+        now = _t_secu.time()
+        ident = str(d.get("code_joueur") or d.get("code") or d.get("code_gagnant")
+                    or d.get("code_source") or _get_client_ip() or "?").upper()
+        # 2) Limite anti-spam PAR JOUEUSE (pas par IP → pas de blocage en salle/wifi partagé)
+        log = _SECU_RL.setdefault(ident, [])
+        log[:] = [t for t in log if now - t < _SECU_RL_WIN]
+        if len(log) >= _SECU_RL_MAX:
+            return jsonify({"ok": False, "msg": "Trop d'opérations d'affilée, patiente quelques secondes."}), 429
+        log.append(now)
+        # 3) Anti double-clic : même joueuse + même action + même contenu en moins de 1,5 s
+        try:
+            raw = request.get_data(cache=True) or b""
+        except Exception:
+            raw = b""
+        emp = hashlib.sha256((ident + "|" + path + "|").encode("utf-8", "ignore") + raw).hexdigest()
+        last = _SECU_DEDUP.get(emp)
+        if last and now - last < _SECU_DEDUP_WIN:
+            return jsonify({"ok": False, "msg": "Action déjà envoyée, patiente une seconde."}), 409
+        _SECU_DEDUP[emp] = now
+        # Nettoyage mémoire
+        if len(_SECU_DEDUP) > 4000:
+            for k in [k for k, t in list(_SECU_DEDUP.items()) if now - t > 60]:
+                _SECU_DEDUP.pop(k, None)
+        if len(_SECU_RL) > 4000:
+            for k in [k for k, ts in list(_SECU_RL.items()) if not ts or now - ts[-1] > 60]:
+                _SECU_RL.pop(k, None)
     except Exception:
         return None
     return None
@@ -2676,6 +2709,11 @@ def crediter_pions():
 
 @app.route("/api/pions/utiliser", methods=["POST"])
 def utiliser_pions():
+    """DÉSACTIVÉE — ancienne route non sécurisée, plus utilisée par l'appli."""
+    return jsonify({"ok": False, "msg": "Route désactivée."}), 410
+
+
+def _utiliser_pions_desactive():
     global DB
     DB = load_data()
     d = request.json
