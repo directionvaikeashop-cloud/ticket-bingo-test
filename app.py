@@ -6954,6 +6954,21 @@ def releve_financier_joueur(code):
             html += "<td class='td-ent'>" + ent + "</td>"
             html += "<td class='td-sor'>" + sor + "</td></tr>"
         html += "</table>"
+        # === RÉCAPITULATIF CLAIR : total entrées, total sorties, total final ===
+        _net_final = total_entrees - total_sorties
+        html += ("<div style='background:#0d1117;border:2px solid #30363d;border-radius:10px;padding:16px;margin:18px 0;font-size:14px'>"
+                 "<div style='font-weight:bold;color:#e6edf3;margin-bottom:10px;font-size:15px'>📋 Récapitulatif du relevé</div>"
+                 "<div style='display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)'>"
+                 "<span style='color:#8b949e'>Total des ENTRÉES (pions reçus / achetés)</span>"
+                 "<b style='color:#3fb950'>+" + format(total_entrees, ",") + " XPF</b></div>"
+                 "<div style='display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)'>"
+                 "<span style='color:#8b949e'>Total des SORTIES (tickets, retraits, régularisations)</span>"
+                 "<b style='color:#f85149'>-" + format(total_sorties, ",") + " XPF</b></div>"
+                 "<div style='display:flex;justify-content:space-between;padding:10px 0 2px;font-size:16px'>"
+                 "<span style='color:#e6edf3;font-weight:bold'>TOTAL FINAL (solde du compte)</span>"
+                 "<b style='color:#58a6ff'>" + format(_net_final, ",") + " XPF</b></div>"
+                 "<div style='font-size:11px;color:#6e7681;margin-top:6px'>Calcul : Total entrées (" + format(total_entrees, ",") + ") &minus; Total sorties (" + format(total_sorties, ",") + ") = " + format(_net_final, ",") + " XPF</div>"
+                 "</div>")
     else:
         html += "<p style='color:#8b949e;margin-top:20px'>Aucune operation pour le moment.</p>"
     
