@@ -6882,10 +6882,24 @@ def releve_financier_joueur(code):
             _role = "Compte relié à un réseau de transferts"
         else:
             _role = ""
-        _liste = ", ".join(sorted(_lies))
+        def _orig_court(_cc):
+            _r = next((x for x in DB.get("rejoindre_log", []) if (x.get("code", "") or "").upper() == _cc), None)
+            _tk = [t for t in DB.get("tickets", []) if (t.get("code_acheteur", "") or "").upper() == _cc]
+            _pb = any((t.get("code_org") == "PUB" or t.get("source") == "publicite") for t in _tk)
+            if _r or _pb:
+                return "QR"
+            if _tk:
+                _os = sorted({t.get("code_org") for t in _tk if t.get("code_org")})
+                _nm = ", ".join(DB.get("codes", {}).get(o, {}).get("nom", o) for o in _os)
+                return _nm or "?"
+            return "?"
+        _liste_html = "".join(
+            "<div style='margin-left:12px;font-family:monospace;font-size:12px'>&ndash; " + _c +
+            " <span style='color:#d4a857;font-family:system-ui'>(émis par : " + _orig_court(_c) + ")</span></div>"
+            for _c in sorted(_lies))
         html += ("<div style='background:#2b1a00;border:1px solid #f59e0b;border-radius:10px;padding:14px;margin:12px 0;color:#fde68a;font-size:13px;line-height:1.7'>"
                  "<div style='font-size:14px;font-weight:bold;color:#f0b03e;margin-bottom:6px'>&#128269; Synth&egrave;se d'audit de ce compte</div>"
-                 "<div>&bull; Comptes li&eacute;s par transfert : <b>" + str(len(_lies)) + "</b> (" + _liste + ")</div>"
+                 "<div>&bull; Comptes li&eacute;s par transfert : <b>" + str(len(_lies)) + "</b></div>" + _liste_html +
                  "<div>&bull; Pions re&ccedil;us par transfert : <b>" + format(_tot_recu, ",") + " XPF</b>" +
                  (" depuis " + str(len(_recu_de)) + " compte(s)" if _recu_de else "") + "</div>"
                  "<div>&bull; Pions envoy&eacute;s par transfert : <b>" + format(_tot_env, ",") + " XPF</b>" +
