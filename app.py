@@ -656,7 +656,11 @@ def calculer_frais_service(montant, mode_paiement):
     return round(montant * 0.05)
 
 def gen_code(n=8):
-    return ''.join(secrets.choice(string.ascii_uppercase + string.digits) for _ in range(n))
+    # Alphabet SANS caracteres ambigus (0/O, 1/I/L bannis) pour eviter les
+    # confusions de saisie qui font atterrir sur le mauvais compte.
+    # N'affecte QUE les nouveaux codes ; tous les codes existants restent valides.
+    _ALPHABET_SANS_AMBIGU = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+    return ''.join(secrets.choice(_ALPHABET_SANS_AMBIGU) for _ in range(n))
 
 def verif_session(token):
     # Recharger depuis fichier pour avoir sessions a jour
