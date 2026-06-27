@@ -11873,3 +11873,80 @@ def verif_mises_org():
       {rows}</table></div>
       {anom_html}
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/securite-admin")
+def page_securite_admin():
+    """ADMIN — Contrôle des accès administrateur. Liste les codes admin actifs,
+    indique si ADMIN2024 (public) est encore ouvert, et permet de désactiver
+    un code admin. ?cle=ADMIN[&desactiver=CODE]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    msg_action = ""
+    deb = (request.args.get("desactiver", "") or "").upper().strip()
+    if deb:
+        if deb == cle:
+            msg_action = "⚠️ Impossible de désactiver le code que tu utilises en ce moment."
+        elif deb in DB.get("codes", {}):
+            DB["codes"][deb]["actif"] = False
+            save_data(immediat=True)
+            msg_action = f"✅ Le code admin {deb} a été DÉSACTIVÉ."
+
+    env_defini = bool(os.environ.get("ADMIN_CODE_SECRET", "").strip())
+    admin2024 = DB.get("codes", {}).get("ADMIN2024", {})
+    admin2024_actif = bool(admin2024.get("actif"))
+
+    rows = ""
+    nb_actifs = 0
+    for code, c in DB.get("codes", {}).items():
+        if not isinstance(c, dict) or not c.get("admin"):
+            continue
+        actif = bool(c.get("actif"))
+        if actif:
+            nb_actifs += 1
+        danger = (code == "ADMIN2024" and actif)
+        etat = ('<span style="color:#34d399;font-weight:700">✅ Actif</span>' if actif else '<span style="color:#94a3b8">⏸️ Inactif</span>')
+        if danger:
+            etat = '<span style="color:#f87171;font-weight:800">🚨 ACTIF & PUBLIC</span>'
+        ici = ' <span style="color:#818cf8;font-size:11px">(toi, en ce moment)</span>' if code == cle else ''
+        if actif and code != cle:
+            action = f'<a href="/securite-admin?cle={cle}&desactiver={code}" style="color:#fca5a5;text-decoration:none;font-weight:700">🔒 Désactiver</a>'
+        elif code == cle:
+            action = '<span style="color:#64748b">—</span>'
+        else:
+            action = '<span style="color:#64748b">déjà inactif</span>'
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:9px;font-family:monospace;color:#a78bfa">{code}{ici}</td>'
+                 f'<td style="padding:9px;color:#94a3b8">{c.get("nom","")}</td>'
+                 f'<td style="padding:9px">{etat}</td>'
+                 f'<td style="padding:9px;text-align:right">{action}</td></tr>')
+
+    env_html = ('<div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:8px;padding:12px;margin-bottom:10px;color:#34d399;font-size:13px">✅ La variable Railway <b>ADMIN_CODE_SECRET</b> est définie : ton vrai code admin vient de Railway (pas du code public), et ADMIN2024 doit être désactivé.</div>'
+                if env_defini else
+                '<div style="background:rgba(239,68,68,.12);border:1px solid #f87171;border-radius:8px;padding:12px;margin-bottom:10px;color:#fca5a5;font-size:13px">🚨 La variable Railway <b>ADMIN_CODE_SECRET</b> n\'est PAS définie. Tant qu\'elle est vide, le code public <b>ADMIN2024</b> peut servir d\'admin. Définis-la d\'urgence (voir plus bas).</div>')
+    a24_html = ('<div style="background:rgba(239,68,68,.18);border:1px solid #f87171;border-radius:8px;padding:12px;margin-bottom:10px;color:#fca5a5;font-size:13px;font-weight:700">🚨 ADMIN2024 est ENCORE ACTIF et il est public ! Désactive-le dans le tableau ci-dessous.</div>'
+                if admin2024_actif else
+                '<div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:8px;padding:12px;margin-bottom:10px;color:#34d399;font-size:13px">✅ ADMIN2024 (le code public) est désactivé. Bien.</div>')
+    banner = f'<div style="background:rgba(99,102,241,.15);border:1px solid #6366f1;border-radius:8px;padding:10px;margin-bottom:12px;color:#c7d2fe;font-weight:700">{msg_action}</div>' if msg_action else ""
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sécurité admin</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:820px;margin:0 auto">
+      <h1 style="font-size:21px;color:#f87171;margin-bottom:10px">🔐 Sécurité des accès administrateur</h1>
+      {banner}{env_html}{a24_html}
+      <div style="color:#94a3b8;font-size:13px;margin:14px 0 6px"><b style="color:#fff">{nb_actifs}</b> code(s) admin actif(s). Désactive tout ce que tu ne reconnais pas.</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px;min-width:520px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:9px;color:#a78bfa">Code admin</th><th style="padding:9px;color:#a78bfa">Nom</th><th style="padding:9px;color:#a78bfa">État</th><th style="padding:9px;color:#a78bfa;text-align:right">Action</th></tr>
+      {rows}</table></div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-top:16px;font-size:13px;color:#cbd5e1;line-height:1.7">
+        <b style="color:#fff">Pour sécuriser ton admin (à faire sur Railway) :</b><br>
+        1. Va sur Railway → ton projet → onglet <b>Variables</b><br>
+        2. Crée une variable <b>ADMIN_CODE_SECRET</b> = un nouveau code secret (ex. une longue suite de lettres/chiffres à toi)<br>
+        3. Railway redéploie tout seul → ce nouveau code devient ton admin, et <b>ADMIN2024 se désactive automatiquement</b><br>
+        4. Reviens ici avec <b>?cle=TON_NOUVEAU_CODE</b> pour vérifier que tout est ✅
+      </div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
