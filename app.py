@@ -6812,6 +6812,23 @@ def releve_financier_joueur(code):
     html += ".td-ent{color:#3fb950;text-align:right}.td-sor{color:#f85149;text-align:right}</style></head><body>"
     html += "<h1>Mon releve de pions</h1>"
     html += "<div class='sub'>" + str(nom) + " (" + code + ")</div>"
+    # === ORIGINE DU CODE : QR (inscription pub) ou créé par une organisatrice ? ===
+    _rj = next((x for x in DB.get("rejoindre_log", []) if (x.get("code", "") or "").upper() == code), None)
+    _tks_all = [t for t in DB.get("tickets", []) if (t.get("code_acheteur", "") or "").upper() == code]
+    _pub = any((t.get("code_org") == "PUB" or t.get("source") == "publicite") for t in _tks_all)
+    if _rj or _pub:
+        _camp = (_rj.get("campagne") if _rj else "") or "—"
+        _dt = ((_rj.get("date") if _rj else "") or "")[:16].replace("T", " ")
+        html += ('<div style="background:#0c4a6e;color:#bae6fd;padding:12px 14px;border-radius:10px;margin:12px 0;font-size:13px">'
+                 '📲 <b>Origine du compte : auto-inscription par QR code</b> (publicité).'
+                 + (f'<br><span style="color:#7dd3fc;font-size:12px">Campagne : <b>{_camp}</b>{(" · le " + _dt) if _dt else ""}</span>' if (_camp != "—" or _dt) else "")
+                 + '</div>')
+    elif _tks_all:
+        _org_codes = sorted({t.get("code_org") for t in _tks_all if t.get("code_org")})
+        _org_noms = ", ".join(DB.get("codes", {}).get(o, {}).get("nom", o) for o in _org_codes) or "—"
+        html += ('<div style="background:#3b1d5e;color:#e9d5ff;padding:12px 14px;border-radius:10px;margin:12px 0;font-size:13px">'
+                 '✍️ <b>Origine du compte : créé par une organisatrice</b>.'
+                 f'<br><span style="color:#c4b5fd;font-size:12px">Organisatrice : <b>{_org_noms}</b></span></div>')
     # === SECURITE : adresses IP enregistrees pour ce compte ===
     _ips_vues = {}
     for _x in DB.get("journal_connexions", []):
