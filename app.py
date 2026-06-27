@@ -9834,6 +9834,126 @@ def diag_campagnes():
       <div style="margin-top:14px;color:#94a3b8;font-size:12px">« mini » = affiche P6 50 000 · « premier » = affiche OHANA 500 000. Mets ton budget pub sur la meilleure.</div>
     </div></body></html>'''
 
+@app.route("/journal-operations")
+def journal_operations():
+    """ADMIN — Journal central de TOUTES les opérations entre organisatrices et
+    joueuses. ?cle=ADMIN[&org=CODE][&joueur=CODE][&date=AAAA-MM-JJ][&limit=N]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    f_org = (request.args.get("org", "") or "").strip().upper()
+    f_joueur = (request.args.get("joueur", "") or "").strip().upper()
+    f_date = (request.args.get("date", "") or "").strip()
+    try:
+        limit = int(request.args.get("limit", 250) or 250)
+    except Exception:
+        limit = 250
+    codes = DB.get("codes", {})
+
+    def i(x):
+        try:
+            return int(float(x or 0))
+        except Exception:
+            return 0
+
+    ops = []
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict):
+            ops.append({"date": c.get("date", ""), "type": "Achat pions", "coul": "#fbbf24",
+                        "org": c.get("code_org", ""), "joueur": c.get("code_joueur", ""),
+                        "montant": i(c.get("montant_paye")), "statut": c.get("statut", ""),
+                        "info": f'{c.get("nb_pions","?")} pions'})
+    for t in DB.get("transactions_joueur_org", []):
+        if isinstance(t, dict):
+            ops.append({"date": t.get("date", ""), "type": "Crédit pions (org→joueuse)", "coul": "#34d399",
+                        "org": t.get("code_org", ""), "joueur": t.get("code_joueur", ""),
+                        "montant": i(t.get("montant_total")), "statut": "", "info": t.get("mode_paiement", "")})
+    for c in DB.get("commandes_tickets_pions", []):
+        if isinstance(c, dict):
+            ops.append({"date": c.get("date", ""), "type": "Achat tickets", "coul": "#818cf8",
+                        "org": c.get("code_org", ""), "joueur": c.get("code_joueur", ""),
+                        "montant": i(c.get("total_pions")), "statut": c.get("statut", ""), "info": c.get("jeu", "")})
+    for g in DB.get("gains_finaux", []):
+        if isinstance(g, dict):
+            ops.append({"date": g.get("date", ""), "type": "Gain", "coul": "#f472b6",
+                        "org": g.get("code_org", ""), "joueur": g.get("code_gagnant", ""),
+                        "montant": i(g.get("montant_credite") or g.get("montant_gain")), "statut": "", "info": g.get("jeu", "")})
+    for r in DB.get("demandes_retrait", []):
+        if isinstance(r, dict):
+            ops.append({"date": r.get("date", ""), "type": "Retrait", "coul": "#fb923c",
+                        "org": r.get("code_org", ""), "joueur": r.get("code_joueur", ""),
+                        "montant": i(r.get("montant_demande")), "statut": r.get("statut", ""), "info": ""})
+    for rb in DB.get("remboursements_tournoi", []):
+        if isinstance(rb, dict):
+            for det in (rb.get("detail") or []):
+                if isinstance(det, dict):
+                    ops.append({"date": rb.get("date", ""), "type": "Remboursement", "coul": "#fca5a5",
+                                "org": rb.get("code_org", ""), "joueur": det.get("code_joueur", ""),
+                                "montant": i(det.get("montant")), "statut": "", "info": rb.get("jeu", "")})
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict):
+            ops.append({"date": t.get("date", ""), "type": "Transfert", "coul": "#c4b5fd",
+                        "org": t.get("par", ""), "joueur": str(t.get("de", "")) + "→" + str(t.get("vers", "")),
+                        "montant": i(t.get("montant")), "statut": "admin" if t.get("admin") else "", "info": ""})
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict):
+            for cj in (c.get("codes") or []):
+                ops.append({"date": c.get("date", ""), "type": "Crédit groupe", "coul": "#5eead4",
+                            "org": c.get("par", "ADMIN"), "joueur": cj,
+                            "montant": i(c.get("nb_pions")) * i(c.get("valeur_pion")), "statut": "", "info": c.get("motif", "")})
+
+    # Filtres
+    def garde(o):
+        if f_org and (o.get("org", "") or "").upper() != f_org:
+            return False
+        if f_joueur and f_joueur not in (o.get("joueur", "") or "").upper():
+            return False
+        if f_date and not str(o.get("date", "")).startswith(f_date):
+            return False
+        return True
+
+    ops = [o for o in ops if garde(o)]
+    total = len(ops)
+    ops.sort(key=lambda o: str(o.get("date", "")), reverse=True)
+    ops = ops[:limit]
+
+    onom = lambda o: (codes.get(o, {}).get("nom", o) if o else "—")
+    rows = ""
+    for o in ops:
+        st = o.get("statut", "")
+        stbadge = f'<span style="font-size:10px;color:#94a3b8"> · {st}</span>' if st else ''
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:7px;color:#64748b;font-size:11px;white-space:nowrap">{str(o.get("date",""))[:16].replace("T"," ")}</td>'
+                 f'<td style="padding:7px"><span style="color:{o.get("coul","#fff")};font-weight:600;font-size:12px">{o.get("type","")}</span>{stbadge}</td>'
+                 f'<td style="padding:7px;font-size:12px;color:#fbbf24">{onom(o.get("org",""))}</td>'
+                 f'<td style="padding:7px;font-family:monospace;font-size:12px;color:#a78bfa">{o.get("joueur","")}</td>'
+                 f'<td style="padding:7px;text-align:right;font-weight:700;color:#fff;white-space:nowrap">{format(o.get("montant",0), ",")} F</td>'
+                 f'<td style="padding:7px;color:#94a3b8;font-size:11px">{o.get("info","")}</td></tr>')
+    if not rows:
+        rows = '<tr><td colspan="6" style="padding:20px;text-align:center;color:#94a3b8">Aucune opération pour ces filtres.</td></tr>'
+
+    filtres_actifs = " · ".join(filter(None, [
+        ("org=" + f_org) if f_org else "",
+        ("joueuse=" + f_joueur) if f_joueur else "",
+        ("date=" + f_date) if f_date else ""])) or "tout"
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Journal des opérations</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff">
+    <div style="max-width:960px;margin:0 auto">
+      <h1 style="font-size:21px;color:#a855f7;margin-bottom:2px">📒 Journal des opérations</h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:12px">Toutes les opérations entre organisatrices et joueuses · filtre : <b style="color:#fff">{filtres_actifs}</b> · {min(total, limit)} affichées sur {total}</div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:10px 12px;margin-bottom:12px;color:#94a3b8;font-size:12px;line-height:1.6">
+        🔎 Filtrer : ajoute <code style="color:#a78bfa">&org=CODE</code>, <code style="color:#a78bfa">&joueur=CODE</code>, <code style="color:#a78bfa">&date=2026-06-27</code> ou <code style="color:#a78bfa">&limit=500</code> à l'adresse.
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:680px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:7px;color:#a78bfa">Date</th><th style="padding:7px;color:#a78bfa">Opération</th><th style="padding:7px;color:#a78bfa">Organisatrice</th><th style="padding:7px;color:#a78bfa">Joueuse</th><th style="padding:7px;color:#a78bfa;text-align:right">Montant</th><th style="padding:7px;color:#a78bfa">Détail</th></tr>
+      {rows}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
+
 @app.route("/rapport-org")
 def rapport_org():
     """ADMIN — Rapport de solde d'un organisateur + actions (rembourser sa poche,
