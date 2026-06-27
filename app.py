@@ -6591,9 +6591,9 @@ def releve_financier_joueur(code):
         _sor = sum(l["sortie"] for l in lignes)
         ajustement = solde_pions - (_ent - _sor)
         if ajustement > 0:
-            lignes.append({"date": "", "type": "Régularisation", "desc": "Autres mouvements (gains/recrédits non détaillés)", "entree": ajustement, "sortie": 0})
+            lignes.append({"date": "", "type": "Solde antérieur", "desc": "Avant le basculement sur le tournoi de TUKEA", "entree": ajustement, "sortie": 0})
         elif ajustement < 0:
-            lignes.append({"date": "", "type": "Régularisation", "desc": "Autres mouvements (corrections non détaillées)", "entree": 0, "sortie": -ajustement})
+            lignes.append({"date": "", "type": "Solde antérieur", "desc": "Avant le basculement sur le tournoi de TUKEA", "entree": 0, "sortie": -ajustement})
 
     lignes.sort(key=lambda x: str(x["date"]), reverse=True)
 
