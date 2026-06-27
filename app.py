@@ -8676,15 +8676,16 @@ def diag_ecarts():
         for g in DB.get("gains_finaux", []):
             if isinstance(g, dict) and g.get("code_gagnant") == code and not g.get("annule"):
                 ent += int(g.get("montant_credite", 0) or 0)
+        # NB : les crédits admin (re-crédits de réconciliation) ne comptent PAS
+        # comme une attente : ils servent à COMBLER un trou (ils montent le solde
+        # réel pour rejoindre l'attendu). Sinon la ligne ne se refermerait jamais.
+        # On ne garde que les DÉBITS admin (retraits volontaires), qui eux baissent
+        # le solde réel et doivent donc baisser l'attendu.
         for c in DB.get("credits_admin", []):
             if isinstance(c, dict) and c.get("code_joueur") == code:
                 m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
-                if m > 0: ent += m
-                elif m < 0: sor += -m
-        for c in DB.get("credits_masse", []):
-            if isinstance(c, dict) and c.get("profil", "joueur") == "joueur" and code in (c.get("codes") or []):
-                m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
-                if m > 0: ent += m
+                if m < 0:
+                    sor += -m
         for rb in DB.get("remboursements_tournoi", []):
             if isinstance(rb, dict):
                 for det in (rb.get("detail") or []):
