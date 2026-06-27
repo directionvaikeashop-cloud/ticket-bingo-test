@@ -13216,3 +13216,114 @@ def bilan_bloques():
       <tr style="border-top:2px solid #7f1d1d;font-weight:700"><td style="padding:8px" colspan="2">TOTAUX</td><td style="padding:8px;text-align:right;color:#34d399">{format(t_solde, ",")} F</td><td style="padding:8px;text-align:right;color:#f87171">{format(t_cred, ",")} F</td><td style="padding:8px;text-align:right;color:#6ee7b7">{format(t_recu, ",")} F</td><td style="padding:8px;text-align:right;color:#fca5a5">{format(t_env, ",")} F</td></tr>
       </table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/preuve-code")
+def preuve_code():
+    """ADMIN — Fiche de PREUVE imprimable pour un code frauduleux : identité,
+    connexions (IP/appareils), transferts, crédits admin, achats, retraits, et
+    faisceau d'indices. Sans &code : liste tous les bloqués. ?cle=ADMIN[&code=X]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    code = (request.args.get("code", "") or "").strip().upper()
+    bloques = set(DB.get("codes_bloques", []))
+
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
+
+    # ---- LISTE (pas de code) ----
+    if not code:
+        items = ""
+        for c in sorted(bloques):
+            items += f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)"><td style="padding:8px;font-family:monospace;color:#a78bfa">{c}</td><td style="padding:8px;text-align:right;color:#34d399">{format(solde(c), ",")} F</td><td style="padding:8px"><a href="/preuve-code?cle={cle}&code={c}" style="color:#fde68a;font-weight:700;text-decoration:none">📄 Fiche de preuve →</a></td></tr>'
+        if not items:
+            items = '<tr><td colspan="3" style="padding:16px;color:#94a3b8">Aucun code bloqué.</td></tr>'
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Fiches de preuve</title></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:720px;margin:0 auto">
+        <h1 style="font-size:20px;color:#f87171">📄 Fiches de preuve — {len(bloques)} comptes bloqués</h1>
+        <div style="color:#94a3b8;font-size:13px;margin-bottom:12px">Clique sur un code pour générer sa fiche de preuve imprimable.</div>
+        <table style="width:100%;border-collapse:collapse;font-size:14px"><tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:8px;color:#fca5a5">Code</th><th style="padding:8px;color:#fca5a5;text-align:right">Solde gelé</th><th style="padding:8px;color:#fca5a5">Preuve</th></tr>{items}</table>
+        </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    # ---- FICHE D'UN CODE ----
+    jc = [x for x in DB.get("journal_connexions", []) if isinstance(x, dict) and (x.get("code") or "").upper() == code]
+    ips = sorted(set(x.get("ip") for x in jc if x.get("ip")))
+    devices = sorted(set((x.get("user_agent") or "")[:70] for x in jc if x.get("user_agent")))
+    noms = sorted(set(x.get("nom") for x in jc if x.get("nom")))
+
+    transf = [t for t in DB.get("transferts_pions", []) if isinstance(t, dict) and ((t.get("de") or "").upper() == code or (t.get("vers") or "").upper() == code)]
+    for t in transf:
+        if t.get("ip"): ips.append(t.get("ip"))
+    ips = sorted(set(ips))
+    transf.sort(key=lambda t: str(t.get("date", "")))
+
+    creds = [c for c in DB.get("credits_admin", []) if isinstance(c, dict) and (c.get("code_joueur") or "").upper() == code]
+    achats = [c for c in DB.get("commandes_pions_joueurs", []) if isinstance(c, dict) and (c.get("code_joueur") or "").upper() == code and c.get("statut") == "validee"]
+    retraits = [r for r in DB.get("demandes_retrait", []) if isinstance(r, dict) and (r.get("code_joueur") or "").upper() == code]
+
+    # Faisceau d'indices
+    indices = []
+    # partage IP avec d'autres bloqués
+    autres_partage = set()
+    for x in DB.get("journal_connexions", []):
+        if isinstance(x, dict) and x.get("ip") in ips and (x.get("code") or "").upper() != code and (x.get("code") or "").upper() in bloques:
+            autres_partage.add((x.get("code") or "").upper())
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict) and t.get("ip") in ips:
+            for cc in [(t.get("de") or "").upper(), (t.get("vers") or "").upper()]:
+                if cc and cc != code and cc in bloques:
+                    autres_partage.add(cc)
+    if autres_partage:
+        indices.append(f"Partage une ou plusieurs adresses IP avec {len(autres_partage)} autre(s) compte(s) frauduleux : {', '.join(sorted(autres_partage))}.")
+    env = sum(int(t.get('montant', 0) or 0) for t in transf if (t.get('de') or '').upper() == code)
+    rec = sum(int(t.get('montant', 0) or 0) for t in transf if (t.get('vers') or '').upper() == code)
+    if env: indices.append(f"A envoyé {format(env, ',')} XPF de pions par transfert vers d'autres comptes (concentration vers collecteurs).")
+    if rec: indices.append(f"A reçu {format(rec, ',')} XPF de pions par transfert depuis d'autres comptes.")
+    tot_cred = sum(int(c.get('nb_pions', 0) or 0) * int(c.get('valeur_pion', 0) or 0) for c in creds if int(c.get('nb_pions', 0) or 0) * int(c.get('valeur_pion', 0) or 0) > 0)
+    if tot_cred: indices.append(f"A bénéficié de {format(tot_cred, ',')} XPF de recrédits administratifs (écarts simulés).")
+    tot_achat = sum(int(c.get('nb_pions', 0) or 0) * int(c.get('valeur_pion', 0) or 0) or int(c.get('montant_net', 0) or 0) for c in achats)
+    ret_att = sum(int(r.get('montant_demande', 0) or 0) for r in retraits if r.get('statut') in (None, '', 'en_attente'))
+    ret_val = sum(int(r.get('montant_demande', 0) or 0) for r in retraits if r.get('statut') == 'validee')
+    if ret_att: indices.append(f"A tenté de retirer {format(ret_att, ',')} XPF en argent réel (demande EN ATTENTE, bloquée).")
+    if ret_val: indices.append(f"A obtenu {format(ret_val, ',')} XPF de retrait validé.")
+
+    def tr(cells):
+        return '<tr>' + ''.join(f'<td style="border:1px solid #ccc;padding:5px">{c}</td>' for c in cells) + '</tr>'
+    t_transf = ''.join(tr([str(t.get('date', ''))[:16].replace('T', ' '),
+                           '➡️ envoyé' if (t.get('de') or '').upper() == code else '⬅️ reçu',
+                           (t.get('vers') if (t.get('de') or '').upper() == code else t.get('de')) or '',
+                           format(int(t.get('montant', 0) or 0), ','),
+                           t.get('ip', '') or ('admin ' + str(t.get('par', '')) if t.get('admin') else '')]) for t in transf) or '<tr><td colspan="5" style="border:1px solid #ccc;padding:6px">Aucun transfert.</td></tr>'
+    t_cred = ''.join(tr([str(c.get('date', ''))[:16].replace('T', ' '), format(int(c.get('nb_pions', 0) or 0) * int(c.get('valeur_pion', 0) or 0), ','), c.get('par', '')]) for c in creds) or '<tr><td colspan="3" style="border:1px solid #ccc;padding:6px">Aucun.</td></tr>'
+    t_retr = ''.join(tr([str(r.get('date', ''))[:16].replace('T', ' '), format(int(r.get('montant_demande', 0) or 0), ','), r.get('statut', 'en_attente')]) for r in retraits) or '<tr><td colspan="3" style="border:1px solid #ccc;padding:6px">Aucune.</td></tr>'
+    ind_html = ''.join(f'<li style="margin:4px 0">{i}</li>' for i in indices) or '<li>—</li>'
+    import datetime as _dt
+    maintenant = _dt.datetime.now().strftime("%d/%m/%Y à %H:%M")
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Preuve {code}</title>
+    <style>@media print{{.noprint{{display:none}}}} body{{background:#fff;color:#111;font-family:Georgia,serif;line-height:1.5}} h1{{font-size:19px}} h2{{font-size:14px;border-bottom:2px solid #111;padding-bottom:2px;margin-top:20px}} table{{border-collapse:collapse;width:100%;font-family:Arial,sans-serif;font-size:11px;margin:6px 0}} th{{border:1px solid #ccc;padding:5px;background:#f0f0f0;text-align:left}}</style></head>
+    <body style="margin:0;padding:22px"><div style="max-width:760px;margin:0 auto">
+      <button onclick="window.print()" class="noprint" style="background:#111;color:#fff;border:0;padding:9px 16px;border-radius:6px;font-size:13px;cursor:pointer;margin-bottom:14px">🖨️ Imprimer / PDF</button>
+      <a href="/preuve-code?cle={cle}" class="noprint" style="margin-left:8px;color:#555;font-size:13px">← Tous les codes</a>
+      <h1>FICHE DE PREUVE — COMPTE FRAUDULEUX</h1>
+      <p style="font-size:12px;color:#444">Plateforme Ticket Bingo — EI TUKEA IMPORT (N° Tahiti B90121), Papeete. Document généré le {maintenant}.</p>
+      <h2>Identité du compte</h2>
+      <p style="font-size:13px">Code : <b>{code}</b> · Nom enregistré : {', '.join(noms) if noms else '— (anonyme)'} · Statut : <b>BLOQUÉ</b> · Solde gelé actuel : <b>{format(solde(code), ',')} XPF</b></p>
+      <h2>Faisceau d'indices de fraude</h2>
+      <ul style="font-size:13px">{ind_html}</ul>
+      <h2>Adresses IP & appareils de connexion</h2>
+      <p style="font-size:12px">IP : {', '.join(ips) if ips else '—'}<br>Appareils : {'; '.join(devices) if devices else '—'}</p>
+      <h2>Transferts de pions</h2>
+      <table><tr><th>Date</th><th>Sens</th><th>Autre compte</th><th>Montant (XPF)</th><th>IP / origine</th></tr>{t_transf}</table>
+      <h2>Recrédits administratifs reçus</h2>
+      <table><tr><th>Date</th><th>Montant (XPF)</th><th>Par</th></tr>{t_cred}</table>
+      <h2>Demandes de retrait (argent réel)</h2>
+      <table><tr><th>Date</th><th>Montant demandé (XPF)</th><th>Statut</th></tr>{t_retr}</table>
+      <p style="font-size:12px;color:#444;margin-top:16px">Achats réels de pions par ce compte : {format(tot_achat, ',')} XPF. Les journaux techniques horodatés sont conservés et communicables à l'autorité judiciaire sur réquisition.</p>
+      <p style="font-size:12px;margin-top:18px">Fait à Papeete, le {maintenant}. Signature : ____________________</p>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
