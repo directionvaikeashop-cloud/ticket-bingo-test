@@ -6782,13 +6782,19 @@ def releve_financier_joueur(code):
         _ent = sum(l["entree"] for l in lignes)
         _sor = sum(l["sortie"] for l in lignes)
         ajustement = solde_pions - (_ent - _sor)
-        # Compte signalé = a fait des transferts entre comptes (signal de fraude)
-        _a_transfere = any(
-            isinstance(_t, dict) and ((_t.get("de") or "").upper() == code or (_t.get("vers") or "").upper() == code)
-            for _t in DB.get("transferts_pions", [])
-        )
+        # Fraude = lié à 2+ AUTRES comptes par transfert (réseau de 3 codes ou +).
+        # 2 codes (HEINI + MAEVA) pour un même joueur = normal, pas de la fraude.
+        _lies_reg = set()
+        for _t in DB.get("transferts_pions", []):
+            if not isinstance(_t, dict):
+                continue
+            _d = (_t.get("de") or "").upper(); _v = (_t.get("vers") or "").upper()
+            if _d == code and _v:
+                _lies_reg.add(_v)
+            elif _v == code and _d:
+                _lies_reg.add(_d)
         _bloque = code in DB.get("codes_bloques", [])
-        if _a_transfere or _bloque:
+        if len(_lies_reg) >= 2 or _bloque:
             _type_reg = "Régularisation anti-fraude"
             _desc_reg = "Pions issus de transferts non justifiés, retirés lors du contrôle anti-fraude (compte remis à zéro)"
         else:
@@ -6866,7 +6872,7 @@ def releve_financier_joueur(code):
         elif _de == code and _vers:
             _envoye_a[_vers] = _envoye_a.get(_vers, 0) + _m
     _lies = set(_recu_de) | set(_envoye_a)
-    if _lies:
+    if len(_lies) >= 2:  # lié à 2+ autres comptes = réseau de 3 codes ou + = fraude
         _tot_recu = sum(_recu_de.values())
         _tot_env = sum(_envoye_a.values())
         _nb_ip = len(_ips_vues)
@@ -13924,13 +13930,18 @@ def compte_fraude():
         if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
             noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
 
-    # Comptes ayant transféré (émis ou reçu)
-    fraude = set()
+    # Comptes liés par transfert : on compte les LIENS distincts par compte
+    liens_par_code = {}
     for t in DB.get("transferts_pions", []):
         if isinstance(t, dict):
-            for c in [(t.get("de") or "").upper(), (t.get("vers") or "").upper()]:
-                if c and c not in codes_staff:
-                    fraude.add(c)
+            de = (t.get("de") or "").upper(); vers = (t.get("vers") or "").upper()
+            if de and vers:
+                if de not in codes_staff:
+                    liens_par_code.setdefault(de, set()).add(vers)
+                if vers not in codes_staff:
+                    liens_par_code.setdefault(vers, set()).add(de)
+    # Fraude = lié à 2+ AUTRES comptes (réseau de 3 codes ou +). 2 codes (HEINI+MAEVA) = normal.
+    fraude = set(c for c, liens in liens_par_code.items() if len(liens) >= 2)
     bloques = set(DB.get("codes_bloques", []))
 
     rows = ""
