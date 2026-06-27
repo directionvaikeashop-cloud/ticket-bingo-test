@@ -1750,6 +1750,9 @@ def get_alertes_bingo():
     token = request.headers.get("X-Token", "")
     s = verif_session(token)
     alertes = DB.get("alertes_bingo", [])
+    # Masquer les tickets validés dont la visibilité de 5 jours est écoulée
+    _now_iso = datetime.datetime.now().isoformat()
+    alertes = [a for a in alertes if not a.get("expire_le") or str(a.get("expire_le")) > _now_iso]
     # Admin voit toutes les alertes
     if s and s.get("admin"):
         return jsonify(alertes)
@@ -1759,6 +1762,35 @@ def get_alertes_bingo():
         alertes = [a for a in alertes if a.get("code_org") == code_org or not a.get("code_org")]
         return jsonify(alertes)
     return jsonify([])
+
+@app.route("/api/bingo/effacer-non-valides", methods=["POST"])
+def effacer_alertes_non_valides():
+    """ORGANISATEUR — Efface tous les tickets bingo NON validés. Seuls les tickets
+    validés restent, et deviennent invisibles automatiquement après 5 jours."""
+    global DB
+    DB = load_data()
+    token = request.headers.get("X-Token", "")
+    s = verif_session(token)
+    if not s:
+        return jsonify({"ok": False, "msg": "Accès refusé"}), 403
+    code_org = s["code"]
+    is_admin = bool(s.get("admin"))
+    exp = (datetime.datetime.now() + datetime.timedelta(days=5)).isoformat()
+    gardees = []
+    effacees = 0
+    for a in DB.get("alertes_bingo", []):
+        appartient = is_admin or a.get("code_org") == code_org or not a.get("code_org")
+        if not appartient:
+            gardees.append(a)
+            continue
+        if a.get("statut") == "valide":
+            a["expire_le"] = exp   # visible encore 5 jours
+            gardees.append(a)
+        else:
+            effacees += 1          # non validé -> effacé
+    DB["alertes_bingo"] = gardees
+    save_data(immediat=True)
+    return jsonify({"ok": True, "effacees": effacees})
 
 import threading
 
