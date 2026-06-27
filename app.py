@@ -8701,6 +8701,11 @@ def diag_ecarts():
             if isinstance(c, dict) and c.get("code_joueur") == code:
                 ret = int(c.get("solde_avant", 0) or 0) - int(c.get("solde_apres", 0) or 0)
                 if ret > 0: sor += ret
+        # Gains PAYÉS au gagnant (virement / espèces chez l'admin) = sortie :
+        # son gain a déjà été versé, ce n'est plus dû en pions.
+        for v in DB.get("virements_gagnants", []):
+            if isinstance(v, dict) and (v.get("gagnant") or "").upper().strip() == code:
+                sor += int(v.get("montant", 0) or 0)
         return ent - sor
 
     # Détail lisible des mouvements d'une joueuse (pour juger un écart)
@@ -8732,6 +8737,8 @@ def diag_ecarts():
                     corr += ret
         recred = sum(int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0) for c in DB.get("credits_admin", [])
                      if isinstance(c, dict) and c.get("code_joueur") == code and (int(c.get("nb_pions", 0) or 0) > 0))
+        virem = sum(int(v.get("montant", 0) or 0) for v in DB.get("virements_gagnants", [])
+                    if isinstance(v, dict) and (v.get("gagnant") or "").upper().strip() == code)
         bits = []
         if gain: bits.append(f"gain {gain}")
         if achats: bits.append(f"achats {achats}")
@@ -8739,6 +8746,7 @@ def diag_ecarts():
         if remb: bits.append(f"remb. {remb}")
         if tickets: bits.append(f"tickets −{tickets}")
         if retraits: bits.append(f"retraits −{retraits}")
+        if virem: bits.append(f"virement gagnant −{virem}")
         if corr: bits.append(f"corrections −{corr}")
         if recred: bits.append(f"déjà recrédité {recred}")
         bits.append(f"<b style='color:#cbd5e1'>solde réel {solde_reel(code)}</b>")
