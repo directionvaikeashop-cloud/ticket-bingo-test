@@ -9905,6 +9905,28 @@ def journal_operations():
                 ops.append({"date": c.get("date", ""), "type": "Crédit groupe", "coul": "#5eead4",
                             "org": c.get("par", "ADMIN"), "joueur": cj,
                             "montant": i(c.get("nb_pions")) * i(c.get("valeur_pion")), "statut": "", "info": c.get("motif", "")})
+    # --- Crédits / retraits de pions (joueuse) ---
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict):
+            ops.append({"date": c.get("date", ""), "type": "Crédit pions (admin→joueuse)", "coul": "#34d399",
+                        "org": c.get("par", "ADMIN"), "joueur": c.get("code_joueur", ""),
+                        "montant": i(c.get("valeur_pion")) * i(c.get("nb_pions")), "statut": "", "info": "crédit admin"})
+    for c in DB.get("corrections_pions", []):
+        if isinstance(c, dict):
+            ops.append({"date": c.get("date", ""), "type": "Retrait pions (joueuse)", "coul": "#fca5a5",
+                        "org": c.get("par", "ADMIN"), "joueur": c.get("code_joueur", ""),
+                        "montant": i(c.get("montant_retire")), "statut": "", "info": c.get("motif", "")})
+    # --- Crédits / retraits de la poche ORGANISATRICE ---
+    for c in DB.get("credits_poche_org", []):
+        if isinstance(c, dict):
+            ops.append({"date": c.get("date", ""), "type": "Crédit poche ORG", "coul": "#22d3ee",
+                        "org": c.get("code_org", ""), "joueur": "— (organisatrice)",
+                        "montant": i(c.get("montant")), "statut": "", "info": c.get("motif", "")})
+    for r in DB.get("remboursements_org", []):
+        if isinstance(r, dict):
+            ops.append({"date": r.get("date", ""), "type": "Retrait poche ORG", "coul": "#f59e0b",
+                        "org": r.get("org", ""), "joueur": "— (organisatrice)",
+                        "montant": i(r.get("montant")), "statut": "", "info": "clôture / remboursement org"})
 
     # Filtres
     def garde(o):
