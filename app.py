@@ -6922,6 +6922,7 @@ def releve_financier_joueur(code):
                  "<div>&bull; Adresses IP de connexion enregistr&eacute;es : <b>" + str(_nb_ip) + "</b></div>"
                  + ("<div>&bull; Pions r&eacute;ellement achet&eacute;s (vrai paiement) : <b>" + format(_tot_achat_reel, ",") + " XPF</b></div>" if _tot_achat_reel else "<div>&bull; Pions r&eacute;ellement achet&eacute;s : <b>0 XPF</b> (aucun achat r&eacute;el)</div>")
                  + ("<div>&bull; Recr&eacute;dits administratifs re&ccedil;us : <b>" + format(_tot_cred, ",") + " XPF</b></div>" if _tot_cred else "")
+                 + ((("<div style='margin-top:6px;padding:8px;background:rgba(248,81,73,.12);border-radius:6px'>&#128308; <b>Ce compte d&eacute;tient encore " + format(solde_pions, ",") + " XPF</b> de pions sur les transferts re&ccedil;us.</div>") if solde_pions > 0 else ("<div style='margin-top:6px;padding:8px;background:rgba(63,185,80,.12);border-radius:6px;color:#3fb950'>&#9989; <b>Ce compte ne d&eacute;tient plus de pions</b> (solde &agrave; 0). Les pions re&ccedil;us par transfert ne sont plus disponibles.</div>")) if _tot_recu > 0 else "")
                  + "<div style='margin-top:8px;font-size:12px;color:#d4a857'>Toutes ces op&eacute;rations sont enregistr&eacute;es et document&eacute;es (dates, montants et adresses IP).</div></div>")
     html += "<form method='get' style='margin:10px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"
     html += "<span style='font-size:12px;color:#8b949e'>Periode :</span>"
@@ -13981,4 +13982,72 @@ def compte_fraude():
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:380px">
       <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:6px;color:#fca5a5">Code</th><th style="padding:6px;color:#fca5a5">Nom</th><th style="padding:6px;color:#fca5a5;text-align:right">Solde</th></tr>
       {rows or '<tr><td colspan=3 style="padding:14px;color:#34d399">Aucun compte avec transfert.</td></tr>'}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/verif-transferts-zero")
+def verif_transferts_zero():
+    """ADMIN — Vérifie : les comptes ayant REÇU des pions par transfert qui ont
+    ENCORE un solde > 0 (transferts pas encore neutralisés). ?cle=ADMIN"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    staff = set(DB.get("codes", {}).keys())
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
+            noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
+
+    # Pour chaque compte : total reçu par transfert + comptes liés (pour distinguer 2 codes vs 3+)
+    recu = {}; liens = {}; achat_reel = {}
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict):
+            de = (t.get("de") or "").upper(); vers = (t.get("vers") or "").upper(); m = int(t.get("montant", 0) or 0)
+            if vers and vers not in staff:
+                recu[vers] = recu.get(vers, 0) + m
+                if de: liens.setdefault(vers, set()).add(de)
+            if de and de not in staff:
+                if vers: liens.setdefault(de, set()).add(vers)
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict) and c.get("statut") == "validee":
+            cj = (c.get("code_joueur") or "").upper()
+            nbp = int(c.get("nb_pions", c.get("pions_credites", 0)) or 0); vp = int(c.get("valeur_pion", 0) or 0)
+            achat_reel[cj] = achat_reel.get(cj, 0) + ((nbp * vp) or int(c.get("montant_net", 0) or 0))
+
+    # Comptes ayant reçu par transfert ET solde > 0
+    rows = ""; nb = 0; total_restant = 0
+    for c in sorted(recu, key=lambda x: -solde(x)):
+        s = solde(c)
+        if s > 0:
+            nb += 1; total_restant += s
+            nbl = len(liens.get(c, set()))
+            ar = achat_reel.get(c, 0)
+            flag = "🔴 3+ codes" if nbl >= 2 else "🟡 2 codes"
+            rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                     f'<td style="padding:7px;font-family:monospace;color:#a78bfa">{c}</td>'
+                     f'<td style="padding:7px;color:#cbd5e1;font-size:12px">{noms.get(c, "")}</td>'
+                     f'<td style="padding:7px;text-align:right;color:#6ee7b7">{format(recu.get(c,0), ",")}</td>'
+                     f'<td style="padding:7px;text-align:right;color:#93c5fd">{format(ar, ",")}</td>'
+                     f'<td style="padding:7px;text-align:right;color:#fbbf24;font-weight:700">{format(s, ",")}</td>'
+                     f'<td style="padding:7px;font-size:12px">{flag}</td></tr>')
+    if not rows:
+        rows = '<tr><td colspan="6" style="padding:16px;text-align:center;color:#34d399">✅ Aucun compte ayant reçu des transferts n\'a de solde restant. Tout est à zéro.</td></tr>'
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vérif transferts</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:840px;margin:0 auto">
+      <h1 style="font-size:20px;color:#f0883e;margin-bottom:8px">🔎 Comptes ayant reçu des transferts avec solde restant</h1>
+      <div style="background:rgba(251,191,36,.1);border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:12px">
+        <div style="color:#fde68a;font-size:14px"><b>{nb}</b> compte(s) ont reçu des pions par transfert et ont <b>encore un solde</b> (total : <b>{format(total_restant, ",")} XPF</b>).</div>
+      </div>
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:10px">🔴 3+ codes liés = réseau (fraude probable). 🟡 2 codes = peut être un même joueur (HEINI+MAEVA) ou famille — à vérifier avant d'agir. « Acheté réel » = vrai argent payé par ce compte.</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:640px">
+      <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:7px;color:#fca5a5">Code</th><th style="padding:7px;color:#fca5a5">Nom</th><th style="padding:7px;color:#fca5a5;text-align:right">Reçu transf.</th><th style="padding:7px;color:#fca5a5;text-align:right">Acheté réel</th><th style="padding:7px;color:#fca5a5;text-align:right">Solde restant</th><th style="padding:7px;color:#fca5a5">Type</th></tr>
+      {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
