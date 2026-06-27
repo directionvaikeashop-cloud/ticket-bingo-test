@@ -14359,3 +14359,87 @@ def aligner_soldes():
       <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:6px;color:#fca5a5">Code</th><th style="padding:6px;color:#fca5a5">Nom</th><th style="padding:6px;color:#fca5a5;text-align:right">Compteur actuel</th><th style="padding:6px;color:#fca5a5;text-align:right">Vrai solde</th><th style="padding:6px;color:#fca5a5;text-align:right">Écart</th></tr>
       {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/sources-emetteurs")
+def sources_emetteurs():
+    """ADMIN — Pour chaque code qui a ENVOYÉ des pions : d'où viennent ses pions
+    (achats Stripe, gains, bonus, crédits, reçus) vs ce qu'il a envoyé. Montre
+    l'écart fabriqué. Lecture seule. ?cle=ADMIN[&code=X pour un seul]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    filtre = (request.args.get("code", "") or "").strip().upper()
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
+            noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
+
+    achats = {}; nb_achats = {}; gains = {}; bonus = {}; credits = {}; recu = {}; envoye = {}
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict) and c.get("statut") == "validee" and c.get("code_joueur"):
+            cj = (c.get("code_joueur") or "").upper()
+            nbp = int(c.get("nb_pions", c.get("pions_credites", 0)) or 0); vp = int(c.get("valeur_pion", 0) or 0)
+            achats[cj] = achats.get(cj, 0) + ((nbp * vp) or int(c.get("montant_net", 0) or 0))
+            nb_achats[cj] = nb_achats.get(cj, 0) + 1
+    for g in DB.get("gains_finaux", []):
+        if isinstance(g, dict) and g.get("code"):
+            cj = (g.get("code") or "").upper()
+            gains[cj] = gains.get(cj, 0) + int(g.get("montant_gain", g.get("montant_credite", 0)) or 0)
+    for x in DB.get("rejoindre_log", []):
+        if isinstance(x, dict) and x.get("campagne", "") == "semaine" and x.get("code"):
+            cj = (x.get("code") or "").upper(); bonus[cj] = bonus.get(cj, 0) + 500
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict) and c.get("code_joueur"):
+            cj = (c.get("code_joueur") or "").upper()
+            credits[cj] = credits.get(cj, 0) + int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict):
+            m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+            for cj in (c.get("codes") or []):
+                cj = (cj or "").upper(); credits[cj] = credits.get(cj, 0) + m
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict):
+            de = (t.get("de") or "").upper(); vers = (t.get("vers") or "").upper(); m = int(t.get("montant", 0) or 0)
+            if de: envoye[de] = envoye.get(de, 0) + m
+            if vers: recu[vers] = recu.get(vers, 0) + m
+
+    emetteurs = sorted([c for c in envoye if envoye[c] > 0], key=lambda c: -(envoye[c] - (achats.get(c,0)+gains.get(c,0)+bonus.get(c,0)+credits.get(c,0)+recu.get(c,0))))
+    if filtre:
+        emetteurs = [c for c in emetteurs if c == filtre]
+
+    rows = ""; total_fab = 0; nb_fab = 0
+    for c in emetteurs:
+        a = achats.get(c,0); g = gains.get(c,0); b = bonus.get(c,0); cr = credits.get(c,0); r = recu.get(c,0)
+        eu = a + g + b + cr + r
+        env = envoye.get(c,0)
+        ecart = env - eu
+        if ecart > 0: total_fab += ecart; nb_fab += 1
+        coul = "#f85149" if ecart > 0 else "#3fb950"
+        verdict = (f"🔴 a fabriqué {format(ecart, ',')}" if ecart > 0 else "✅ cohérent")
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:6px;font-family:monospace;color:#a78bfa">{c}</td>'
+                 f'<td style="padding:6px;color:#94a3b8;font-size:12px">{noms.get(c,"")}</td>'
+                 f'<td style="padding:6px;text-align:right;color:#6ee7b7">{format(a, ",")}<br><span style="font-size:10px;color:#6b7280">{nb_achats.get(c,0)} paiement(s)</span></td>'
+                 f'<td style="padding:6px;text-align:right;color:#93c5fd">{format(g, ",")}</td>'
+                 f'<td style="padding:6px;text-align:right;color:#93c5fd">{format(b+cr, ",")}</td>'
+                 f'<td style="padding:6px;text-align:right;color:#fbbf24">{format(r, ",")}</td>'
+                 f'<td style="padding:6px;text-align:right;color:#e6edf3;font-weight:700">{format(eu, ",")}</td>'
+                 f'<td style="padding:6px;text-align:right;color:#fca5a5;font-weight:700">{format(env, ",")}</td>'
+                 f'<td style="padding:6px;text-align:right;color:{coul};font-weight:800;font-size:12px">{verdict}</td></tr>')
+
+    titre = f"Émetteur {filtre}" if filtre else "Tous les émetteurs"
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sources des émetteurs</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:1000px;margin:0 auto">
+      <h1 style="font-size:20px;color:#f0883e;margin-bottom:8px">🔍 D'où viennent les pions des émetteurs — {titre}</h1>
+      <div style="background:rgba(248,81,73,.1);border:1px solid #f85149;border-radius:10px;padding:14px;margin-bottom:12px">
+        <div style="color:#fca5a5;font-size:14px"><b>{nb_fab}</b> émetteur(s) ont fabriqué des pions (envoyé plus que tout ce qu'ils ont eu). Total fabriqué : <b>{format(total_fab, ",")} XPF</b>.</div>
+      </div>
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:10px">« A réellement eu » = Achats Stripe + Gains + Bonus/Crédits + Reçus par transfert. Si « Envoyé » &gt; « A eu » → 🔴 pions fabriqués (sortis de nulle part, pas d'un achat).</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:820px">
+      <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:6px;color:#fca5a5">Code</th><th style="padding:6px;color:#fca5a5">Nom</th><th style="padding:6px;color:#fca5a5;text-align:right">Achats réels</th><th style="padding:6px;color:#fca5a5;text-align:right">Gains</th><th style="padding:6px;color:#fca5a5;text-align:right">Bonus/Crédits</th><th style="padding:6px;color:#fca5a5;text-align:right">Reçus</th><th style="padding:6px;color:#fca5a5;text-align:right">A eu (total)</th><th style="padding:6px;color:#fca5a5;text-align:right">Envoyé</th><th style="padding:6px;color:#fca5a5;text-align:right">Verdict</th></tr>
+      {rows}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
