@@ -8637,61 +8637,109 @@ def diag_ecarts():
         return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
 
     pj_all = DB.get("pions_joueurs", {})
-    cmds_pions = DB.get("commandes_pions_joueurs", [])
-    credits_masse = DB.get("credits_masse", [])
-    gains = DB.get("gains_finaux", [])
-    tickets = DB.get("commandes_tickets_pions", [])
-    corrections = DB.get("corrections_pions", [])
 
     def solde_reel(code):
         p = pj_all.get(code, {})
         return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
 
-    # Codes gagnants uniques
-    gagnants = []
-    for g in gains:
-        cg = (g.get("code_gagnant") or "").upper()
-        if cg and cg not in gagnants:
-            gagnants.append(cg)
+    # Décompose un manquant en pions recréditables (100/50/20). Le reliquat
+    # éventuel de 10 XPF n'est pas recréditable par l'outil (qui gère 100/50/20).
+    def deco(montant):
+        m = max(0, int(montant))
+        n100 = m // 100; m -= n100*100
+        n50 = m // 50; m -= n50*50
+        n20 = m // 20; m -= n20*20
+        bouts = []
+        if n100: bouts.append(f"{n100}×100")
+        if n50: bouts.append(f"{n50}×50")
+        if n20: bouts.append(f"{n20}×20")
+        txt = " + ".join(bouts) if bouts else "—"
+        if m > 0:
+            txt += f" (+{m} XPF en espèces)"
+        return txt
+
+    # Calcule entrées/sorties pour un joueur — MÊME comptabilité que le relevé,
+    # pour rester juste après les recrédits admin.
+    def attendu_pour(code):
+        ent = 0; sor = 0
+        for c in DB.get("commandes_pions_joueurs", []):
+            if isinstance(c, dict) and c.get("code_joueur") == code and c.get("statut") == "validee":
+                nb = int(c.get("nb_pions", c.get("pions_credites", 0)) or 0)
+                val = int(c.get("valeur_pion", 0) or 0)
+                v = nb * val
+                if v <= 0:
+                    v = int(c.get("montant_net", 0) or 0)
+                ent += v
+        for t in DB.get("transactions_joueur_org", []):
+            if isinstance(t, dict) and t.get("code_joueur") == code:
+                ent += int(t.get("montant_total", 0) or 0)
+        for g in DB.get("gains_finaux", []):
+            if isinstance(g, dict) and g.get("code_gagnant") == code and not g.get("annule"):
+                ent += int(g.get("montant_credite", 0) or 0)
+        for c in DB.get("credits_admin", []):
+            if isinstance(c, dict) and c.get("code_joueur") == code:
+                m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+                if m > 0: ent += m
+                elif m < 0: sor += -m
+        for c in DB.get("credits_masse", []):
+            if isinstance(c, dict) and c.get("profil", "joueur") == "joueur" and code in (c.get("codes") or []):
+                m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+                if m > 0: ent += m
+        for rb in DB.get("remboursements_tournoi", []):
+            if isinstance(rb, dict):
+                for det in (rb.get("detail") or []):
+                    if isinstance(det, dict) and det.get("code_joueur") == code:
+                        ent += int(det.get("montant", 0) or 0)
+        for c in DB.get("commandes_tickets_pions", []):
+            if isinstance(c, dict) and c.get("code_joueur") == code:
+                sor += int(c.get("total_pions", 0) or 0)
+        for r in DB.get("demandes_retrait", []):
+            if isinstance(r, dict) and r.get("code_joueur") == code and r.get("statut") == "validee":
+                sor += int(r.get("montant_demande", 0) or 0)
+        for c in DB.get("corrections_pions", []):
+            if isinstance(c, dict) and c.get("code_joueur") == code:
+                ret = int(c.get("solde_avant", 0) or 0) - int(c.get("solde_apres", 0) or 0)
+                if ret > 0: sor += ret
+        return ent - sor
+
+    # Tous les codes concernés : gagnants + tout joueur ayant un solde de pions
+    codes = set()
+    for g in DB.get("gains_finaux", []):
+        cg = (g.get("code_gagnant") or "").upper().strip()
+        if cg: codes.add(cg)
+    for k in pj_all.keys():
+        if k: codes.add(k)
 
     rows = []
-    for code in gagnants:
-        t_achats = sum(((c.get("pions_credites") or c.get("nb_pions") or 0) * c.get("valeur_pion", 0))
-                       for c in cmds_pions if (c.get("code_joueur") or "").upper() == code and c.get("statut") == "validee")
-        t_credits = sum((cm.get("nb_pions", 0) * cm.get("valeur_pion", 0)) for cm in credits_masse if code in cm.get("codes", []))
-        t_gains = sum(g.get("montant_gain", 0) for g in gains if (g.get("code_gagnant") or "").upper() == code)
-        t_dep = sum(c.get("total_pions", 0) for c in tickets if (c.get("code_joueur") or "").upper() == code and c.get("statut") == "validee")
-        t_corr = sum(c.get("montant_retire", 0) for c in corrections if (c.get("code_joueur") or "") == code)
-        attendu = t_achats + t_credits + t_gains - t_dep - t_corr
+    for code in codes:
+        attendu = attendu_pour(code)
         reel = solde_reel(code)
         ecart = reel - attendu
-        rows.append((code, reel, attendu, ecart, t_gains))
+        rows.append((code, reel, attendu, ecart))
 
-    # Les plus en déficit d'abord
-    rows.sort(key=lambda r: r[3])
+    rows.sort(key=lambda r: r[3])  # déficits d'abord
     corps = ""
-    a_recrediter = 0
-    for code, reel, attendu, ecart, tg in rows:
+    a_recrediter = 0; total_du = 0
+    for code, reel, attendu, ecart in rows:
         if ecart < 0:
-            coul = "#fca5a5"; note = f"⚠️ doit {-ecart} XPF"
-            a_recrediter += 1
+            coul = "#fca5a5"; note = f"⚠️ doit {-ecart} XPF → {deco(-ecart)}"
+            a_recrediter += 1; total_du += -ecart
         elif ecart > 0:
             coul = "#fde68a"; note = f"+{ecart} XPF (en trop)"
         else:
-            coul = "#6ee7b7"; note = "✅ OK"
+            continue  # on n'affiche que les écarts
         corps += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.08)">'
                   f'<td style="padding:8px;font-family:monospace;color:#a78bfa">{code}</td>'
-                  f'<td style="padding:8px;color:#fff">gagné {tg}</td>'
                   f'<td style="padding:8px;color:#94a3b8">a {reel} / devrait {attendu}</td>'
                   f'<td style="padding:8px;color:{coul};font-weight:600">{note}</td></tr>')
 
-    return f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Réconciliation gains</title></head>
+    return f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Réconciliation des soldes</title></head>
     <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff">
-    <div style="max-width:760px;margin:0 auto">
-      <h1 style="font-size:20px;color:#a855f7">🏆 Gains à vérifier</h1>
-      <div style="color:#94a3b8;font-size:13px;margin-bottom:14px">{len(rows)} gagnant(s) · <b style="color:#fca5a5">{a_recrediter} à recréditer</b></div>
-      <table style="width:100%;border-collapse:collapse;font-size:13px">{corps or '<tr><td style="padding:10px;color:#6ee7b7">Aucun gain enregistré.</td></tr>'}</table>
-      <div style="margin-top:14px;color:#94a3b8;font-size:12px">« doit X XPF » = ce joueur a gagné mais ne l'a pas (ou plus) dans son solde → recrédite-le du montant indiqué avec « 💰 Créditer le joueur ».</div>
+    <div style="max-width:780px;margin:0 auto">
+      <h1 style="font-size:20px;color:#a855f7">🧮 Réconciliation des soldes</h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:14px">{len(rows)} joueur(s) analysé(s) · <b style="color:#fca5a5">{a_recrediter} à recréditer</b> · total dû <b style="color:#fca5a5">{total_du} XPF</b></div>
+      <table style="width:100%;border-collapse:collapse;font-size:13px">{corps or '<tr><td style="padding:10px;color:#6ee7b7">✅ Tous les soldes sont justes.</td></tr>'}</table>
+      <div style="margin-top:14px;color:#94a3b8;font-size:12px">« doit X XPF » = la joueuse a des mouvements enregistrés (gain, achat…) qui ne sont pas dans son solde réel → recrédite-la avec l'outil admin « Recréditer joueur » en utilisant la décomposition indiquée. Le mouvement sera tracé (Crédit admin) et la ligne passera au vert.</div>
     </div></body></html>'''
 
 @app.route("/diag-campagnes")
