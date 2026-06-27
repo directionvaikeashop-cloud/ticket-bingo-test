@@ -6787,6 +6787,27 @@ def releve_financier_joueur(code):
     html += ".td-ent{color:#3fb950;text-align:right}.td-sor{color:#f85149;text-align:right}</style></head><body>"
     html += "<h1>Mon releve de pions</h1>"
     html += "<div class='sub'>" + str(nom) + " (" + code + ")</div>"
+    # === SECURITE : adresses IP enregistrees pour ce compte ===
+    _ips_vues = {}
+    for _x in DB.get("journal_connexions", []):
+        if isinstance(_x, dict) and (_x.get("code") or "").upper() == code and _x.get("ip"):
+            _d = str(_x.get("date", ""))
+            if _x["ip"] not in _ips_vues or _d > _ips_vues[_x["ip"]]:
+                _ips_vues[_x["ip"]] = _d
+    for _t in DB.get("transferts_pions", []):
+        if isinstance(_t, dict) and _t.get("ip") and ((_t.get("de") or "").upper() == code or (_t.get("vers") or "").upper() == code):
+            _d = str(_t.get("date", ""))
+            if _t["ip"] not in _ips_vues or _d > _ips_vues[_t["ip"]]:
+                _ips_vues[_t["ip"]] = _d
+    if _ips_vues:
+        _lignes_ip = ""
+        for _ip, _d in sorted(_ips_vues.items(), key=lambda kv: kv[1], reverse=True)[:15]:
+            _dd = _d[:16].replace("T", " ") if _d else ""
+            _lignes_ip += "<div style='font-family:monospace;font-size:12px;color:#e6edf3'>" + str(_ip) + ("  <span style='color:#8b949e'>(" + _dd + ")</span>" if _dd else "") + "</div>"
+        html += ("<div style='background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px;margin:12px 0'>"
+                 "<div style='font-size:13px;color:#58a6ff;font-weight:bold;margin-bottom:6px'>&#128274; Connexions enregistrees sur ce compte</div>"
+                 + _lignes_ip +
+                 "<div style='font-size:11px;color:#8b949e;margin-top:6px'>Chaque acces a ce compte est enregistre (adresse IP, date et appareil) a des fins de securite.</div></div>")
     html += "<form method='get' style='margin:10px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"
     html += "<span style='font-size:12px;color:#8b949e'>Periode :</span>"
     html += "<input type='date' name='du' value='" + du + "' style='background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:6px'>"
