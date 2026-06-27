@@ -9689,6 +9689,91 @@ def diag_campagnes():
       <div style="margin-top:14px;color:#94a3b8;font-size:12px">« mini » = affiche P6 50 000 · « premier » = affiche OHANA 500 000. Mets ton budget pub sur la meilleure.</div>
     </div></body></html>'''
 
+@app.route("/rapport-org")
+def rapport_org():
+    """ADMIN — Rapport de solde d'un organisateur + actions (rembourser sa poche,
+    fermer son code). ?cle=ADMIN&org=CODE[&action=vider|fermer&confirme=1]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    org = (request.args.get("org", "") or "").strip().upper()
+    action = (request.args.get("action", "") or "").strip()
+    confirme = request.args.get("confirme", "") == "1"
+
+    def page(corps):
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport organisateur</title></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:18px;color:#fff">
+        <div style="max-width:680px;margin:0 auto">{corps}</div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    if not org:
+        return page('<h1 style="color:#a855f7;font-size:20px">🧾 Rapport organisateur</h1>'
+                    '<p style="color:#94a3b8">Ajoute <code style="color:#fde68a">&org=CODE</code> (ex. <code style="color:#fde68a">&org=CPFRD66H</code> pour HEINI).</p>')
+
+    oinfo = DB.get("codes", {}).get(org)
+    if not oinfo:
+        return page(f'<p style="color:#fca5a5">Organisateur {org} introuvable.</p>')
+
+    nom = oinfo.get("nom", "") or "(sans nom)"
+    poche = DB.get("pions_org", {}).get(org, {})
+    solde = _xpf_total_pions(poche)
+
+    # === ACTIONS ===
+    if action == "vider" and confirme:
+        DB.setdefault("remboursements_org", []).insert(0, {
+            "org": org, "nom": nom, "montant": solde, "par": cle,
+            "date": datetime.datetime.now().isoformat()})
+        DB.setdefault("pions_org", {})[org] = {}
+        save_data(immediat=True)
+        return page(f'<h1 style="color:#34d399;font-size:20px">✅ Poche remboursée</h1>'
+                    f'<p style="color:#fff"><b>{format(solde, ",")} F</b> de pions retirés de la poche de <b>{nom}</b> (remboursement enregistré).</p>'
+                    f'<p style="margin-top:10px"><a href="/rapport-org?cle={cle}&org={org}" style="color:#a78bfa">← Revoir le rapport</a></p>')
+    if action == "fermer" and confirme:
+        oinfo["actif"] = False
+        DB["codes"][org] = oinfo
+        save_data(immediat=True)
+        return page(f'<h1 style="color:#34d399;font-size:20px">🔒 Code fermé</h1>'
+                    f'<p style="color:#fff">Le code organisateur <b>{nom}</b> ({org}) est désormais <b>désactivé</b>.</p>'
+                    f'<p style="margin-top:10px"><a href="/rapport-org?cle={cle}&org={org}" style="color:#a78bfa">← Revoir le rapport</a></p>')
+
+    # === RAPPORT ===
+    ventes_org = [v for v in DB.get("ventes", []) if (v.get("code_org") or "").upper() == org]
+    total_vendu = sum(int(v.get("total", 0) or 0) for v in ventes_org)
+    # transactions joueuse <-> org
+    tjo = [t for t in DB.get("transactions_joueur_org", []) if (t.get("code_org") or "").upper() == org]
+    recu_joueuses = sum(int(t.get("montant", 0) or 0) for t in tjo if int(t.get("montant", 0) or 0) > 0)
+
+    deco = " · ".join(f'{n}×{v}' for v, n in sorted(poche.items(), key=lambda kv: -int(kv[0])) if n) or "vide"
+    badge_actif = ('<span style="color:#6ee7b7">✅ actif</span>' if oinfo.get("actif") else '<span style="color:#fca5a5">🔒 fermé</span>')
+
+    url_vider = f"/rapport-org?cle={cle}&org={org}&action=vider&confirme=1"
+    url_fermer = f"/rapport-org?cle={cle}&org={org}&action=fermer&confirme=1"
+
+    return page(f'''
+      <h1 style="font-size:21px;color:#fbbf24">🧾 {nom} <span style="font-size:13px;color:#94a3b8">({org})</span></h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:14px">Statut : {badge_actif}</div>
+
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;margin-bottom:14px">
+        <div style="font-size:13px;color:#8b949e">💰 Solde de sa poche de pions (à lui rembourser)</div>
+        <div style="font-size:30px;font-weight:800;color:#34d399;margin:4px 0">{format(solde, ",")} F</div>
+        <div style="font-size:12px;color:#94a3b8">Détail : {deco}</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px">
+        <div style="background:#161b22;border-radius:10px;padding:12px;text-align:center"><div style="font-size:12px;color:#8b949e">Ventes enregistrées</div><div style="font-size:18px;font-weight:800">{len(ventes_org)}</div><div style="font-size:11px;color:#fbbf24">{format(total_vendu, ",")} F</div></div>
+        <div style="background:#161b22;border-radius:10px;padding:12px;text-align:center"><div style="font-size:12px;color:#8b949e">Reçu des joueuses</div><div style="font-size:18px;font-weight:800;color:#fbbf24">{format(recu_joueuses, ",")} F</div></div>
+      </div>
+
+      <div style="background:#1a1830;border-radius:12px;padding:16px">
+        <div style="font-size:14px;color:#fff;margin-bottom:10px;font-weight:600">Clôture du compte</div>
+        <a href="{url_vider}" style="display:block;background:#059669;color:#fff;padding:11px;border-radius:9px;text-decoration:none;font-weight:700;text-align:center;margin-bottom:8px">💸 Rembourser & vider sa poche ({format(solde, ",")} F)</a>
+        <a href="{url_fermer}" style="display:block;background:#b91c1c;color:#fff;padding:11px;border-radius:9px;text-decoration:none;font-weight:700;text-align:center">🔒 Fermer son code organisateur</a>
+        <div style="color:#6b7280;font-size:11px;margin-top:8px">Fais d'abord le remboursement, puis ferme le code. Le détail de ses ventes : <code style="color:#a78bfa">/diag-achats?cle={cle}&org={org}</code></div>
+      </div>''')
+
 @app.route("/diag-achats")
 def diag_achats():
     """RAPPORT — Achats de tickets/PDF par organisateur (pour remboursement).
