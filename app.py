@@ -11644,3 +11644,137 @@ def page_organisatrices():
       <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:10px;color:#a78bfa">Nom</th><th style="padding:10px;color:#a78bfa">Code</th><th style="padding:10px;color:#a78bfa">État</th><th style="padding:10px;color:#a78bfa;text-align:right">Action</th></tr>
       {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/rapport-tournoi")
+def rapport_tournoi():
+    """ADMIN — Rapport FINAL d'un tournoi (toutes les transactions + résumé).
+    Sans paramètre : liste des tournois (organisatrice + jour).
+    ?cle=ADMIN&org=CODE&date=AAAA-MM-JJ : rapport complet de ce tournoi."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    codes = DB.get("codes", {})
+
+    def i(x):
+        try:
+            return int(float(x or 0))
+        except Exception:
+            return 0
+
+    def onom(o):
+        return codes.get(o, {}).get("nom", o) if o else "—"
+
+    def jour(x):
+        return str(x or "")[:10]
+
+    f_org = (request.args.get("org", "") or "").strip().upper()
+    f_date = (request.args.get("date", "") or "").strip()[:10]
+
+    # ===== MODE LISTE : tous les tournois (org + jour ayant des ventes de tickets) =====
+    if not (f_org and f_date):
+        tournois = {}
+        for c in DB.get("commandes_tickets_pions", []):
+            if not isinstance(c, dict):
+                continue
+            o = (c.get("code_org") or "").upper()
+            j = jour(c.get("date"))
+            if not o or not j:
+                continue
+            k = (o, j)
+            t = tournois.setdefault(k, {"mises": 0, "tickets": 0, "joueuses": set()})
+            if c.get("statut") in ("validee", "en_attente", "rembourse"):
+                t["mises"] += i(c.get("total_pions"))
+                t["tickets"] += 1
+                t["joueuses"].add(c.get("code_joueur"))
+        lignes = sorted(tournois.items(), key=lambda kv: kv[0][1], reverse=True)
+        rows = ""
+        for (o, j), t in lignes:
+            rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                     f'<td style="padding:9px;color:#64748b">{j}</td>'
+                     f'<td style="padding:9px;color:#fbbf24;font-weight:600">{onom(o)}</td>'
+                     f'<td style="padding:9px;text-align:right">{format(t["mises"], ",")} F</td>'
+                     f'<td style="padding:9px;text-align:right;color:#94a3b8">{len(t["joueuses"])}</td>'
+                     f'<td style="padding:9px;text-align:right"><a href="/rapport-tournoi?cle={cle}&org={o}&date={j}" style="color:#34d399;text-decoration:none;font-weight:700">📊 Rapport →</a></td></tr>')
+        if not rows:
+            rows = '<tr><td colspan="5" style="padding:20px;text-align:center;color:#94a3b8">Aucun tournoi avec des ventes.</td></tr>'
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapports de tournois</title></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:860px;margin:0 auto">
+        <h1 style="font-size:21px;color:#a855f7;margin-bottom:6px">📊 Rapports de tournois</h1>
+        <div style="color:#94a3b8;font-size:13px;margin-bottom:14px">Choisis un tournoi pour voir son rapport final (toutes les transactions + résumé financier).</div>
+        <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px;min-width:560px">
+        <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:9px;color:#a78bfa">Jour</th><th style="padding:9px;color:#a78bfa">Organisatrice</th><th style="padding:9px;color:#a78bfa;text-align:right">Mises</th><th style="padding:9px;color:#a78bfa;text-align:right">Joueuses</th><th style="padding:9px;color:#a78bfa;text-align:right">Rapport</th></tr>
+        {rows}</table></div></div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    # ===== MODE RAPPORT : un tournoi précis (org + jour) =====
+    def concerne(rec):
+        return isinstance(rec, dict) and (rec.get("code_org", "") or "").upper() == f_org and jour(rec.get("date")) == f_date
+
+    mises = tickets_nb = 0
+    achats_pions = credits_org = gains = remb = retraits = 0
+    ops = []
+    for c in DB.get("commandes_tickets_pions", []):
+        if concerne(c) and c.get("statut") in ("validee", "en_attente", "rembourse"):
+            m = i(c.get("total_pions")); mises += m; tickets_nb += 1
+            ops.append((c.get("date", ""), "Achat ticket", "#818cf8", c.get("code_joueur", ""), m, c.get("jeu", "")))
+    for c in DB.get("commandes_pions_joueurs", []):
+        if concerne(c) and c.get("statut") in ("validee", "valide", "en_attente_validation"):
+            m = i(c.get("montant_paye")); achats_pions += m
+            ops.append((c.get("date", ""), "Achat pions", "#fbbf24", c.get("code_joueur", ""), m, f'{c.get("nb_pions","?")} pions'))
+    for t in DB.get("transactions_joueur_org", []):
+        if concerne(t):
+            m = i(t.get("montant_total")); credits_org += m
+            ops.append((t.get("date", ""), "Crédit org→joueuse", "#34d399", t.get("code_joueur", ""), m, ""))
+    for g in DB.get("gains_finaux", []):
+        if concerne(g):
+            m = i(g.get("montant_credite") or g.get("montant_gain")); gains += m
+            ops.append((g.get("date", ""), "Gain payé", "#f472b6", g.get("code_gagnant", ""), m, g.get("jeu", "")))
+    for rb in DB.get("remboursements_tournoi", []):
+        if concerne(rb):
+            m = i(rb.get("total_rembourse")); remb += m
+            ops.append((rb.get("date", ""), "Remboursement", "#fca5a5", f'{rb.get("nb_joueuses","?")} joueuses', m, rb.get("jeu", "")))
+    for r in DB.get("demandes_retrait", []):
+        if concerne(r):
+            m = i(r.get("montant_demande")); retraits += m
+            ops.append((r.get("date", ""), "Retrait", "#fb923c", r.get("code_joueur", ""), m, r.get("statut", "")))
+
+    cagnotte = round(mises * 0.80)
+    part_org = round(mises * 0.20)
+    ops.sort(key=lambda o: str(o[0]))
+    rows = ""
+    for date_op, typ, coul, qui, montant, det in ops:
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:7px;color:#64748b;font-size:11px;white-space:nowrap">{str(date_op)[:16].replace("T"," ")}</td>'
+                 f'<td style="padding:7px"><span style="color:{coul};font-weight:600;font-size:12px">{typ}</span></td>'
+                 f'<td style="padding:7px;font-family:monospace;font-size:12px;color:#a78bfa">{qui}</td>'
+                 f'<td style="padding:7px;text-align:right;font-weight:700;white-space:nowrap">{format(montant, ",")} F</td>'
+                 f'<td style="padding:7px;color:#94a3b8;font-size:11px">{det}</td></tr>')
+    if not rows:
+        rows = '<tr><td colspan="5" style="padding:20px;text-align:center;color:#94a3b8">Aucune transaction ce jour-là.</td></tr>'
+
+    def carte(titre, valeur, coul):
+        return (f'<div style="flex:1;min-width:135px;background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px">'
+                f'<div style="font-size:11px;color:#94a3b8;margin-bottom:4px">{titre}</div>'
+                f'<div style="font-size:18px;font-weight:800;color:{coul}">{format(valeur, ",")} F</div></div>')
+
+    cartes = (carte("Mises sur tickets", mises, "#818cf8")
+              + carte("Cagnotte (80%)", cagnotte, "#34d399")
+              + carte("Part organisatrice (20%)", part_org, "#fbbf24")
+              + carte("Gains payés", gains, "#f472b6")
+              + carte("Remboursements", remb, "#fca5a5")
+              + carte("Achats de pions", achats_pions, "#fcd34d"))
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport tournoi</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:920px;margin:0 auto">
+      <a href="/rapport-tournoi?cle={cle}" style="color:#818cf8;text-decoration:none;font-size:13px">← Tous les tournois</a>
+      <h1 style="font-size:22px;color:#a855f7;margin:8px 0 2px">📊 Rapport final — {onom(f_org)}</h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:14px">Tournoi du <b style="color:#fff">{f_date}</b> · {tickets_nb} ticket(s) vendu(s)</div>
+      <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:18px">{cartes}</div>
+      <h2 style="font-size:15px;color:#c7d2fe;margin-bottom:8px">Détail de toutes les transactions</h2>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:600px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:7px;color:#a78bfa">Heure</th><th style="padding:7px;color:#a78bfa">Opération</th><th style="padding:7px;color:#a78bfa">Joueuse</th><th style="padding:7px;color:#a78bfa;text-align:right">Montant</th><th style="padding:7px;color:#a78bfa">Détail</th></tr>
+      {rows}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
