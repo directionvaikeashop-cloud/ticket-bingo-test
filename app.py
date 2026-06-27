@@ -13041,3 +13041,107 @@ def audit_credits_admin():
       <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:7px;color:#a78bfa">Date</th><th style="padding:7px;color:#a78bfa">Code crédité</th><th style="padding:7px;color:#a78bfa;text-align:right">Montant</th><th style="padding:7px;color:#a78bfa">Par</th><th style="padding:7px;color:#a78bfa">Verdict</th></tr>
       {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/annuler-credits-fraude")
+def annuler_credits_fraude():
+    """ADMIN — Annule (retire) la valeur injectée par l'ADMIN (recrédits + éventuels
+    transferts admin) vers les comptes BLOQUÉS frauduleux. Aperçu d'abord ; rien
+    n'est modifié sans &confirme=1. Ne touche QUE les comptes bloqués. ?cle=ADMIN[&confirme=1]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    confirme = request.args.get("confirme", "") == "1"
+    bloques = set(DB.get("codes_bloques", []))
+
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
+    def poser_solde(c, montant):
+        montant = max(0, int(montant))
+        DB.setdefault("pions_joueurs", {})[c] = {
+            "100": montant // 100,
+            "50": (montant % 100) // 50,
+            "20": (montant % 50) // 20,
+            "10": (montant % 20) // 10,
+        }
+
+    # Valeur injectée par l'ADMIN vers chaque code bloqué
+    injecte = {}  # code -> {"credits": int, "transferts": int}
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict):
+            code = (c.get("code_joueur") or "").upper()
+            if code in bloques:
+                m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+                if m > 0:
+                    injecte.setdefault(code, {"credits": 0, "transferts": 0})["credits"] += m
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict):
+            for code in (c.get("codes") or []):
+                code = (code or "").upper()
+                if code in bloques:
+                    m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+                    if m > 0:
+                        injecte.setdefault(code, {"credits": 0, "transferts": 0})["credits"] += m
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict) and t.get("admin"):
+            code = (t.get("vers") or "").upper()
+            if code in bloques:
+                injecte.setdefault(code, {"credits": 0, "transferts": 0})["transferts"] += int(t.get("montant", 0) or 0)
+
+    # Calcul de ce qui sera retiré (plafonné au solde actuel, jamais négatif)
+    plan = []
+    total_inj = total_retire = 0
+    for code, d in injecte.items():
+        inj = d["credits"] + d["transferts"]
+        s = solde(code)
+        retire = min(inj, s)
+        total_inj += inj; total_retire += retire
+        plan.append((code, d["credits"], d["transferts"], s, retire))
+    plan.sort(key=lambda x: -x[4])
+
+    if confirme and plan:
+        for code, cr, tr, s, retire in plan:
+            if retire > 0:
+                poser_solde(code, s - retire)
+        DB.setdefault("annulations_credits_fraude", []).insert(0, {
+            "id": secrets.token_hex(4).upper(),
+            "total_retire": total_retire, "nb_codes": len([p for p in plan if p[4] > 0]),
+            "par": cle, "date": datetime.datetime.now().isoformat()
+        })
+        save_data(immediat=True)
+
+    rows = ""
+    for code, cr, tr, s, retire in plan:
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:8px;font-family:monospace;color:#a78bfa">{code}</td>'
+                 f'<td style="padding:8px;text-align:right;color:#fbbf24">{format(cr, ",")} F</td>'
+                 f'<td style="padding:8px;text-align:right;color:#93c5fd">{format(tr, ",")} F</td>'
+                 f'<td style="padding:8px;text-align:right;color:#34d399">{format(s, ",")} F</td>'
+                 f'<td style="padding:8px;text-align:right;color:#f87171;font-weight:700">−{format(retire, ",")} F</td>'
+                 f'<td style="padding:8px;text-align:right;color:#cbd5e1">{format(s - retire, ",")} F</td></tr>')
+    if not rows:
+        rows = '<tr><td colspan="6" style="padding:16px;text-align:center;color:#34d399">Aucun crédit admin sur un compte bloqué. Rien à annuler. ✅</td></tr>'
+
+    if confirme:
+        banniere = (f'<div style="background:rgba(16,185,129,.15);border:2px solid #10b981;border-radius:10px;padding:14px;margin-bottom:14px;color:#34d399;font-weight:800;font-size:15px">'
+                    f'✅ FAIT — {format(total_retire, ",")} XPF retirés des comptes frauduleux. Valeur fabriquée neutralisée.</div>')
+    else:
+        lien_ok = f"/annuler-credits-fraude?cle={cle}&confirme=1"
+        banniere = (f'<div style="background:rgba(251,191,36,.1);border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:14px">'
+                    f'<div style="color:#fde68a;font-weight:700;margin-bottom:6px">👁️ APERÇU — rien n\'est encore modifié</div>'
+                    f'<div style="color:#94a3b8;font-size:13px;margin-bottom:10px">Va retirer <b style="color:#f87171">{format(total_retire, ",")} XPF</b> des comptes <b>bloqués</b> uniquement (plafonné à leur solde, jamais en négatif). Les comptes sains ne sont PAS touchés.</div>'
+                    f'<a href="{lien_ok}" style="display:inline-block;background:#ef4444;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">✅ Confirmer l\'annulation</a></div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Annuler crédits fraude</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:820px;margin:0 auto">
+      <h1 style="font-size:21px;color:#f87171;margin-bottom:10px">↩️ Annuler les crédits admin vers les comptes frauduleux</h1>
+      {banniere}
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:620px">
+      <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:8px;color:#fca5a5">Code bloqué</th><th style="padding:8px;color:#fca5a5;text-align:right">Recrédits admin</th><th style="padding:8px;color:#fca5a5;text-align:right">Transferts admin</th><th style="padding:8px;color:#fca5a5;text-align:right">Solde actuel</th><th style="padding:8px;color:#fca5a5;text-align:right">À retirer</th><th style="padding:8px;color:#fca5a5;text-align:right">Nouveau solde</th></tr>
+      {rows}</table></div>
+      <div style="color:#94a3b8;font-size:12px;margin-top:10px">« À retirer » = ce que l'admin a injecté, plafonné au solde actuel (on ne descend jamais sous 0). Le reste du solde (achats réels du fraudeur) reste gelé sur le compte bloqué.</div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
