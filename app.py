@@ -6828,21 +6828,50 @@ def releve_financier_joueur(code):
                  "<div style='font-size:13px;color:#58a6ff;font-weight:bold;margin-bottom:6px'>&#128274; Connexions enregistrees sur ce compte</div>"
                  + _lignes_ip +
                  "<div style='font-size:11px;color:#8b949e;margin-top:6px'>Chaque acces a ce compte est enregistre (adresse IP, date et appareil) a des fins de securite.</div></div>")
-    # === COMPTES LIES (par transferts uniquement — JAMAIS par wifi partage) : nombre seul ===
-    _lies = set()
+    # === SYNTHESE D'AUDIT (uniquement comptes avec transferts ; releve prive) ===
+    _recu_de = {}; _envoye_a = {}
     for _t in DB.get("transferts_pions", []):
         if not isinstance(_t, dict):
             continue
         _de = (_t.get("de", "") or "").upper()
         _vers = (_t.get("vers", "") or "").upper()
-        if _de == code and _vers:
-            _lies.add(_vers)
-        elif _vers == code and _de:
-            _lies.add(_de)
+        _m = int(_t.get("montant", 0) or 0)
+        if _vers == code and _de:
+            _recu_de[_de] = _recu_de.get(_de, 0) + _m
+        elif _de == code and _vers:
+            _envoye_a[_vers] = _envoye_a.get(_vers, 0) + _m
+    _lies = set(_recu_de) | set(_envoye_a)
     if _lies:
-        html += ("<div style='background:#2b1a00;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin:12px 0;color:#fde68a;font-size:13px'>"
-                 "&#9888; Ce compte a &eacute;chang&eacute; des pions avec <b>" + str(len(_lies)) + " autre(s) compte(s)</b>. "
-                 "Cette activit&eacute; est enregistr&eacute;e et trac&eacute;e.</div>")
+        _tot_recu = sum(_recu_de.values())
+        _tot_env = sum(_envoye_a.values())
+        _nb_ip = len(_ips_vues)
+        _tot_cred = 0
+        for _c in DB.get("credits_admin", []):
+            if isinstance(_c, dict) and (_c.get("code_joueur") or "").upper() == code:
+                _tot_cred += int(_c.get("nb_pions", 0) or 0) * int(_c.get("valeur_pion", 0) or 0)
+        for _c in DB.get("credits_masse", []):
+            if isinstance(_c, dict) and code in [(x or "").upper() for x in (_c.get("codes") or [])]:
+                _tot_cred += int(_c.get("nb_pions", 0) or 0) * int(_c.get("valeur_pion", 0) or 0)
+        if len(_recu_de) >= 2 and _tot_recu > _tot_env:
+            _role = "Collecteur (reçoit des pions de plusieurs comptes)"
+        elif len(_envoye_a) >= 2 and _tot_env > _tot_recu:
+            _role = "Redistributeur (envoie des pions vers plusieurs comptes)"
+        elif _lies:
+            _role = "Compte relié à un réseau de transferts"
+        else:
+            _role = ""
+        _liste = ", ".join(sorted(_lies))
+        html += ("<div style='background:#2b1a00;border:1px solid #f59e0b;border-radius:10px;padding:14px;margin:12px 0;color:#fde68a;font-size:13px;line-height:1.7'>"
+                 "<div style='font-size:14px;font-weight:bold;color:#f0b03e;margin-bottom:6px'>&#128269; Synth&egrave;se d'audit de ce compte</div>"
+                 "<div>&bull; Comptes li&eacute;s par transfert : <b>" + str(len(_lies)) + "</b> (" + _liste + ")</div>"
+                 "<div>&bull; Pions re&ccedil;us par transfert : <b>" + format(_tot_recu, ",") + " XPF</b>" +
+                 (" depuis " + str(len(_recu_de)) + " compte(s)" if _recu_de else "") + "</div>"
+                 "<div>&bull; Pions envoy&eacute;s par transfert : <b>" + format(_tot_env, ",") + " XPF</b>" +
+                 (" vers " + str(len(_envoye_a)) + " compte(s)" if _envoye_a else "") + "</div>"
+                 "<div>&bull; Adresses IP de connexion enregistr&eacute;es : <b>" + str(_nb_ip) + "</b></div>"
+                 + ("<div>&bull; Recr&eacute;dits administratifs re&ccedil;us : <b>" + format(_tot_cred, ",") + " XPF</b></div>" if _tot_cred else "")
+                 + ("<div>&bull; Profil : <b>" + _role + "</b></div>" if _role else "")
+                 + "<div style='margin-top:8px;font-size:12px;color:#d4a857'>Toutes ces op&eacute;rations sont enregistr&eacute;es et document&eacute;es (dates, montants, adresses IP). Cette activit&eacute; a &eacute;t&eacute; identifi&eacute;e lors d'un contr&ocirc;le anti-fraude.</div></div>")
     html += "<form method='get' style='margin:10px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"
     html += "<span style='font-size:12px;color:#8b949e'>Periode :</span>"
     html += "<input type='date' name='du' value='" + du + "' style='background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:6px'>"
