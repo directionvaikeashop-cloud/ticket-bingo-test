@@ -5179,7 +5179,7 @@ async function refuserRetrait(id){
 function voirMonReleveJoueur(){
   var code = (codeJoueurActuel || '');
   if(!code){ alert('Code joueur introuvable'); return; }
-  window.open('/releve-financier-joueur/' + encodeURIComponent(code), '_blank');
+  window.open('/releve-financier-joueur/' + encodeURIComponent(code) + '?cle=' + encodeURIComponent(code), '_blank');
 }
 
 function ouvrirModaleRetrait(){
