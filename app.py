@@ -8979,6 +8979,14 @@ def diag_ecarts():
     a_verifier = []  # écart négatif sans gain (peut être un vieux solde)
     en_trop = 0      # nombre de "en trop" (jamais une dette)
     impossibles = 0  # attendu < 0 (journal incomplet)
+    suspects_fraude = []  # codes ayant émis des transferts ou bloqués -> NE PAS recréditer
+
+    # Codes ayant ENVOYÉ des transferts (hors admin) = manipulation possible
+    codes_emetteurs = set()
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict) and not t.get("admin") and t.get("de"):
+            codes_emetteurs.add((t.get("de") or "").upper())
+    codes_bloques_set = set(DB.get("codes_bloques", []))
 
     for code in codes:
         if code in codes_non_joueurs:
@@ -8994,6 +9002,11 @@ def diag_ecarts():
             impossibles += 1
             continue  # cas impossible -> journal incomplet, pas fiable
         ligne = (code, reel, attendu, -ecart)
+        # PROTECTION ANTI-FRAUDE : un code qui a transféré des pions ou qui est
+        # bloqué n'est JAMAIS proposé au recrédit (piège des faux écarts).
+        if code in codes_emetteurs or code in codes_bloques_set:
+            suspects_fraude.append(ligne)
+            continue
         if code in codes_avec_gain:
             prio.append(ligne)
         else:
@@ -9001,6 +9014,7 @@ def diag_ecarts():
 
     prio.sort(key=lambda r: -r[3])
     a_verifier.sort(key=lambda r: -r[3])
+    suspects_fraude.sort(key=lambda r: -r[3])
 
     def _tr(r, accent):
         code, reel, attendu, du = r
@@ -9011,6 +9025,13 @@ def diag_ecarts():
 
     corps_prio = "".join(_tr(r, "#fca5a5") for r in prio) or '<tr><td colspan="3" style="padding:10px;color:#6ee7b7">Aucune perte de gain détectée. ✅</td></tr>'
     corps_verif = "".join(_tr(r, "#fbbf24") for r in a_verifier) or '<tr><td colspan="3" style="padding:10px;color:#6ee7b7">Rien à vérifier. ✅</td></tr>'
+    corps_suspects = "".join(_tr(r, "#f87171") for r in suspects_fraude)
+    bloc_suspects = ""
+    if suspects_fraude:
+        bloc_suspects = (f'<div style="background:rgba(239,68,68,.12);border:2px solid #ef4444;border-radius:10px;padding:12px;margin-bottom:16px">'
+                         f'<div style="color:#fca5a5;font-weight:800;margin-bottom:8px">🚨 Écarts SUSPECTS — NE PAS recréditer ({len(suspects_fraude)})</div>'
+                         f'<div style="color:#fca5a5;font-size:12px;margin-bottom:8px">Ces codes ont <b>envoyé des transferts</b> ou sont <b>bloqués</b> : leur « écart » est presque sûrement de la <b>fraude</b> (faux écart créé en faisant tourner des pions). Les recréditer reviendrait à fabriquer de la valeur pour le fraudeur. Vérifie-les dans <b>/audit-fraude</b>.</div>'
+                         f'<table style="width:100%;border-collapse:collapse;font-size:13px">{corps_suspects}</table></div>')
 
     total_prio = sum(r[3] for r in prio)
     bloc_doublons = ""
@@ -9037,6 +9058,8 @@ def diag_ecarts():
         <div style="color:#94a3b8;font-size:12px;margin-bottom:8px">Pas de gain enregistré pour ces codes : ça peut être un <b>vieux solde d'avant le journal</b>. Ne recrédite que si la joueuse réclame et que tu confirmes.</div>
         <table style="width:100%;border-collapse:collapse;font-size:13px">{corps_verif}</table>
       </div>
+
+      {bloc_suspects}
 
       <div style="color:#6ee7b7;font-size:13px;margin-bottom:6px">🟢 {en_trop} joueuse(s) ont « plus » que le journal ne sait expliquer → <b>aucune dette</b>, rien à faire.</div>
       <div style="color:#94a3b8;font-size:12px">⚪ {impossibles} cas ignorés (journal incomplet, montant impossible).</div>
