@@ -3023,6 +3023,15 @@ function envoyerReclamation(){
 
 // 📮 RÉCLAMATIONS — côté organisateur
 function echapHtmlRec(s){ return (s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function _renduVerif(v){
+  if(!v) return '';
+  var c = v.statut==='dementi' ? '#f87171' : (v.statut==='confirme' ? '#34d399' : '#94a3b8');
+  var bg = v.statut==='dementi' ? 'rgba(239,68,68,.12)' : (v.statut==='confirme' ? 'rgba(16,185,129,.12)' : 'rgba(148,163,184,.12)');
+  var titre = v.statut==='dementi' ? '🚨 Contredit par les données' : (v.statut==='confirme' ? '✅ Confirmé par les données' : '❔ À vérifier');
+  return '<div style="margin:6px 0;padding:8px;background:'+bg+';border:0.5px solid '+c+';border-radius:6px">'
+    + '<div style="font-size:12px;font-weight:700;color:'+c+'">'+titre+' · '+echapHtmlRec(v.sujet||'')+'</div>'
+    + '<div style="font-size:11px;color:var(--mu);margin-top:3px">'+echapHtmlRec(v.detail||'')+'</div></div>';
+}
 async function chargerReclamations(){
   var liste = document.getElementById('reclamations-liste');
   if(!liste) return;
@@ -3040,6 +3049,7 @@ async function chargerReclamations(){
       return '<div style="padding:10px;background:var(--s2);border:0.5px solid ' + (traitee ? 'var(--bd)' : 'rgba(99,102,241,.5)') + ';border-radius:8px;margin-bottom:6px;opacity:' + (traitee ? '0.55' : '1') + '">'
         + '<div style="font-weight:700;font-size:13px">' + echapHtmlRec(x.nom || x.code_joueur) + ' <span style="color:var(--mu);font-size:11px">(' + x.code_joueur + ')</span></div>'
         + '<div style="font-size:13px;margin:5px 0;white-space:pre-wrap;line-height:1.4">' + echapHtmlRec(x.message) + '</div>'
+        + _renduVerif(x.verif)
         + '<div style="font-size:11px;color:var(--mu)">' + quand + (traitee ? ' · ✅ traitée' : '') + '</div>'
         + (traitee ? '' : '<button onclick="traiterReclamation(\'' + x.id + '\')" style="margin-top:8px;padding:6px 12px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid rgba(16,185,129,.5);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✓ Marquer comme traitée</button>')
         + '</div>';
@@ -3075,6 +3085,7 @@ async function chargerCommentairesMicro(){
       return '<div style="padding:10px;background:var(--s2);border:0.5px solid ' + (traite ? 'var(--bd)' : 'rgba(99,102,241,.5)') + ';border-radius:8px;margin-bottom:6px;opacity:' + (traite ? '0.55' : '1') + '">'
         + '<div style="font-weight:700;font-size:13px">' + echapHtmlRec(x.nom || x.code_joueur) + ' <span style="color:var(--mu);font-size:11px">(' + x.code_joueur + ')</span></div>'
         + '<div style="font-size:14px;margin:5px 0;white-space:pre-wrap;line-height:1.4">' + echapHtmlRec(x.message) + '</div>'
+        + _renduVerif(x.verif)
         + '<div style="font-size:11px;color:var(--mu)">' + quand + (traite ? ' · ✅ traité' : '') + '</div>'
         + (traite ? '' : '<button onclick="traiterCommentaireMicro(\'' + x.id + '\')" style="margin-top:8px;padding:6px 12px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid rgba(16,185,129,.5);border-radius:6px;cursor:pointer;font-size:12px;font-weight:600">✓ Marquer comme traité</button>')
         + '</div>';
@@ -6057,9 +6068,21 @@ async function envoyerCommentaireMicro(){
 async function _envoyerCommentaireMicro(msg){
   if(typeof codeJoueurActuel === 'undefined' || !codeJoueurActuel){ alert("Connecte-toi d'abord avec ton code."); return; }
   try{
-    await fetch('/api/micro/commentaire',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code_joueur:codeJoueurActuel,message:msg})});
+    var r = await fetch('/api/micro/commentaire',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code_joueur:codeJoueurActuel,message:msg})});
+    var d = await r.json();
     var cf = document.getElementById('commentaire-micro-confirme');
-    if(cf){ cf.textContent = "✅ Réponse envoyée à l'organisatrice"; cf.style.display = 'block'; setTimeout(function(){ cf.style.display = 'none'; }, 3000); }
+    if(cf){
+      cf.innerHTML = (d && d.reponse) ? echapHtmlRec(d.reponse) : "✅ Réponse envoyée à l'organisatrice";
+      cf.style.display = 'block';
+      cf.style.background = 'rgba(99,102,241,.12)';
+      cf.style.border = '0.5px solid rgba(99,102,241,.45)';
+      cf.style.borderRadius = '8px';
+      cf.style.padding = '10px';
+      cf.style.color = '#c7d2fe';
+      cf.style.textAlign = 'left';
+      cf.style.lineHeight = '1.5';
+      setTimeout(function(){ cf.style.display = 'none'; }, 14000);
+    }
   }catch(e){ alert("Erreur réseau, réessaie."); }
 }
 
