@@ -6795,8 +6795,8 @@ def releve_financier_joueur(code):
                 _lies_reg.add(_d)
         _bloque = code in DB.get("codes_bloques", [])
         if len(_lies_reg) >= 2 or _bloque:
-            _type_reg = "Total des transferts de pions de code à code"
-            _desc_reg = "Pions ayant circulé entre comptes par transfert (enregistrés, datés et horodatés)"
+            _type_reg = "Pions retirés — compte remis à zéro"
+            _desc_reg = "Solde du compte ramené à 0 (le détail des transferts reçus/envoyés figure ci-dessus)"
         else:
             _type_reg = "Solde antérieur"
             _desc_reg = "Solde des tournois précédents (avant la mise en place des relevés détaillés)"
@@ -6954,21 +6954,26 @@ def releve_financier_joueur(code):
             html += "<td class='td-ent'>" + ent + "</td>"
             html += "<td class='td-sor'>" + sor + "</td></tr>"
         html += "</table>"
-        # === RÉCAPITULATIF CLAIR : total entrées, total sorties, total final ===
+        # === RÉCAPITULATIF INCONTESTABLE : décompte étape par étape ===
         _net_final = total_entrees - total_sorties
         html += ("<div style='background:#0d1117;border:2px solid #30363d;border-radius:10px;padding:16px;margin:18px 0;font-size:14px'>"
                  "<div style='font-weight:bold;color:#e6edf3;margin-bottom:10px;font-size:15px'>📋 Récapitulatif du relevé</div>"
                  "<div style='display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)'>"
-                 "<span style='color:#8b949e'>Total des ENTRÉES (pions reçus / achetés)</span>"
+                 "<span style='color:#8b949e'>① Total de TOUTES les entrées (pions reçus, achetés, gagnés)</span>"
                  "<b style='color:#3fb950'>+" + format(total_entrees, ",") + " XPF</b></div>"
                  "<div style='display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,.06)'>"
-                 "<span style='color:#8b949e'>Total des SORTIES (tickets, retraits, régularisations)</span>"
+                 "<span style='color:#8b949e'>② Total de TOUTES les sorties (tickets, retraits, transferts envoyés)</span>"
                  "<b style='color:#f85149'>-" + format(total_sorties, ",") + " XPF</b></div>"
-                 "<div style='display:flex;justify-content:space-between;padding:10px 0 2px;font-size:16px'>"
-                 "<span style='color:#e6edf3;font-weight:bold'>TOTAL FINAL (solde du compte)</span>"
+                 "<div style='display:flex;justify-content:space-between;padding:10px 0 4px;font-size:16px;border-bottom:2px solid #30363d'>"
+                 "<span style='color:#e6edf3;font-weight:bold'>③ SOLDE = ① − ②</span>"
                  "<b style='color:#58a6ff'>" + format(_net_final, ",") + " XPF</b></div>"
-                 "<div style='font-size:11px;color:#6e7681;margin-top:6px'>Calcul : Total entrées (" + format(total_entrees, ",") + ") &minus; Total sorties (" + format(total_sorties, ",") + ") = " + format(_net_final, ",") + " XPF</div>"
-                 "</div>")
+                 "<div style='display:flex;justify-content:space-between;padding:10px 0 2px;font-size:15px'>"
+                 "<span style='color:#8b949e'>Solde réel du compte aujourd'hui</span>"
+                 "<b style='color:#58a6ff'>" + format(solde_pions, ",") + " XPF</b></div>"
+                 + (("<div style='margin-top:8px;padding:8px;background:rgba(63,185,80,.1);border-radius:6px;font-size:12px;color:#3fb950'>✓ Vérification : " + format(total_entrees, ",") + " − " + format(total_sorties, ",") + " = " + format(_net_final, ",") + " XPF. Le total correspond exactement au solde du compte. Calcul équilibré.</div>")
+                    if _net_final == solde_pions else
+                    ("<div style='margin-top:8px;padding:8px;background:rgba(248,81,73,.1);border-radius:6px;font-size:12px;color:#f85149'>Écart à vérifier : " + format(abs(_net_final - solde_pions), ",") + " XPF.</div>"))
+                 + "</div>")
     else:
         html += "<p style='color:#8b949e;margin-top:20px'>Aucune operation pour le moment.</p>"
     
