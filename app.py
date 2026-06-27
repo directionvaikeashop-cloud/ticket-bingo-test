@@ -6614,7 +6614,10 @@ def releve_financier_joueur(code):
             lignes.append({
                 "date": c.get("date", "?"),
                 "type": "Achat pions",
-                "desc": str(nb) + " pions x " + str(val) + " XPF (" + str(c.get("mode_paiement", "?")) + ")",
+                "desc": str(nb) + " pions x " + str(val) + " XPF (" + str(c.get("mode_paiement", "?")) + ")"
+                        + ((" · payé " + format(int(c.get("montant_paye", 0) or 0), ",") + " XPF") if c.get("montant_paye") else "")
+                        + ((" · frais " + format(int(c.get("frais_service", 0) or 0), ",") + " XPF") if c.get("frais_service") else "")
+                        + ((" · réf. " + str(c.get("ref_paiement"))) if c.get("ref_paiement") else ""),
                 "entree": valeur_pions,
                 "sortie": 0
             })
@@ -6874,6 +6877,12 @@ def releve_financier_joueur(code):
         for _c in DB.get("credits_masse", []):
             if isinstance(_c, dict) and code in [(x or "").upper() for x in (_c.get("codes") or [])]:
                 _tot_cred += int(_c.get("nb_pions", 0) or 0) * int(_c.get("valeur_pion", 0) or 0)
+        _tot_achat_reel = 0
+        for _c in DB.get("commandes_pions_joueurs", []):
+            if isinstance(_c, dict) and (_c.get("code_joueur") or "").upper() == code and _c.get("statut") == "validee":
+                _nbp = int(_c.get("nb_pions", _c.get("pions_credites", 0)) or 0)
+                _vp = int(_c.get("valeur_pion", 0) or 0)
+                _tot_achat_reel += (_nbp * _vp) or int(_c.get("montant_net", 0) or 0)
         if len(_recu_de) >= 2 and _tot_recu > _tot_env:
             _role = "Collecteur (reçoit des pions de plusieurs comptes)"
         elif len(_envoye_a) >= 2 and _tot_env > _tot_recu:
@@ -6905,6 +6914,7 @@ def releve_financier_joueur(code):
                  "<div>&bull; Pions envoy&eacute;s par transfert : <b>" + format(_tot_env, ",") + " XPF</b>" +
                  (" vers " + str(len(_envoye_a)) + " compte(s)" if _envoye_a else "") + "</div>"
                  "<div>&bull; Adresses IP de connexion enregistr&eacute;es : <b>" + str(_nb_ip) + "</b></div>"
+                 + ("<div>&bull; Pions r&eacute;ellement achet&eacute;s (vrai paiement) : <b>" + format(_tot_achat_reel, ",") + " XPF</b></div>" if _tot_achat_reel else "<div>&bull; Pions r&eacute;ellement achet&eacute;s : <b>0 XPF</b> (aucun achat r&eacute;el)</div>")
                  + ("<div>&bull; Recr&eacute;dits administratifs re&ccedil;us : <b>" + format(_tot_cred, ",") + " XPF</b></div>" if _tot_cred else "")
                  + ("<div>&bull; Profil : <b>" + _role + "</b></div>" if _role else "")
                  + "<div style='margin-top:8px;font-size:12px;color:#d4a857'>Toutes ces op&eacute;rations sont enregistr&eacute;es et document&eacute;es (dates, montants, adresses IP). Cette activit&eacute; a &eacute;t&eacute; identifi&eacute;e lors d'un contr&ocirc;le anti-fraude.</div></div>")
