@@ -12489,3 +12489,93 @@ def audit_fraude_global():
       <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:8px;color:#a78bfa">Code</th><th style="padding:8px;color:#a78bfa;text-align:right">Solde</th><th style="padding:8px;color:#a78bfa">État</th><th style="padding:8px;color:#a78bfa;text-align:right">Action</th></tr>
       {rs}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/origine-pions")
+def origine_pions_reseau():
+    """ADMIN — Retrace l'ORIGINE des pions entrés dans une liste de codes :
+    achats (argent réel), crédits org, recrédits admin, gains, remboursements.
+    Dit si la valeur vient d'argent réel ou de pions 'fabriqués'.
+    ?cle=ADMIN&codes=A,B,C"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    codes_str = (request.args.get("codes", "") or "").strip().upper()
+    codes = set(c.strip() for c in codes_str.split(",") if c.strip())
+    if not codes:
+        return Response('<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"></head><body style="background:#0f0e1f;color:#fff;font-family:system-ui;padding:16px"><p>Ajoute &codes=A,B,C</p></body></html>', mimetype="text/html; charset=utf-8")
+
+    achats = credits_org = recredits_admin = gains = remb = 0
+    # Achats de pions (argent réel payé)
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict) and (c.get("code_joueur") or "").upper() in codes and c.get("statut") == "validee":
+            nb = int(c.get("nb_pions", c.get("pions_credites", 0)) or 0)
+            val = int(c.get("valeur_pion", 0) or 0)
+            v = nb * val or int(c.get("montant_net", 0) or 0)
+            achats += v
+    # Crédits organisatrice -> joueuse
+    for t in DB.get("transactions_joueur_org", []):
+        if isinstance(t, dict) and (t.get("code_joueur") or "").upper() in codes:
+            credits_org += int(t.get("montant_total", 0) or 0)
+    # Recrédits admin (positifs uniquement)
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict) and (c.get("code_joueur") or "").upper() in codes:
+            m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+            if m > 0:
+                recredits_admin += m
+    # Crédits de masse
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict):
+            inter = [x for x in (c.get("codes") or []) if (x or "").upper() in codes]
+            if inter:
+                recredits_admin += len(inter) * int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+    # Gains
+    for g in DB.get("gains_finaux", []):
+        if isinstance(g, dict) and (g.get("code_gagnant") or "").upper() in codes and not g.get("annule"):
+            gains += int(g.get("montant_credite", 0) or 0)
+    # Remboursements
+    for rb in DB.get("remboursements_tournoi", []):
+        if isinstance(rb, dict):
+            for det in (rb.get("detail") or []):
+                if isinstance(det, dict) and (det.get("code_joueur") or "").upper() in codes:
+                    remb += int(det.get("montant", 0) or 0)
+
+    total = achats + credits_org + recredits_admin + gains + remb
+    argent_reel = achats  # seul l'achat = argent versé pour de vrai
+    fabrique = recredits_admin + gains  # potentiellement "créé" sans argent entrant
+
+    def ligne(label, montant, coul, note):
+        pct = (montant * 100 // total) if total else 0
+        return (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                f'<td style="padding:10px;color:{coul};font-weight:600">{label}</td>'
+                f'<td style="padding:10px;text-align:right;font-weight:700">{format(montant, ",")} F</td>'
+                f'<td style="padding:10px;text-align:right;color:#94a3b8">{pct}%</td>'
+                f'<td style="padding:10px;color:#94a3b8;font-size:12px">{note}</td></tr>')
+
+    rows = (ligne("💵 Achats de pions", achats, "#34d399", "argent RÉEL versé par le fraudeur") +
+            ligne("🏪 Crédits organisatrice", credits_org, "#fbbf24", "une orga les a crédités — à vérifier avec elle") +
+            ligne("🔧 Recrédits admin", recredits_admin, "#f87171", "recrédits de réconciliation — POTENTIELLEMENT en boucle") +
+            ligne("🏆 Gains", gains, "#a78bfa", "gains de tournoi crédités") +
+            ligne("↩️ Remboursements", remb, "#93c5fd", "jeux annulés remboursés"))
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Origine des pions</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:820px;margin:0 auto">
+      <h1 style="font-size:21px;color:#a855f7;margin-bottom:6px">💰 Origine des pions du réseau</h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:12px">{len(codes)} comptes analysés. Total entré : <b style="color:#fff">{format(total, ",")} XPF</b></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="flex:1;min-width:200px;background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:10px;padding:14px"><div style="color:#94a3b8;font-size:12px">💵 Argent RÉEL versé (achats)</div><div style="color:#34d399;font-size:22px;font-weight:800">{format(argent_reel, ",")} F</div></div>
+        <div style="flex:1;min-width:200px;background:rgba(239,68,68,.12);border:1px solid #f87171;border-radius:10px;padding:14px"><div style="color:#94a3b8;font-size:12px">🔧 Recrédits + gains (à expliquer)</div><div style="color:#f87171;font-size:22px;font-weight:800">{format(fabrique, ",")} F</div></div>
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px;min-width:560px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:10px;color:#a78bfa">Origine</th><th style="padding:10px;color:#a78bfa;text-align:right">Montant</th><th style="padding:10px;color:#a78bfa;text-align:right">Part</th><th style="padding:10px;color:#a78bfa">Quoi</th></tr>
+      {rows}</table></div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-top:14px;font-size:13px;color:#cbd5e1;line-height:1.7">
+        <b style="color:#fff">Comment lire :</b><br>
+        • Si <b style="color:#34d399">💵 achats</b> domine → le fraudeur a vraiment payé ; il a juste fait tourner sa propre mise (pas de perte pour toi).<br>
+        • Si <b style="color:#f87171">🔧 recrédits admin</b> est gros → il s'est fait recréditer en boucle en simulant des écarts (comme BQQXKF). C'est de la valeur "créée" → ne JAMAIS recréditer ces comptes.<br>
+        • Si <b style="color:#fbbf24">🏪 crédits orga</b> est gros → une organisatrice les a alimentés : à éclaircir avec elle (complice ou trompée ?).
+      </div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
