@@ -13773,3 +13773,68 @@ def codes_relies():
       <table><tr><th>Code relié</th><th>Nom</th><th>Type de lien</th><th>Pions échangés</th><th>Solde actuel</th></tr>{rows}</table>
       <p style="font-size:11px;color:#666;margin-top:10px">💸 Transfert = pions réellement échangés entre les comptes (lien fort). 🌐 IP partagée = même adresse de connexion (indice ; peut aussi être un wifi commun). 🔒 = compte ex-bloqué.</p>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/clients-bascule")
+def clients_bascule():
+    """ADMIN — Clients ayant joué chez une 1re organisatrice PUIS basculé vers une autre.
+    Par défaut : HEINI -> MAEVA. ?cle=ADMIN[&de=CODE_ORG&vers=CODE_ORG]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    # Organisatrices par défaut : HEINI -> MAEVA (modifiable via &de= et &vers=)
+    de = (request.args.get("de", "") or "").strip().upper()
+    vers = (request.args.get("vers", "") or "").strip().upper()
+    if not de or not vers:
+        # retrouver par nom si non fourni
+        for c, v in DB.get("codes", {}).items():
+            nm = (v.get("nom", "") or "").upper()
+            if not de and "HEINI" in nm: de = c
+            if not vers and "MAEVA" in nm and not v.get("admin"): vers = c
+    nom_de = DB.get("codes", {}).get(de, {}).get("nom", de) or de
+    nom_vers = DB.get("codes", {}).get(vers, {}).get("nom", vers) or vers
+
+    # Construire l'historique org par joueur : (date, code_org)
+    hist = {}
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("code_org"):
+            cj = (t.get("code_acheteur") or "").upper()
+            hist.setdefault(cj, []).append((str(t.get("date", "")), (t.get("code_org") or "").upper()))
+            if t.get("acheteur"): noms[cj] = t.get("acheteur")
+    for tr in DB.get("transactions_joueur_org", []):
+        if isinstance(tr, dict) and tr.get("code_joueur") and tr.get("code_org"):
+            cj = (tr.get("code_joueur") or "").upper()
+            hist.setdefault(cj, []).append((str(tr.get("date", "")), (tr.get("code_org") or "").upper()))
+
+    rows = ""; nb = 0
+    for cj, evts in hist.items():
+        evts.sort(key=lambda x: x[0])
+        orgs_seq = [o for (_d, o) in evts]
+        if de in orgs_seq and vers in orgs_seq:
+            # 1re date chez 'de' et 1re date chez 'vers'
+            d_de = next((d for (d, o) in evts if o == de), "")
+            d_vers = next((d for (d, o) in evts if o == vers), "")
+            if d_de and d_vers and d_de <= d_vers:
+                nb += 1
+                rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                         f'<td style="padding:7px;font-family:monospace;color:#a78bfa">{cj}</td>'
+                         f'<td style="padding:7px;color:#cbd5e1">{noms.get(cj, "")}</td>'
+                         f'<td style="padding:7px;color:#6ee7b7;font-size:12px">{d_de[:10]}</td>'
+                         f'<td style="padding:7px;color:#fbbf24;font-size:12px">{d_vers[:10]}</td></tr>')
+    if not rows:
+        rows = f'<tr><td colspan="4" style="padding:14px;color:#94a3b8">Aucun client trouvé ayant basculé de {nom_de} vers {nom_vers}.</td></tr>'
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Clients basculés</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:760px;margin:0 auto">
+      <h1 style="font-size:20px;color:#a855f7;margin-bottom:6px">🔄 Clients ayant basculé : {nom_de} → {nom_vers}</h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:6px">Joueurs ayant d'abord joué chez <b>{nom_de}</b> ({de}) puis chez <b>{nom_vers}</b> ({vers}). <b>{nb}</b> client(s).</div>
+      <div style="color:#6e7681;font-size:11px;margin-bottom:12px">⚠️ Les toutes anciennes parties {nom_de} (sans relevé détaillé) peuvent ne pas toutes figurer ; on se base sur les tickets et transactions enregistrés.</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:480px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:7px;color:#a78bfa">Code</th><th style="padding:7px;color:#a78bfa">Nom</th><th style="padding:7px;color:#a78bfa">1re activité {nom_de}</th><th style="padding:7px;color:#a78bfa">1re activité {nom_vers}</th></tr>
+      {rows}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
