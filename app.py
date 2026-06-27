@@ -13838,3 +13838,67 @@ def clients_bascule():
       <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:7px;color:#a78bfa">Code</th><th style="padding:7px;color:#a78bfa">Nom</th><th style="padding:7px;color:#a78bfa">1re activité {nom_de}</th><th style="padding:7px;color:#a78bfa">1re activité {nom_vers}</th></tr>
       {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/demarrage-org")
+def demarrage_org():
+    """ADMIN — Date de démarrage et d'activité d'une organisatrice (1re et dernière
+    activité dans tickets, transactions, gains de tournois). ?cle=ADMIN[&org=CODE]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    org = (request.args.get("org", "") or "").strip().upper()
+    if not org:
+        for c, v in DB.get("codes", {}).items():
+            if "MAEVA" in (v.get("nom", "") or "").upper() and not v.get("admin"):
+                org = c; break
+    nom_org = DB.get("codes", {}).get(org, {}).get("nom", org) or org
+
+    sources = {
+        "Tickets vendus": [("tickets", "code_org", "date", "code_acheteur")],
+        "Transactions joueuses": [("transactions_joueur_org", "code_org", "date", "code_joueur")],
+        "Gains de tournois": [("gains_finaux", "code_org", "date", "code")],
+        "Achats de pions": [("commandes_pions_joueurs", "code_org", "date", "code_joueur")],
+    }
+    lignes = ""
+    glob_min = None; glob_max = None
+    for label, defs in sources.items():
+        key, ko, kd, kj = defs[0]
+        dates = []; joueurs = set()
+        for x in DB.get(key, []):
+            if isinstance(x, dict) and (x.get(ko) or "").upper() == org:
+                d = str(x.get(kd, "") or "")
+                if d: dates.append(d)
+                if x.get(kj): joueurs.add((x.get(kj) or "").upper())
+        if dates:
+            dmin = min(dates); dmax = max(dates)
+            glob_min = dmin if glob_min is None or dmin < glob_min else glob_min
+            glob_max = dmax if glob_max is None or dmax > glob_max else glob_max
+            lignes += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                       f'<td style="padding:7px;color:#cbd5e1">{label}</td>'
+                       f'<td style="padding:7px;text-align:right;color:#6ee7b7">{dmin[:16].replace("T", " ")}</td>'
+                       f'<td style="padding:7px;text-align:right;color:#fbbf24">{dmax[:16].replace("T", " ")}</td>'
+                       f'<td style="padding:7px;text-align:right;color:#a78bfa">{len(dates)}</td>'
+                       f'<td style="padding:7px;text-align:right;color:#93c5fd">{len(joueurs)}</td></tr>')
+        else:
+            lignes += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                       f'<td style="padding:7px;color:#6e7681">{label}</td>'
+                       f'<td colspan="4" style="padding:7px;color:#6e7681">aucune donnée</td></tr>')
+
+    demarrage = glob_min[:16].replace("T", " ") if glob_min else "—"
+    derniere = glob_max[:16].replace("T", " ") if glob_max else "—"
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Démarrage {nom_org}</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:760px;margin:0 auto">
+      <h1 style="font-size:20px;color:#a855f7;margin-bottom:10px">📅 Activité de {nom_org} ({org})</h1>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
+        <div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:8px;padding:12px 16px"><div style="color:#94a3b8;font-size:12px">🚀 Tout premier tournoi / activité</div><div style="color:#34d399;font-size:18px;font-weight:700">{demarrage}</div></div>
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:12px 16px"><div style="color:#94a3b8;font-size:12px">Dernière activité</div><div style="color:#fbbf24;font-size:18px;font-weight:700">{derniere}</div></div>
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:520px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:7px;color:#a78bfa">Source</th><th style="padding:7px;color:#a78bfa;text-align:right">Première</th><th style="padding:7px;color:#a78bfa;text-align:right">Dernière</th><th style="padding:7px;color:#a78bfa;text-align:right">Nb</th><th style="padding:7px;color:#a78bfa;text-align:right">Joueurs</th></tr>
+      {lignes}</table></div>
+      <div style="color:#6e7681;font-size:11px;margin-top:10px">La date de démarrage = la toute première activité enregistrée de cette organisatrice, toutes sources confondues.</div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
