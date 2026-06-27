@@ -6889,6 +6889,14 @@ def releve_financier_joueur(code):
                 _nbp = int(_c.get("nb_pions", _c.get("pions_credites", 0)) or 0)
                 _vp = int(_c.get("valeur_pion", 0) or 0)
                 _tot_achat_reel += (_nbp * _vp) or int(_c.get("montant_net", 0) or 0)
+        # Gains de tournoi (pour le total "réellement eu")
+        _tot_gain = 0
+        for _g in DB.get("gains_finaux", []):
+            if isinstance(_g, dict) and (_g.get("code") or "").upper() == code:
+                _tot_gain += int(_g.get("montant_gain", _g.get("montant_credite", 0)) or 0)
+        # Contrôle du débit source : a-t-il envoyé plus qu'il n'a jamais eu ?
+        _total_eu = _tot_achat_reel + _tot_gain + _tot_cred + _tot_recu
+        _ecart_source = _tot_env - _total_eu  # > 0 => pions envoyés sans les avoir eus
         if len(_recu_de) >= 2 and _tot_recu > _tot_env:
             _role = "Collecteur (reçoit des pions de plusieurs comptes)"
         elif len(_envoye_a) >= 2 and _tot_env > _tot_recu:
@@ -6922,6 +6930,7 @@ def releve_financier_joueur(code):
                  "<div>&bull; Adresses IP de connexion enregistr&eacute;es : <b>" + str(_nb_ip) + "</b></div>"
                  + ("<div>&bull; Pions r&eacute;ellement achet&eacute;s (vrai paiement) : <b>" + format(_tot_achat_reel, ",") + " XPF</b></div>" if _tot_achat_reel else "<div>&bull; Pions r&eacute;ellement achet&eacute;s : <b>0 XPF</b> (aucun achat r&eacute;el)</div>")
                  + ("<div>&bull; Recr&eacute;dits administratifs re&ccedil;us : <b>" + format(_tot_cred, ",") + " XPF</b></div>" if _tot_cred else "")
+                 + ((("<div style='margin-top:6px;padding:8px;background:rgba(248,81,73,.15);border-radius:6px'>&#128308; <b>Contr&ocirc;le d&eacute;bit : ce compte a envoy&eacute; " + format(_ecart_source, ",") + " XPF de PLUS qu'il n'en a jamais eu</b> (envoy&eacute; " + format(_tot_env, ",") + " / r&eacute;ellement eu " + format(_total_eu, ",") + "). Ces pions n'avaient pas de contrepartie r&eacute;elle.</div>") if _ecart_source > 0 else ("<div style='margin-top:6px;padding:8px;background:rgba(63,185,80,.1);border-radius:6px;color:#3fb950'>&#9989; D&eacute;bit coh&eacute;rent : ce compte a envoy&eacute; " + format(_tot_env, ",") + " XPF, couverts par ce qu'il a r&eacute;ellement eu (" + format(_total_eu, ",") + " XPF).</div>")) if _tot_env > 0 else "")
                  + ((("<div style='margin-top:6px;padding:8px;background:rgba(248,81,73,.12);border-radius:6px'>&#128308; <b>Ce compte d&eacute;tient encore " + format(solde_pions, ",") + " XPF</b> de pions sur les transferts re&ccedil;us.</div>") if solde_pions > 0 else ("<div style='margin-top:6px;padding:8px;background:rgba(63,185,80,.12);border-radius:6px;color:#3fb950'>&#9989; <b>Ce compte ne d&eacute;tient plus de pions</b> (solde &agrave; 0). Les pions re&ccedil;us par transfert ne sont plus disponibles.</div>")) if _tot_recu > 0 else "")
                  + "<div style='margin-top:8px;font-size:12px;color:#d4a857'>Toutes ces op&eacute;rations sont enregistr&eacute;es et document&eacute;es (dates, montants et adresses IP).</div></div>")
     html += "<form method='get' style='margin:10px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"
