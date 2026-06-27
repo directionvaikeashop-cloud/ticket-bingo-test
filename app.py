@@ -3119,23 +3119,11 @@ def get_annonces_jeux():
         return bool(info and info.get("actif"))
     annonces = [a for a in annonces if _org_actif(a)]
 
-    # 2) SECURITE : si un code joueuse est fourni, elle ne voit QUE les jeux
-    #    de SON propre organisateur (jamais ceux d'un autre organisateur).
-    code_joueur = (request.args.get("code", "") or "").strip().upper()
-    if code_joueur:
-        # On ne retient que les VRAIS organisateurs actifs (on ignore "PUB" et
-        # autres codes non-organisateurs issus de l'inscription publicitaire).
-        mes_orgs = set()
-        for t in DB.get("tickets", []):
-            if (t.get("code_acheteur", "") or "").upper() == code_joueur:
-                o = t.get("code_org")
-                if o and codes.get(o) and codes.get(o).get("actif"):
-                    mes_orgs.add(o)
-        if mes_orgs:
-            # Joueuse rattachée à une organisatrice : elle ne voit que SES jeux.
-            annonces = [a for a in annonces if a.get("code_org") in mes_orgs]
-        # Sinon (inscription pub / pas encore d'organisatrice) : elle voit TOUS
-        # les jeux des organisateurs actifs, pour pouvoir commencer à jouer.
+    # 2) Toutes les joueuses voient TOUS les jeux des organisatrices ACTIVES.
+    #    Cloisonnement par organisatrice DÉSACTIVÉ (à la demande de l'admin) :
+    #    une joueuse peut participer aux tournois de n'importe quelle organisatrice
+    #    active, y compris une nouvelle arrivée. Le paramètre "code" reste accepté
+    #    mais ne restreint plus l'affichage.
     return jsonify(annonces)
 
 @app.route("/api/annonce/ventes", methods=["POST"])
@@ -11598,5 +11586,61 @@ def page_perturbateurs():
       {banner}
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:560px">
       <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:8px;color:#a78bfa">Code</th><th style="padding:8px;color:#a78bfa">État</th><th style="padding:8px;color:#a78bfa">Dernier motif</th><th style="padding:8px;color:#a78bfa">Maj</th><th style="padding:8px;color:#a78bfa">Action</th></tr>
+      {rows}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/organisatrices")
+def page_organisatrices():
+    """ADMIN — Active / désactive les organisatrices. Une organisatrice INACTIVE
+    n'apparaît plus sur les écrans des joueuses (ses jeux et PDF sont masqués).
+    ?cle=ADMIN  ·  &toggle=CODE pour basculer active/inactive."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    msg_action = ""
+    tog = (request.args.get("toggle", "") or "").upper().strip()
+    if tog and tog in DB.get("codes", {}):
+        c = DB["codes"][tog]
+        if isinstance(c, dict) and not c.get("admin"):
+            c["actif"] = not bool(c.get("actif"))
+            save_data(immediat=True)
+            msg_action = f"{c.get('nom', tog)} ({tog}) est maintenant " + ("✅ ACTIVE" if c["actif"] else "⏸️ INACTIVE") + "."
+    orgs = []
+    for code, c in DB.get("codes", {}).items():
+        if not isinstance(c, dict):
+            continue
+        if c.get("admin") or c.get("role") == "revendeur":
+            continue
+        orgs.append((code, c.get("nom", code), bool(c.get("actif"))))
+    orgs.sort(key=lambda x: (0 if x[2] else 1, str(x[1]).lower()))
+    nb_actives = sum(1 for o in orgs if o[2])
+    rows = ""
+    for code, nom, actif in orgs:
+        if actif:
+            etat = '<span style="color:#34d399;font-weight:700">✅ Active</span>'
+            bouton = f'<a href="/organisatrices?cle={cle}&toggle={code}" style="display:inline-block;padding:7px 14px;background:rgba(245,158,11,.2);color:#fbbf24;border:0.5px solid rgba(245,158,11,.5);border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">⏸️ Désactiver</a>'
+        else:
+            etat = '<span style="color:#94a3b8;font-weight:700">⏸️ Inactive</span>'
+            bouton = f'<a href="/organisatrices?cle={cle}&toggle={code}" style="display:inline-block;padding:7px 14px;background:rgba(16,185,129,.2);color:#34d399;border:0.5px solid rgba(16,185,129,.5);border-radius:8px;text-decoration:none;font-weight:700;font-size:13px">✅ Activer</a>'
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:10px;font-weight:600">{nom}</td>'
+                 f'<td style="padding:10px;font-family:monospace;color:#a78bfa">{code}</td>'
+                 f'<td style="padding:10px">{etat}</td>'
+                 f'<td style="padding:10px;text-align:right">{bouton}</td></tr>')
+    if not rows:
+        rows = '<tr><td colspan="4" style="padding:20px;text-align:center;color:#94a3b8">Aucune organisatrice enregistrée.</td></tr>'
+    banner = f'<div style="background:rgba(16,185,129,.15);border:1px solid #10b981;border-radius:8px;padding:10px;margin-bottom:12px;color:#34d399;font-weight:700">{msg_action}</div>' if msg_action else ""
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Organisatrices</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff">
+    <div style="max-width:820px;margin:0 auto">
+      <h1 style="font-size:21px;color:#a855f7;margin-bottom:6px">👑 Organisatrices</h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:12px">{len(orgs)} organisatrice(s) · <b style="color:#34d399">{nb_actives} active(s)</b>. Une organisatrice INACTIVE disparaît des écrans des joueuses (ses jeux et PDF sont masqués partout).</div>
+      {banner}
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:14px;min-width:520px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:10px;color:#a78bfa">Nom</th><th style="padding:10px;color:#a78bfa">Code</th><th style="padding:10px;color:#a78bfa">État</th><th style="padding:10px;color:#a78bfa;text-align:right">Action</th></tr>
       {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
