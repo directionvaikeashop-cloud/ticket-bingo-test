@@ -8849,6 +8849,94 @@ def diag_ecarts():
       <div style="margin-top:16px;color:#94a3b8;font-size:12px;line-height:1.5">Pour recréditer : outil admin « Recréditer joueur », avec la décomposition indiquée. Le mouvement est tracé (Crédit admin) et la ligne disparaît d'ici.</div>
     </div></body></html>'''
 
+@app.route("/crediter-petits-jeux")
+def crediter_petits_jeux():
+    """ADMIN — Crédite 500 F de pions bonus aux inscrites d'une campagne (ex. QR
+    petits jeux) qui ne l'ont pas déjà reçu. Idempotent.
+    ?cle=ADMIN  -> liste les campagnes. &campagne=X -> aperçu. &confirme=1 -> crédite."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    log = DB.get("rejoindre_log", [])
+    deja = set(DB.get("bonus_petitsjeux_donne", []))
+    campagne = (request.args.get("campagne", "") or "").strip()
+    confirme = request.args.get("confirme", "") == "1"
+
+    def page(corps):
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Crédit petits jeux</title></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:18px;color:#fff">
+        <div style="max-width:620px;margin:0 auto">{corps}</div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    # --- LISTE DES CAMPAGNES ---
+    if not campagne:
+        stats = {}
+        for x in log:
+            c = (x.get("campagne", "") or "(sans campagne)")
+            code = x.get("code")
+            d = stats.setdefault(c, {"total": set(), "credit": set()})
+            if code:
+                d["total"].add(code)
+                if code in deja:
+                    d["credit"].add(code)
+        if not stats:
+            return page('<h1 style="color:#a855f7;font-size:20px">📲 Inscriptions QR</h1><p style="color:#94a3b8">Aucune inscription enregistrée pour le moment.</p>')
+        lignes = ""
+        for c, d in sorted(stats.items(), key=lambda kv: -len(kv[1]["total"])):
+            tot = len(d["total"]); cre = len(d["credit"]); reste = tot - cre
+            url = f"/crediter-petits-jeux?cle={cle}&campagne={c}"
+            lignes += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.08)">'
+                       f'<td style="padding:10px;font-weight:600">{c}</td>'
+                       f'<td style="padding:10px;color:#94a3b8">{tot} inscrites · {cre} déjà créditées</td>'
+                       f'<td style="padding:10px">{"<a href=\'" + url + "\' style=\'color:#34d399;font-weight:700\'>Créditer " + str(reste) + " →</a>" if reste > 0 else "<span style=\'color:#6ee7b7\'>✅ à jour</span>"}</td></tr>')
+        return page(f'<h1 style="color:#a855f7;font-size:20px">📲 Inscriptions par QR / campagne</h1>'
+                    f'<p style="color:#94a3b8;font-size:13px">Choisis la campagne du QR « petits jeux » pour créditer 500 F de pions bonus aux inscrites qui ne l\'ont pas reçu.</p>'
+                    f'<table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:10px">{lignes}</table>')
+
+    # --- CIBLES D'UNE CAMPAGNE ---
+    cibles = []
+    for x in log:
+        c = (x.get("campagne", "") or "(sans campagne)")
+        if c == campagne and x.get("code"):
+            if x["code"] not in cibles:
+                cibles.append(x["code"])
+    a_crediter = [c for c in cibles if c not in deja]
+
+    if not confirme:
+        url_ok = f"/crediter-petits-jeux?cle={cle}&campagne={campagne}&confirme=1"
+        return page(f'<h1 style="color:#a855f7;font-size:20px">Aperçu — campagne « {campagne} »</h1>'
+                    f'<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px;margin:12px 0;line-height:1.8">'
+                    f'Inscrites : <b>{len(cibles)}</b><br>'
+                    f'Déjà créditées : <b>{len(cibles) - len(a_crediter)}</b><br>'
+                    f'À créditer maintenant (500 F bonus chacune) : <b style="color:#34d399">{len(a_crediter)}</b><br>'
+                    f'Total à distribuer : <b style="color:#fbbf24">{len(a_crediter) * 500} F</b></div>'
+                    + (f'<a href="{url_ok}" style="display:inline-block;background:#059669;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:700">✅ Créditer les {len(a_crediter)} maintenant</a>'
+                       if a_crediter else '<p style="color:#6ee7b7">✅ Tout le monde a déjà reçu son bonus.</p>')
+                    + '<p style="color:#6b7280;font-size:12px;margin-top:10px">Les 500 F sont des pions BONUS (jouables, non retirables), comme à l\'inscription.</p>')
+
+    # --- EXECUTION ---
+    faits = 0
+    for code in a_crediter:
+        poche = DB.setdefault("pions_bonus_joueurs", {}).get(code, {})
+        _crediter_pions_montant(poche, 500)
+        DB["pions_bonus_joueurs"][code] = poche
+        deja.add(code)
+        faits += 1
+    DB["bonus_petitsjeux_donne"] = list(deja)
+    DB.setdefault("credits_masse", []).insert(0, {
+        "profil": "joueur", "codes": a_crediter, "nb_pions": 5, "valeur_pion": 100,
+        "motif": f"Bonus 500F inscription QR ({campagne})", "bonus": True,
+        "par": cle, "date": datetime.datetime.now().isoformat()
+    })
+    save_data(immediat=True)
+    return page(f'<h1 style="color:#34d399;font-size:20px">✅ Crédit effectué</h1>'
+                f'<p style="color:#fff"><b>{faits}</b> joueuse(s) de la campagne « {campagne} » ont reçu <b>500 F de pions bonus</b>.</p>'
+                f'<p style="color:#94a3b8">Total distribué : <b style="color:#fbbf24">{faits * 500} F</b>. Tu peux relancer ce lien sans risque : personne ne sera crédité deux fois.</p>'
+                f'<p style="margin-top:10px"><a href="/crediter-petits-jeux?cle={cle}" style="color:#a78bfa">← Revoir les campagnes</a></p>')
+
 @app.route("/maj-tournoi-juillet")
 def maj_tournoi_juillet():
     """ADMIN — Reporte le tournoi au vendredi 3 juillet 2026 ET publie l'annonce
