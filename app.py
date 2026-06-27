@@ -13498,3 +13498,76 @@ def neutraliser_debloquer():
       <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:7px;color:#a78bfa">Compte bloqué</th><th style="padding:7px;color:#a78bfa;text-align:right">Pions à remettre à 0</th></tr>
       {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/tous-releves")
+def tous_releves():
+    """ADMIN — Tableau récap de TOUS les joueurs : solde, transferts reçus/émis,
+    recrédits admin, + lien vers le relevé détaillé de chacun. ?cle=ADMIN"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    codes_non_joueurs = set(k for k, v in DB.get("codes", {}).items() if isinstance(v, dict))
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
+
+    # Noms depuis tickets
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
+            noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
+
+    # Agrégats transferts / crédits
+    t_recu = {}; t_emis = {}
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict):
+            v = (t.get("vers") or "").upper(); d = (t.get("de") or "").upper(); m = int(t.get("montant", 0) or 0)
+            if v: t_recu[v] = t_recu.get(v, 0) + m
+            if d: t_emis[d] = t_emis.get(d, 0) + m
+    cred = {}
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict):
+            code = (c.get("code_joueur") or "").upper()
+            m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+            if m > 0: cred[code] = cred.get(code, 0) + m
+
+    # Tous les codes joueurs
+    joueurs = set()
+    for k in ["pions_joueurs", "tickets_acheteurs"]:
+        d = DB.get(k, {})
+        if isinstance(d, dict): joueurs.update(x.upper() for x in d.keys())
+    joueurs |= set(t_recu) | set(t_emis) | set(cred)
+    joueurs = [c for c in joueurs if c and c not in codes_non_joueurs]
+
+    bloques = set(DB.get("codes_bloques", []))
+    joueurs.sort(key=lambda c: -solde(c))
+
+    rows = ""; t_s = t_r = t_e = t_c = 0
+    for c in joueurs:
+        s = solde(c); rc = t_recu.get(c, 0); em = t_emis.get(c, 0); cr = cred.get(c, 0)
+        t_s += s; t_r += rc; t_e += em; t_c += cr
+        flag = ' 🔒' if c in bloques else (' ⚠️' if (rc or em) else '')
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:6px;font-family:monospace;color:#a78bfa">{c}{flag}</td>'
+                 f'<td style="padding:6px;color:#94a3b8;font-size:12px">{noms.get(c, "")}</td>'
+                 f'<td style="padding:6px;text-align:right;color:#34d399">{format(s, ",")}</td>'
+                 f'<td style="padding:6px;text-align:right;color:#6ee7b7">{format(rc, ",") if rc else "-"}</td>'
+                 f'<td style="padding:6px;text-align:right;color:#fca5a5">{format(em, ",") if em else "-"}</td>'
+                 f'<td style="padding:6px;text-align:right;color:#fbbf24">{format(cr, ",") if cr else "-"}</td>'
+                 f'<td style="padding:6px"><a href="/releve-financier-joueur/{c}" target="_blank" style="color:#58a6ff;text-decoration:none">relevé →</a></td></tr>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tous les relevés</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:960px;margin:0 auto">
+      <h1 style="font-size:21px;color:#a855f7;margin-bottom:6px">📒 Tous les relevés joueurs ({len(joueurs)})</h1>
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:10px">🔒 = compte ex-bloqué · ⚠️ = a fait des transferts · Clique « relevé » pour le détail complet d'un joueur.</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px;min-width:680px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:6px;color:#a78bfa">Code</th><th style="padding:6px;color:#a78bfa">Nom</th><th style="padding:6px;color:#a78bfa;text-align:right">Solde</th><th style="padding:6px;color:#a78bfa;text-align:right">Transf. reçus</th><th style="padding:6px;color:#a78bfa;text-align:right">Transf. émis</th><th style="padding:6px;color:#a78bfa;text-align:right">Recréd. admin</th><th style="padding:6px;color:#a78bfa">Détail</th></tr>
+      {rows}
+      <tr style="border-top:2px solid #3730a3;font-weight:700"><td style="padding:7px" colspan="2">TOTAUX</td><td style="padding:7px;text-align:right;color:#34d399">{format(t_s, ",")}</td><td style="padding:7px;text-align:right;color:#6ee7b7">{format(t_r, ",")}</td><td style="padding:7px;text-align:right;color:#fca5a5">{format(t_e, ",")}</td><td style="padding:7px;text-align:right;color:#fbbf24">{format(t_c, ",")}</td><td></td></tr>
+      </table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
