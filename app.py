@@ -6685,9 +6685,10 @@ def releve_financier_joueur(code):
     for c in DB.get("credits_admin", []):
         if isinstance(c, dict) and c.get("code_joueur") == code:
             montant = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+            _motif = (c.get("motif") or c.get("jeu") or "").strip()
             if montant > 0:
-                lignes.append({"date": c.get("date", "?"), "type": "Crédit admin",
-                               "desc": "Pions crédités par l'admin", "entree": montant, "sortie": 0})
+                lignes.append({"date": c.get("date", "?"), "type": ("Remboursement" if _motif else "Crédit admin"),
+                               "desc": (_motif if _motif else "Pions crédités par l'admin"), "entree": montant, "sortie": 0})
             elif montant < 0:
                 lignes.append({"date": c.get("date", "?"), "type": "Débit admin",
                                "desc": "Pions retirés par l'admin", "entree": 0, "sortie": -montant})
@@ -14684,4 +14685,74 @@ def annuler_credits_periode():
       {rows}</table></div>
       <h2 style="font-size:15px;color:#93c5fd;margin:18px 0 6px">Détail des crédits visés</h2>
       <div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px;max-height:300px;overflow-y:auto">{detail or '<span style="color:#8b949e">—</span>'}</div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/etiqueter-credits")
+def etiqueter_credits():
+    """ADMIN — Met un MOTIF sur les crédits admin d'une fenêtre (sans changer les
+    montants), pour qu'ils s'affichent correctement sur le relevé. Aperçu d'abord ;
+    rien sans &confirme=1. ?cle=ADMIN&du=...&au=...&motif=...[&confirme=1]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    du = (request.args.get("du", "2026-06-27T05:05") or "").strip()
+    au = (request.args.get("au", "2026-06-27T10:30") or "").strip()
+    motif = (request.args.get("motif", "Remboursement Flash Quines Allonger") or "").strip()
+    confirme = request.args.get("confirme", "") == "1"
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
+            noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
+
+    vises = []
+    total = 0
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict):
+            d = str(c.get("date", ""))
+            if d and du <= d <= au + "~":
+                cj = (c.get("code_joueur") or "").upper()
+                m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+                vises.append((cj, m, d[:16], c.get("motif", "")))
+                total += m
+                if confirme:
+                    c["motif"] = motif
+
+    if confirme and vises:
+        DB.setdefault("etiquetages_credits", []).insert(0, {
+            "id": secrets.token_hex(4).upper(), "du": du, "au": au, "motif": motif,
+            "nb": len(vises), "total": total, "par": cle, "date": datetime.datetime.now().isoformat()})
+        save_data(immediat=True)
+
+    rows = ""
+    for cj, m, d, anc in sorted(vises, key=lambda x: x[2], reverse=True):
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.05)">'
+                 f'<td style="padding:4px 8px;color:#8b949e;font-size:11px">{d}</td>'
+                 f'<td style="padding:4px 8px;font-family:monospace;color:#a78bfa">{cj}</td>'
+                 f'<td style="padding:4px 8px;color:#94a3b8;font-size:12px">{noms.get(cj,"")}</td>'
+                 f'<td style="padding:4px 8px;text-align:right;color:#6ee7b7">+{format(m, ",")}</td></tr>')
+    if not rows:
+        rows = '<tr><td colspan="4" style="padding:16px;text-align:center;color:#8b949e">Aucun crédit dans cette fenêtre.</td></tr>'
+
+    if confirme:
+        banniere = (f'<div style="background:rgba(16,185,129,.15);border:2px solid #10b981;border-radius:10px;padding:14px;margin-bottom:14px;color:#34d399;font-weight:800">'
+                    f'✅ FAIT — {len(vises)} crédit(s) étiquetés « {motif} » ({format(total, ",")} XPF). Les montants n\'ont PAS changé. Le relevé affiche maintenant le bon motif.</div>')
+    else:
+        banniere = (f'<div style="background:rgba(251,191,36,.1);border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:14px">'
+                    f'<div style="color:#fde68a;font-weight:700;margin-bottom:6px">👁️ APERÇU — rien n\'est encore modifié</div>'
+                    f'<div style="color:#94a3b8;font-size:13px;margin-bottom:6px">Fenêtre <b>{du}</b> → <b>{au}</b> : <b>{len(vises)} crédit(s)</b> ({format(total, ",")} XPF) recevront le motif :</div>'
+                    f'<div style="color:#6ee7b7;font-weight:700;margin-bottom:10px">« {motif} »</div>'
+                    f'<div style="color:#94a3b8;font-size:12px;margin-bottom:10px">⚠️ Les montants ne changent PAS. On ajoute juste l\'étiquette pour l\'affichage du relevé.</div>'
+                    f'<a href="/etiqueter-credits?cle={cle}&du={du}&au={au}&motif={motif.replace(" ", "%20")}&confirme=1" style="display:inline-block;background:#10b981;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">✅ Confirmer l\'étiquetage</a></div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Étiqueter crédits</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:760px;margin:0 auto">
+      <h1 style="font-size:20px;color:#10b981;margin-bottom:8px">🏷️ Étiqueter les crédits (motif sur le relevé)</h1>
+      {banniere}
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:460px">
+      <tr style="border-bottom:2px solid #065f46;text-align:left"><th style="padding:6px;color:#6ee7b7">Date</th><th style="padding:6px;color:#6ee7b7">Code</th><th style="padding:6px;color:#6ee7b7">Nom</th><th style="padding:6px;color:#6ee7b7;text-align:right">Montant</th></tr>
+      {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
