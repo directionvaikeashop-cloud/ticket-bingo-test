@@ -1859,7 +1859,9 @@ function buildOrgSpace(){
         <button onclick="modeModifierAnnonce()" style="flex:1;padding:8px;background:rgba(59,130,246,.2);color:#60a5fa;border:0.5px solid rgba(59,130,246,.4);border-radius:8px;cursor:pointer;font-size:12px;font-weight:600">✏️ Modifier</button>
         <button onclick="supprimerAnnonce()" style="flex:1;padding:8px;background:rgba(239,68,68,.2);color:#f87171;border:0.5px solid rgba(239,68,68,.4);border-radius:8px;cursor:pointer;font-size:12px">🗑️ Supprimer</button>
       </div>
+      <button id="btn-valider-tickets" onclick="validerLesTickets()" style="display:none;width:100%;padding:11px;margin-top:8px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;background:rgba(99,102,241,.18);color:#a5b4fc;border:0.5px solid rgba(99,102,241,.4)">✅ Valider les tickets</button>
       <button id="btn-ventes" onclick="toggleVentes()" style="display:none;width:100%;padding:12px;margin-top:8px;border:none;border-radius:8px;cursor:pointer;font-size:14px;font-weight:700"></button>
+      <button id="btn-rembourser-suite" onclick="rembourserDeSuite()" style="display:none;width:100%;padding:11px;margin-top:8px;border-radius:8px;cursor:pointer;font-size:13px;font-weight:700;background:rgba(239,68,68,.18);color:#fca5a5;border:0.5px solid rgba(239,68,68,.4)">💸 Rembourser de suite ce jeu</button>
       <div id="ventes-fermees-banner" style="display:none;margin-top:8px;background:rgba(239,68,68,.15);border:1px solid rgba(239,68,68,.4);border-radius:8px;padding:10px;text-align:center;font-size:13px;color:#f87171;font-weight:700">🛑 Ventes FERMÉES — les joueuses ne peuvent plus commander ce jeu</div>
     </div>
 
@@ -2286,6 +2288,30 @@ async function chargerJeuxRembours(){
   }catch(e){
     cont.innerHTML = '<div style="color:#f87171;font-size:12px;text-align:center;padding:8px">Erreur de chargement</div>';
   }
+}
+
+function validerLesTickets(){
+  try{ checkPionsJoueursEnAttente(); }catch(e){}
+  try{ loadCommandesPionsAdmin(); }catch(e){}
+  setTimeout(function(){
+    var card = document.getElementById('pions-validation-card');
+    if(card && card.style.display !== 'none'){ card.scrollIntoView({behavior:'smooth', block:'center'}); return; }
+    var c2 = document.getElementById('commandes-pions-admin');
+    if(c2 && c2.parentElement){ c2.parentElement.scrollIntoView({behavior:'smooth', block:'center'}); }
+  }, 400);
+}
+
+async function rembourserDeSuite(){
+  if(typeof annonceEnCours === 'undefined' || !annonceEnCours || !annonceEnCours.jeu){ alert("Aucun jeu en cours à rembourser."); return; }
+  const jeu = annonceEnCours.jeu;
+  try{
+    const r = await fetch('/api/org/mes-jeux-rembours', { headers: {'X-Token': TOKEN} });
+    const d = await r.json();
+    if(!d || !d.ok){ alert("Impossible de charger les ventes du jeu."); return; }
+    const info = (d.jeux||[]).find(function(j){ return j.jeu === jeu && !j.rembourse; });
+    if(!info || info.mises<=0){ alert("Aucune vente à rembourser pour « "+jeu+" »."); return; }
+    rembourserJeu(jeu, info.mises, info.nb_joueuses);
+  }catch(e){ alert("Erreur réseau, réessayez."); }
 }
 
 async function rembourserJeu(jeu, mises, nbJoueuses){
@@ -5216,8 +5242,12 @@ function afficherEtatAnnonce(){
   // Par défaut on masque le bouton ventes et la bannière (réaffichés si annonce active)
   var _btnV0 = document.getElementById('btn-ventes');
   var _ban0 = document.getElementById('ventes-fermees-banner');
+  var _btnRS0 = document.getElementById('btn-rembourser-suite');
+  var _btnVT0 = document.getElementById('btn-valider-tickets');
   if(_btnV0) _btnV0.style.display = 'none';
   if(_ban0) _ban0.style.display = 'none';
+  if(_btnRS0) _btnRS0.style.display = 'none';
+  if(_btnVT0) _btnVT0.style.display = 'none';
   
   if(annonceEnCours && !enModeModification){
     selJeu.disabled = true;
@@ -5246,6 +5276,10 @@ function afficherEtatAnnonce(){
       }
     }
     if(banner) banner.style.display = fermees ? 'block' : 'none';
+    var btnRS = document.getElementById('btn-rembourser-suite');
+    if(btnRS) btnRS.style.display = 'block';
+    var btnVT = document.getElementById('btn-valider-tickets');
+    if(btnVT) btnVT.style.display = 'block';
   } else if(enModeModification){
     selJeu.disabled = true;
     inpPrix.disabled = false;
