@@ -6795,8 +6795,8 @@ def releve_financier_joueur(code):
                 _lies_reg.add(_d)
         _bloque = code in DB.get("codes_bloques", [])
         if len(_lies_reg) >= 2 or _bloque:
-            _type_reg = "Régularisation anti-fraude"
-            _desc_reg = "Pions issus de transferts non justifiés, retirés lors du contrôle anti-fraude (compte remis à zéro)"
+            _type_reg = "Régularisation des transferts"
+            _desc_reg = "Ajustement lié aux transferts de pions entre comptes (compte régularisé à zéro)"
         else:
             _type_reg = "Solde antérieur"
             _desc_reg = "Solde des tournois précédents (avant la mise en place des relevés détaillés)"
@@ -6913,7 +6913,7 @@ def releve_financier_joueur(code):
             " <span style='color:#d4a857;font-family:system-ui'>(émis par : " + _orig_court(_c) + ")</span></div>"
             for _c in sorted(_lies))
         html += ("<div style='background:#2b1a00;border:1px solid #f59e0b;border-radius:10px;padding:14px;margin:12px 0;color:#fde68a;font-size:13px;line-height:1.7'>"
-                 "<div style='font-size:14px;font-weight:bold;color:#f0b03e;margin-bottom:6px'>&#128269; Synth&egrave;se d'audit de ce compte</div>"
+                 "<div style='font-size:14px;font-weight:bold;color:#f0b03e;margin-bottom:6px'>&#128202; Total des transferts de pions (de code &agrave; code)</div>"
                  "<div>&bull; Comptes li&eacute;s par transfert : <b>" + str(len(_lies)) + "</b></div>" + _liste_html +
                  "<div>&bull; Pions re&ccedil;us par transfert : <b>" + format(_tot_recu, ",") + " XPF</b>" +
                  (" depuis " + str(len(_recu_de)) + " compte(s)" if _recu_de else "") + "</div>"
@@ -6922,8 +6922,7 @@ def releve_financier_joueur(code):
                  "<div>&bull; Adresses IP de connexion enregistr&eacute;es : <b>" + str(_nb_ip) + "</b></div>"
                  + ("<div>&bull; Pions r&eacute;ellement achet&eacute;s (vrai paiement) : <b>" + format(_tot_achat_reel, ",") + " XPF</b></div>" if _tot_achat_reel else "<div>&bull; Pions r&eacute;ellement achet&eacute;s : <b>0 XPF</b> (aucun achat r&eacute;el)</div>")
                  + ("<div>&bull; Recr&eacute;dits administratifs re&ccedil;us : <b>" + format(_tot_cred, ",") + " XPF</b></div>" if _tot_cred else "")
-                 + ("<div>&bull; Profil : <b>" + _role + "</b></div>" if _role else "")
-                 + "<div style='margin-top:8px;font-size:12px;color:#d4a857'>Toutes ces op&eacute;rations sont enregistr&eacute;es et document&eacute;es (dates, montants, adresses IP). Cette activit&eacute; a &eacute;t&eacute; identifi&eacute;e lors d'un contr&ocirc;le anti-fraude.</div></div>")
+                 + "<div style='margin-top:8px;font-size:12px;color:#d4a857'>Toutes ces op&eacute;rations sont enregistr&eacute;es et document&eacute;es (dates, montants et adresses IP).</div></div>")
     html += "<form method='get' style='margin:10px 0;display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"
     html += "<span style='font-size:12px;color:#8b949e'>Periode :</span>"
     html += "<input type='date' name='du' value='" + du + "' style='background:#0d1117;color:#e6edf3;border:1px solid #30363d;border-radius:6px;padding:6px'>"
@@ -13958,7 +13957,7 @@ def compte_fraude():
         <div style="color:#94a3b8;font-size:13px">Total (comptes ayant fait des transferts entre comptes)</div>
         <div style="color:#f87171;font-size:32px;font-weight:800">{len(fraude)}</div>
       </div>
-      <div style="color:#6e7681;font-size:12px;margin-bottom:10px">Critère : compte non-staff ayant émis OU reçu au moins un transfert de pions. 🔒 = encore bloqué.</div>
+      <div style="color:#6e7681;font-size:12px;margin-bottom:10px">Critère : compte non-staff lié à <b>2 autres comptes ou plus</b> par transfert (réseau de 3 codes ou +). Les comptes avec seulement 2 codes (HEINI + MAEVA) ne sont PAS comptés. 🔒 = encore bloqué.</div>
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:380px">
       <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:6px;color:#fca5a5">Code</th><th style="padding:6px;color:#fca5a5">Nom</th><th style="padding:6px;color:#fca5a5;text-align:right">Solde</th></tr>
       {rows or '<tr><td colspan=3 style="padding:14px;color:#34d399">Aucun compte avec transfert.</td></tr>'}</table></div>
