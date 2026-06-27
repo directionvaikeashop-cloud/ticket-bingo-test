@@ -6795,8 +6795,8 @@ def releve_financier_joueur(code):
                 _lies_reg.add(_d)
         _bloque = code in DB.get("codes_bloques", [])
         if len(_lies_reg) >= 2 or _bloque:
-            _type_reg = "Régularisation des transferts"
-            _desc_reg = "Ajustement lié aux transferts de pions entre comptes (compte régularisé à zéro)"
+            _type_reg = "Total des transferts de pions de code à code"
+            _desc_reg = "Pions ayant circulé entre comptes par transfert (enregistrés, datés et horodatés)"
         else:
             _type_reg = "Solde antérieur"
             _desc_reg = "Solde des tournois précédents (avant la mise en place des relevés détaillés)"
