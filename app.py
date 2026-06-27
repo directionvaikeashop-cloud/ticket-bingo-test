@@ -12692,3 +12692,85 @@ def codes_actifs():
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px"><tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:7px;color:#a78bfa">Code</th><th style="padding:7px;color:#a78bfa;text-align:right">Solde</th></tr>{r_jou}</table></div>
       {note_zero}
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/codes-par-org")
+def codes_par_org():
+    """ADMIN — Relie chaque code joueuse à l'organisatrice qui l'a crédité / vendu
+    des pions, et compare actifs vs bloqués par organisatrice. Révèle quelle orga
+    est la plus liée au réseau frauduleux. ?cle=ADMIN"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    bloques = set(DB.get("codes_bloques", []))
+
+    def onom(o):
+        return DB.get("codes", {}).get(o, {}).get("nom", o) or o
+
+    # org -> {codes:set, bloques:set, valeur_vers_bloques:int}
+    liens = {}
+    def lien(org, cj, valeur=0):
+        org = (org or "").upper(); cj = (cj or "").upper()
+        if not org or not cj:
+            return
+        d = liens.setdefault(org, {"codes": set(), "bloques": set(), "val_bloq": 0})
+        d["codes"].add(cj)
+        if cj in bloques:
+            d["bloques"].add(cj)
+            d["val_bloq"] += int(valeur or 0)
+
+    for t in DB.get("transactions_joueur_org", []):
+        if isinstance(t, dict):
+            lien(t.get("code_org"), t.get("code_joueur"), t.get("montant_total"))
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict):
+            v = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0) or int(c.get("montant_net", 0) or 0)
+            lien(c.get("code_org"), c.get("code_joueur"), v)
+    for c in DB.get("commandes_tickets_pions", []):
+        if isinstance(c, dict):
+            lien(c.get("code_org"), c.get("code_joueur"), 0)
+
+    rows = ""
+    for org in sorted(liens.keys(), key=lambda o: (-len(liens[o]["bloques"]), -len(liens[o]["codes"]))):
+        d = liens[org]
+        nb = len(d["codes"]); nbb = len(d["bloques"]); nba = nb - nbb
+        pct = (nbb * 100 // nb) if nb else 0
+        coul_pct = "#f87171" if pct >= 50 else ("#fbbf24" if pct >= 20 else "#34d399")
+        alerte = ' 🚨' if pct >= 50 and nbb >= 2 else ''
+        liste_bloq = ", ".join(sorted(d["bloques"])[:12]) + ("…" if len(d["bloques"]) > 12 else "")
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:9px;color:#fbbf24;font-weight:600">{onom(org)}{alerte}</td>'
+                 f'<td style="padding:9px;font-family:monospace;color:#a78bfa">{org}</td>'
+                 f'<td style="padding:9px;text-align:center;color:#cbd5e1">{nb}</td>'
+                 f'<td style="padding:9px;text-align:center;color:#34d399">{nba}</td>'
+                 f'<td style="padding:9px;text-align:center;color:#f87171;font-weight:700">{nbb}</td>'
+                 f'<td style="padding:9px;text-align:center;color:{coul_pct};font-weight:700">{pct}%</td>'
+                 f'<td style="padding:9px;text-align:right;color:#f87171">{format(d["val_bloq"], ",")} F</td>'
+                 f'<td style="padding:9px;font-family:monospace;color:#94a3b8;font-size:11px">{liste_bloq}</td></tr>')
+    if not rows:
+        rows = '<tr><td colspan="8" style="padding:16px;text-align:center;color:#94a3b8">Aucun lien trouvé.</td></tr>'
+
+    # Codes bloqués SANS organisatrice identifiée (créés autrement)
+    codes_lies = set()
+    for d in liens.values():
+        codes_lies |= d["codes"]
+    bloq_orphelins = sorted([c for c in bloques if c not in codes_lies])
+    orph_html = ""
+    if bloq_orphelins:
+        orph_html = (f'<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;margin-top:14px">'
+                     f'<div style="color:#fbbf24;font-weight:700;margin-bottom:6px">🔓 {len(bloq_orphelins)} compte(s) bloqué(s) SANS organisatrice identifiée</div>'
+                     f'<div style="color:#94a3b8;font-size:12px;margin-bottom:6px">Créés sans passer par une orga (auto-inscription, transferts entre eux). Typique de comptes 100 % frauduleux fabriqués par le fraudeur lui-même.</div>'
+                     f'<div style="font-family:monospace;color:#a78bfa;font-size:12px">{", ".join(bloq_orphelins)}</div></div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Codes par organisatrice</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:980px;margin:0 auto">
+      <h1 style="font-size:21px;color:#a855f7;margin-bottom:6px">🔗 Codes par organisatrice — actifs vs bloqués</h1>
+      <div style="color:#94a3b8;font-size:13px;margin-bottom:14px">Chaque code est relié à l'organisatrice qui l'a crédité ou lui a vendu des pions. Un fort % de bloqués (🚨) = organisatrice très liée au réseau frauduleux (exploitée… ou complice).</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:760px">
+      <tr style="border-bottom:2px solid #3730a3;text-align:left"><th style="padding:9px;color:#a78bfa">Organisatrice</th><th style="padding:9px;color:#a78bfa">Code</th><th style="padding:9px;color:#a78bfa;text-align:center">Codes liés</th><th style="padding:9px;color:#a78bfa;text-align:center">✅ Actifs</th><th style="padding:9px;color:#a78bfa;text-align:center">🔒 Bloqués</th><th style="padding:9px;color:#a78bfa;text-align:center">% bloq.</th><th style="padding:9px;color:#a78bfa;text-align:right">Valeur→bloqués</th><th style="padding:9px;color:#a78bfa">Codes bloqués</th></tr>
+      {rows}</table></div>
+      {orph_html}
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
