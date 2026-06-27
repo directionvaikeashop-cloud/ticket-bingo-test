@@ -13289,11 +13289,16 @@ def annuler_credits_fraude():
         return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
     def poser_solde(c, montant):
         montant = max(0, int(montant))
+        r = montant
+        n100 = r // 100; r -= n100 * 100
+        n50 = r // 50; r -= n50 * 50
+        n20 = r // 20; r -= n20 * 20
+        n10 = r // 10
         DB.setdefault("pions_joueurs", {})[c] = {
-            "100": montant // 100,
-            "50": (montant % 100) // 50,
-            "20": (montant % 50) // 20,
-            "10": (montant % 20) // 10,
+            "100": n100,
+            "50": n50,
+            "20": n20,
+            "10": n10,
         }
 
     # Valeur injectée par l'ADMIN vers chaque code bloqué
@@ -14251,9 +14256,13 @@ def aligner_soldes():
         return p.get("100", 0)*100 + p.get("50", 0)*50 + p.get("20", 0)*20 + p.get("10", 0)*10
     def poser_solde(c, montant):
         montant = max(0, int(montant))
+        r = montant
+        n100 = r // 100; r -= n100 * 100
+        n50 = r // 50; r -= n50 * 50
+        n20 = r // 20; r -= n20 * 20
+        n10 = r // 10
         DB.setdefault("pions_joueurs", {})[c] = {
-            "100": montant // 100, "50": (montant % 100) // 50,
-            "20": (montant % 50) // 20, "10": (montant % 20) // 10}
+            "100": n100, "50": n50, "20": n20, "10": n10}
     noms = {}
     for t in DB.get("tickets", []):
         if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
@@ -14619,7 +14628,12 @@ def annuler_credits_periode():
         return p.get("100",0)*100+p.get("50",0)*50+p.get("20",0)*20+p.get("10",0)*10
     def poser_solde(c, montant):
         montant = max(0, int(montant))
-        DB.setdefault("pions_joueurs", {})[c] = {"100": montant//100, "50": (montant%100)//50, "20": (montant%50)//20, "10": (montant%20)//10}
+        r = montant
+        n100 = r // 100; r -= n100 * 100
+        n50 = r // 50; r -= n50 * 50
+        n20 = r // 20; r -= n20 * 20
+        n10 = r // 10
+        DB.setdefault("pions_joueurs", {})[c] = {"100": n100, "50": n50, "20": n20, "10": n10}
 
     # Crédits dans la fenêtre
     vises = []
