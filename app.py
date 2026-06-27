@@ -12362,6 +12362,31 @@ def audit_fraude_global():
     codes_suspects = set(collecteurs.keys())
     for v in collecteurs.values(): codes_suspects |= v["sources"]
     for v in ip_videuses.values(): codes_suspects |= v["sources"] | v.get("cibles", set())
+    codes_suspects.discard(cle)
+
+    # TOUT BLOQUER d'un coup
+    if request.args.get("bloquer_tout") == "1":
+        n = 0
+        for c in codes_suspects:
+            if c not in DB["codes_bloques"]:
+                DB["codes_bloques"].append(c); n += 1
+        if n:
+            save_data(immediat=True)
+        msg = f"🔒 {n} compte(s) suspect(s) bloqué(s) d'un seul coup."
+
+    # Vérif des retraits sur tout le réseau (argent réel sorti ?)
+    def _retr(code):
+        v = a = 0
+        for r in DB.get("demandes_retrait", []):
+            if isinstance(r, dict) and (r.get("code_joueur") or "").upper() == code:
+                m = int(r.get("montant_demande", 0) or 0)
+                if r.get("statut") == "validee":
+                    v += m
+                elif r.get("statut") in (None, "", "en_attente"):
+                    a += m
+        return v, a
+    retr_valide = sum(_retr(c)[0] for c in codes_suspects)
+    retr_attente = sum(_retr(c)[1] for c in codes_suspects)
 
     def lien_bloc(c):
         if c == cle:
@@ -12417,19 +12442,40 @@ def audit_fraude_global():
     if not rs:
         rs = '<tr><td colspan="4" style="padding:16px;text-align:center;color:#34d399">✅ Rien à bloquer.</td></tr>'
 
-    nb_suspects = len([c for c in codes_suspects if c != cle])
-    total_gele = sum(solde(c) for c in codes_suspects if c != cle)
+    nb_suspects = len(codes_suspects)
+    total_gele = sum(solde(c) for c in codes_suspects)
+    nb_actifs = len([c for c in codes_suspects if c not in DB["codes_bloques"]])
     msg_html = f'<div style="background:rgba(99,102,241,.15);border:1px solid #6366f1;border-radius:8px;padding:10px;margin-bottom:12px;color:#c7d2fe;font-weight:700">{msg}</div>' if msg else ""
-    resume = (f'<div style="background:rgba(239,68,68,.12);border:1px solid #f87171;border-radius:8px;padding:12px;margin-bottom:14px;color:#fca5a5;font-size:14px;font-weight:700">'
+    resume = (f'<div style="background:rgba(239,68,68,.12);border:1px solid #f87171;border-radius:8px;padding:12px;margin-bottom:10px;color:#fca5a5;font-size:14px;font-weight:700">'
               f'🚨 {len(collecteurs)} collecteur(s) · {len(ip_videuses)} IP suspecte(s) · {nb_suspects} code(s) impliqué(s) · {format(total_gele, ",")} XPF concernés.</div>'
               if (collecteurs or ip_videuses) else
               '<div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:8px;padding:12px;margin-bottom:14px;color:#34d399;font-size:14px;font-weight:700">✅ Aucun réseau de fraude détecté dans toute l\'application.</div>')
+
+    # Alerte retraits (argent réel)
+    if retr_valide > 0:
+        resume += (f'<div style="background:rgba(239,68,68,.2);border:1px solid #f87171;border-radius:8px;padding:12px;margin-bottom:10px;color:#fca5a5;font-size:14px;font-weight:800">'
+                   f'🚨 {format(retr_valide, ",")} XPF de retraits DÉJÀ PAYÉS sur ce réseau — vérifie tes virements/espèces, c\'est de l\'argent qui a pu sortir pour de vrai.</div>')
+    else:
+        resume += ('<div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:8px;padding:12px;margin-bottom:10px;color:#34d399;font-size:14px;font-weight:700">'
+                   '✅ AUCUN retrait payé sur tout le réseau — le fraudeur n\'a rien encaissé. Tout est encore en pions, bloque-les pour geler.</div>')
+    if retr_attente > 0:
+        resume += (f'<div style="background:rgba(251,191,36,.12);border:1px solid #fbbf24;border-radius:8px;padding:12px;margin-bottom:10px;color:#fde68a;font-size:13px;font-weight:700">'
+                   f'⚠️ {format(retr_attente, ",")} XPF de retraits EN ATTENTE sur ce réseau — ne les valide SURTOUT pas.</div>')
+
+    # Bouton TOUT BLOQUER
+    bouton_tout = ""
+    if nb_actifs > 0:
+        bouton_tout = (f'<a href="/audit-fraude?cle={cle}&bloquer_tout=1" style="display:inline-block;background:#ef4444;color:#fff;padding:14px 22px;border-radius:10px;text-decoration:none;font-weight:800;font-size:15px;margin-bottom:14px">'
+                       f'🔒 TOUT BLOQUER ({nb_actifs} compte(s) encore actif(s))</a>')
+    else:
+        bouton_tout = '<div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:8px;padding:12px;margin-bottom:14px;color:#34d399;font-weight:700">✅ Tous les comptes suspects sont déjà bloqués.</div>'
 
     return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Audit fraude global</title></head>
     <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:960px;margin:0 auto">
       <h1 style="font-size:21px;color:#f87171;margin-bottom:8px">🛡️ Audit fraude — TOUTE l'application</h1>
       <div style="color:#94a3b8;font-size:12px;margin-bottom:10px">Basé sur les transferts (hors admin). Ne flague PAS le WiFi partagé d'une salle (qui ne génère pas de transferts).</div>
       {msg_html}{resume}
+      {bouton_tout}
       <h2 style="font-size:16px;color:#fca5a5;margin:16px 0 6px">🎯 Comptes collecteurs (reçoivent de ≥2 sources)</h2>
       <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:680px">
       <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:8px;color:#fca5a5">Collecteur</th><th style="padding:8px;color:#fca5a5;text-align:center">Nb sources</th><th style="padding:8px;color:#fca5a5;text-align:right">Total reçu</th><th style="padding:8px;color:#fca5a5;text-align:right">Solde actuel</th><th style="padding:8px;color:#fca5a5">Sources</th><th style="padding:8px;color:#fca5a5;text-align:right">Action</th></tr>
