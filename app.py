@@ -15336,3 +15336,97 @@ def rembourser_joueuse():
       </div>
       <div style="color:#6b7280;font-size:12px;margin-top:10px">Pour changer le montant : ajoute <b>&montant=XXXX</b> dans l'adresse (il sera plafonné automatiquement).</div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/examiner-codes")
+def examiner_codes():
+    """ADMIN — Analyse rapide de codes douteux : IP (alerte si IP de fraude),
+    vrais achats, gains, transferts reçus/envoyés + contreparties, solde. Aide à
+    trancher victime/participant. Lecture seule. ?cle=ADMIN&codes=A,B,C"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    codes = [x.strip().upper() for x in (request.args.get("codes", "") or "").split(",") if x.strip()]
+    if not codes:
+        return Response("Ajoute &codes=A,B,C", status=400, mimetype="text/plain; charset=utf-8")
+    IP_FRAUDE = ("64.140.148.", "103.129.120.55", "92.184.113.175")
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
+            noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100",0)*100+p.get("50",0)*50+p.get("20",0)*20+p.get("10",0)*10
+    bloques = set(DB.get("codes_bloques", []) or [])
+
+    blocs = ""
+    for code in codes:
+        # IPs
+        ips = {}
+        for j in DB.get("journal_connexions", []):
+            if isinstance(j, dict) and (j.get("code") or "").upper()==code and j.get("ip"):
+                ips[j.get("ip")] = j.get("date","")
+        for r in DB.get("rejoindre_log", []):
+            if isinstance(r, dict) and (r.get("code") or "").upper()==code and r.get("ip"):
+                ips.setdefault(r.get("ip"), r.get("date",""))
+        ip_fraude = [ip for ip in ips if any(ip.startswith(f) or ip==f for f in IP_FRAUDE)]
+        # achats / gains
+        achats=0; nbp_ach=0
+        for c in DB.get("commandes_pions_joueurs", []):
+            if isinstance(c, dict) and (c.get("code_joueur") or "").upper()==code and c.get("statut")=="validee":
+                nbp=int(c.get("nb_pions",c.get("pions_credites",0)) or 0); vp=int(c.get("valeur_pion",0) or 0)
+                achats+=((nbp*vp) or int(c.get("montant_net",0) or 0)); nbp_ach+=1
+        gains=0
+        for g in DB.get("gains_finaux", []):
+            if isinstance(g, dict) and (g.get("code") or "").upper()==code:
+                gains+=int(g.get("montant_gain",g.get("montant_credite",0)) or 0)
+        # transferts
+        recus=[]; envois=[]
+        for t in DB.get("transferts_pions", []):
+            if not isinstance(t, dict): continue
+            de=(t.get("de") or "").upper(); vers=(t.get("vers") or "").upper(); m=int(t.get("montant",0) or 0)
+            if vers==code: recus.append((de, m))
+            if de==code: envois.append((vers, m))
+        tot_recu=sum(m for _,m in recus); tot_env=sum(m for _,m in envois)
+
+        # Verdict heuristique
+        score = 0; raisons=[]
+        if ip_fraude: score+=3; raisons.append("🔴 IP du réseau de fraude")
+        if achats==0 and (tot_recu+tot_env)>0: score+=2; raisons.append("aucun vrai achat, que des transferts")
+        if tot_env>0 and any(v in bloques for v,_ in envois): score+=2; raisons.append("a envoyé à un compte banni")
+        if tot_recu>0 and any(d in bloques for d,_ in recus): score+=1; raisons.append("a reçu d'un compte banni")
+        if achats>0: raisons.append(f"✅ a payé {format(achats, ',')} en vrai (Stripe)")
+        if score>=3: verdict="🔴 PARTICIPANT probable — à bannir"; vc="#f85149"
+        elif score>=1: verdict="🟠 douteux — à surveiller"; vc="#fb923c"
+        else: verdict="🟢 plutôt innocente"; vc="#34d399"
+
+        ip_html = ""
+        for ip,d in sorted(ips.items(), key=lambda x:-len(x[1] or "")):
+            danger = any(ip.startswith(f) or ip==f for f in IP_FRAUDE)
+            ip_html += f'<div style="color:{"#f87171" if danger else "#8b949e"};font-size:12px">{"🔴 " if danger else ""}{ip} <span style="color:#6b7280">{str(d)[:16]}</span></div>'
+        rec_html = " · ".join(f'{d}{"🚫" if d in bloques else ""} ({format(m, ",")})' for d,m in recus) or "—"
+        env_html = " · ".join(f'{v}{"🚫" if v in bloques else ""} ({format(m, ",")})' for v,m in envois) or "—"
+
+        blocs += (f'<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-bottom:14px">'
+                  f'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+                  f'<span style="font-family:monospace;color:#a78bfa;font-size:16px;font-weight:700">{code} <span style="color:#94a3b8;font-size:13px">{noms.get(code,"")}</span></span>'
+                  f'<span style="color:{vc};font-weight:700;font-size:13px">{verdict}</span></div>'
+                  f'<div style="color:#cbd5e1;font-size:13px;margin-bottom:8px">{" · ".join(raisons) if raisons else "Profil neutre"}</div>'
+                  f'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:13px">'
+                  f'<div><b style="color:#6ee7b7">Achats réels :</b> {format(achats, ",")} ({nbp_ach} paiement) · <b style="color:#93c5fd">Gains :</b> {format(gains, ",")}</div>'
+                  f'<div><b style="color:#58a6ff">Solde :</b> {format(solde(code), ",")}</div>'
+                  f'<div><b style="color:#34d399">Reçus :</b> {format(tot_recu, ",")} → {rec_html}</div>'
+                  f'<div><b style="color:#f87171">Envoyés :</b> {format(tot_env, ",")} → {env_html}</div>'
+                  f'</div>'
+                  f'<div style="margin-top:8px"><b style="color:#fbbf24;font-size:12px">IP :</b>{ip_html or " <span style=\\'color:#6b7280\\'>aucune enregistrée</span>"}</div>'
+                  f'</div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Examiner codes</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:760px;margin:0 auto">
+      <h1 style="font-size:20px;color:#f0883e;margin-bottom:6px">🔬 Examen des codes douteux</h1>
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:14px">🔴 IP de fraude = 64.140.148.x / 103.129.120.55 / 92.184.113.175. 🚫 = contrepartie déjà bannie. Verdict heuristique — à toi de trancher.</div>
+      {blocs}
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
