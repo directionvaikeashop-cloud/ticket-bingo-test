@@ -17016,3 +17016,122 @@ def joueuses_a_reverifier():
       {body}
       <div style="color:#8b949e;font-size:12px;margin-top:14px">💡 Pour corriger une joueuse : /restituer-legitime?cle=...&code=XXX&legitime=SOLDE_PROPRE&retirer=ARGENT_DOUTEUX</div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/profil-joueuse")
+def profil_joueuse():
+    """ADMIN — Profil d'enquête d'un code : identité, IP, autres comptes sur la
+    même IP (cercle), crédits reçus (date/montant/par), partenaires de transfert.
+    ?cle=ADMIN&code=X"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    code = (request.args.get("code", "") or "").strip().upper()
+    if not code:
+        return Response("Ajoute &code=LE_CODE", status=400, mimetype="text/plain; charset=utf-8")
+
+    bannis = set((c or "").upper() for c in DB.get("codes_bloques", []))
+    def fmt(n): return format(int(n), ",")
+    def nom_de(c):
+        for t in DB.get("tickets", []):
+            if isinstance(t, dict) and (t.get("code_acheteur") or "").upper()==c and t.get("acheteur"):
+                return t.get("acheteur")
+        return DB.get("codes", {}).get(c, {}).get("nom","") or ""
+    def createur(c):
+        orgs=sorted({(t.get("code_org") or "").upper() for t in DB.get("tickets", []) if (t.get("code_acheteur","") or "").upper()==c and t.get("code_org") and (t.get("code_org") or "").upper() not in ("","ADMIN","PUB")})
+        return ", ".join(DB.get("codes", {}).get(o, {}).get("nom", o) for o in orgs) or "—"
+    def reel(c):
+        r=0
+        for x in DB.get("commandes_pions_joueurs", []):
+            if isinstance(x, dict) and x.get("code_joueur")==c and x.get("statut")=="validee":
+                nb=int(x.get("nb_pions", x.get("pions_credites",0)) or 0); v=int(x.get("valeur_pion",0) or 0)
+                r += (nb*v) if nb*v>0 else int(x.get("montant_net",0) or 0)
+        for t in DB.get("transactions_joueur_org", []):
+            if isinstance(t, dict) and t.get("code_joueur")==c: r+=int(t.get("montant_total",0) or 0)
+        return r
+
+    # IP du code
+    ips = {}
+    for x in DB.get("journal_connexions", []):
+        if isinstance(x, dict) and (x.get("code","") or "").upper()==code and x.get("ip"):
+            ips[x["ip"]] = max(ips.get(x["ip"],""), x.get("date","")[:16])
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict) and t.get("ip") and ((t.get("de","") or "").upper()==code or (t.get("vers","") or "").upper()==code):
+            ips[t["ip"]] = max(ips.get(t["ip"],""), t.get("date","")[:16])
+    mes_ips = set(ips.keys())
+
+    # autres comptes sur les mêmes IP
+    cercle = {}
+    for x in DB.get("journal_connexions", []):
+        c2=(x.get("code","") or "").upper()
+        if isinstance(x, dict) and x.get("ip") in mes_ips and c2 and c2!=code:
+            cercle.setdefault(c2, set()).add(x["ip"])
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict) and t.get("ip") in mes_ips:
+            for c2 in [(t.get("de","") or "").upper(), (t.get("vers","") or "").upper()]:
+                if c2 and c2!=code: cercle.setdefault(c2, set()).add(t["ip"])
+
+    # crédits reçus
+    creds=[]
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict) and c.get("code_joueur")==code:
+            m=int(c.get("nb_pions",0) or 0)*int(c.get("valeur_pion",0) or 0)
+            if m!=0: creds.append((c.get("date","?")[:16].replace("T"," "), m, c.get("par","?"), c.get("motif","") or ""))
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict) and code in [(x or "").upper() for x in (c.get("codes") or [])]:
+            m=int(c.get("nb_pions",0) or 0)*int(c.get("valeur_pion",0) or 0)
+            creds.append((c.get("date","?")[:16].replace("T"," "), m, c.get("par","?"), (c.get("motif","") or "")+" (groupe)"))
+    creds.sort(key=lambda x:x[0], reverse=True)
+
+    # transferts
+    tin=[]; tout=[]
+    for t in DB.get("transferts_pions", []):
+        if not isinstance(t, dict): continue
+        de=(t.get("de","") or "").upper(); ve=(t.get("vers","") or "").upper(); m=int(t.get("montant",0) or 0)
+        if ve==code: tin.append((de, m))
+        if de==code: tout.append((ve, m))
+
+    rows_cercle = "".join(
+        f'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #21262d;font-size:13px">'
+        f'<span style="font-family:monospace;color:#e6edf3">{c2} <span style="font-family:system-ui;color:#94a3b8">{nom_de(c2)}</span>{" 🚫" if c2 in bannis else ""}</span>'
+        f'<span style="color:#8b949e;font-size:11px">créé par {createur(c2)}</span></div>'
+        for c2 in sorted(cercle)) or '<div style="color:#34d399;font-size:13px">✅ Personne d\'autre sur cette IP — compte isolé (bon signe).</div>'
+
+    rows_cred = "".join(
+        f'<div style="display:flex;justify-content:space-between;padding:3px 0;font-size:12px">'
+        f'<span style="color:#cbd5e1">{d} · {mo[:30]}</span><span><b style="color:#fca5a5">{fmt(m)}</b> <span style="color:#a78bfa;font-family:monospace">{p}</span></span></div>'
+        for (d,m,p,mo) in creds) or '<div style="color:#8b949e;font-size:12px">—</div>'
+
+    def tlist(lst):
+        if not lst: return '<span style="color:#8b949e">—</span>'
+        return " · ".join(f'{c2}{" 🚫" if c2 in bannis else ""} ({fmt(m)})' for c2,m in lst)
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Profil {code}</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:620px;margin:0 auto">
+      <h1 style="font-size:20px;color:#c084fc;margin-bottom:4px">🔎 {code} <span style="color:#94a3b8;font-size:15px">{nom_de(code)}</span></h1>
+      <div style="color:#8b949e;font-size:13px;margin-bottom:12px">Créé par : <b style="color:#cbd5e1">{createur(code)}</b> · 💰 vrai argent : <b style="color:#6ee7b7">{fmt(reel(code))} XPF</b>{" · 🚫 BANNI" if code in bannis else ""}</div>
+
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="color:#58a6ff;font-weight:700;font-size:13px;margin-bottom:6px">🌐 Adresses IP de ce compte</div>
+        {"".join(f'<div style="font-family:monospace;font-size:12px;color:#e6edf3">{ip} <span style="color:#8b949e">({d.replace("T"," ")})</span></div>' for ip,d in sorted(ips.items(), key=lambda kv:kv[1], reverse=True)) or '<div style="color:#8b949e;font-size:12px">Aucune IP enregistrée</div>'}
+      </div>
+
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="color:#f0883e;font-weight:700;font-size:13px;margin-bottom:6px">👥 Autres comptes sur la/les même(s) IP ({len(cercle)})</div>
+        {rows_cercle}
+      </div>
+
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="color:#fca5a5;font-weight:700;font-size:13px;margin-bottom:6px">🟥 Crédits admin reçus (par qui)</div>
+        {rows_cred}
+      </div>
+
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;font-size:13px">
+        <div style="color:#67e8f9;font-weight:700;margin-bottom:4px">🔄 Transferts</div>
+        <div style="color:#cbd5e1">⬇️ reçus de : {tlist(tin)}</div>
+        <div style="color:#cbd5e1;margin-top:3px">⬆️ envoyés à : {tlist(tout)}</div>
+      </div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
