@@ -15661,3 +15661,73 @@ def visuel_releves():
         {tranche_html}
       </div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/liste-bannis")
+def liste_bannis():
+    """ADMIN — Liste claire de tous les comptes bannis (codes_bloques) : code, nom,
+    solde actuel, rôle si connu (fabricant/collecteur). Lecture seule. ?cle=ADMIN"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
+            noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100",0)*100+p.get("50",0)*50+p.get("20",0)*20+p.get("10",0)*10
+    # rôle (fabricant si a envoyé plus qu'il n'a eu)
+    achats={};gains={};bc={};recu={};envoye={}
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict) and c.get("statut")=="validee" and c.get("code_joueur"):
+            cj=(c.get("code_joueur") or "").upper(); nbp=int(c.get("nb_pions",c.get("pions_credites",0)) or 0); vp=int(c.get("valeur_pion",0) or 0)
+            achats[cj]=achats.get(cj,0)+((nbp*vp) or int(c.get("montant_net",0) or 0))
+    for g in DB.get("gains_finaux", []):
+        if isinstance(g, dict) and g.get("code"):
+            cj=(g.get("code") or "").upper(); gains[cj]=gains.get(cj,0)+int(g.get("montant_gain",g.get("montant_credite",0)) or 0)
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict) and c.get("code_joueur"):
+            cj=(c.get("code_joueur") or "").upper(); bc[cj]=bc.get(cj,0)+int(c.get("nb_pions",0) or 0)*int(c.get("valeur_pion",0) or 0)
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict):
+            de=(t.get("de") or "").upper(); vers=(t.get("vers") or "").upper(); m=int(t.get("montant",0) or 0)
+            if de: envoye[de]=envoye.get(de,0)+m
+            if vers: recu[vers]=recu.get(vers,0)+m
+
+    bannis = sorted(set(x for x in (DB.get("codes_bloques", []) or []) if x))
+    rows=""
+    nb_fab=0; nb_solde=0; total_solde=0
+    for c in bannis:
+        c=c.upper()
+        eu=achats.get(c,0)+gains.get(c,0)+bc.get(c,0)+recu.get(c,0)
+        env=envoye.get(c,0)
+        if env-eu>0: role="🔴 fabricant"; rc="#f85149"; nb_fab+=1
+        elif recu.get(c,0)>0: role="💰 collecteur"; rc="#fbbf24"
+        else: role="bloqué"; rc="#8b949e"
+        s=solde(c)
+        if s>0: nb_solde+=1; total_solde+=s
+        rows+=(f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+               f'<td style="padding:7px;font-family:monospace;color:#a78bfa">{c}</td>'
+               f'<td style="padding:7px;color:#cbd5e1;font-size:13px">{noms.get(c,"")}</td>'
+               f'<td style="padding:7px;color:{rc};font-size:12px;font-weight:600">{role}</td>'
+               f'<td style="padding:7px;text-align:right;color:{"#f87171" if s>0 else "#34d399"};font-weight:700">{format(s, ",")}</td></tr>')
+    if not rows:
+        rows='<tr><td colspan="4" style="padding:16px;text-align:center;color:#8b949e">Aucun compte banni.</td></tr>'
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Liste des bannis</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:720px;margin:0 auto">
+      <h1 style="font-size:21px;color:#f85149;margin-bottom:4px">🚫 Comptes bannis</h1>
+      <div style="color:#6b7280;font-size:12px;margin-bottom:14px">{datetime.datetime.now().strftime("%d/%m/%Y %H:%M")} · ne peuvent plus se connecter</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px"><div style="color:#8b949e;font-size:12px">Total bannis</div><div style="color:#f85149;font-size:22px;font-weight:800">{len(bannis)}</div></div>
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px"><div style="color:#8b949e;font-size:12px">Fabricants</div><div style="color:#fb923c;font-size:22px;font-weight:800">{nb_fab}</div></div>
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px"><div style="color:#8b949e;font-size:12px">Avec solde restant</div><div style="color:{"#f87171" if nb_solde else "#34d399"};font-size:22px;font-weight:800">{nb_solde}</div><div style="color:#6b7280;font-size:11px">{format(total_solde, ",")} XPF</div></div>
+      </div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:460px">
+      <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:7px;color:#fca5a5">Code</th><th style="padding:7px;color:#fca5a5">Nom</th><th style="padding:7px;color:#fca5a5">Rôle</th><th style="padding:7px;color:#fca5a5;text-align:right">Solde</th></tr>
+      {rows}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
