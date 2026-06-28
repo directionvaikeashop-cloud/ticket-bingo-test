@@ -16563,3 +16563,87 @@ def examiner_faux_positifs():
       {bloc("🟠 À EXAMINER (mi-figue)", "#f59e0b", oranges, "Ont reçu des crédits de toi MAIS aussi un excédent ou des transferts non couverts. À regarder cas par cas.")}
       {bloc("🔴 CIRCUIT confirmé", "#f85149", rouges, "Aucun crédit admin / fabrication ou collecte pure. À laisser bannis.")}
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/examiner-credits-suspects")
+def examiner_credits_suspects():
+    """ADMIN — Liste TOUS les crédits admin (groupés + individuels) avec QUI les a
+    créés (par) et QUAND, pour repérer les crédits non autorisés. ?cle=ADMIN"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    # Crédits groupés (credits_masse)
+    masse = []
+    for c in DB.get("credits_masse", []):
+        if not isinstance(c, dict): continue
+        codes = c.get("codes") or []
+        montant_par_code = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+        total = montant_par_code * len(codes)
+        masse.append({"date": c.get("date","?"), "par": c.get("par","?"), "motif": c.get("motif","") or "—",
+                      "nb_codes": len(codes), "montant_code": montant_par_code, "total": total, "codes": codes})
+    masse.sort(key=lambda x: x["date"], reverse=True)
+
+    # Gros crédits individuels (credits_admin)
+    indiv = []
+    for c in DB.get("credits_admin", []):
+        if not isinstance(c, dict): continue
+        m = int(c.get("nb_pions", 0) or 0) * int(c.get("valeur_pion", 0) or 0)
+        if m >= 1000:
+            indiv.append({"date": c.get("date","?"), "par": c.get("par","?"), "code": c.get("code_joueur","?"), "montant": m, "motif": c.get("motif","") or ""})
+    indiv.sort(key=lambda x: x["montant"], reverse=True)
+
+    # Synthèse par émetteur
+    par_emetteur = {}
+    for m in masse:
+        par_emetteur.setdefault(m["par"], {"total":0,"nb":0})
+        par_emetteur[m["par"]]["total"] += m["total"]; par_emetteur[m["par"]]["nb"] += 1
+    for i in indiv:
+        par_emetteur.setdefault(i["par"], {"total":0,"nb":0})
+        par_emetteur[i["par"]]["total"] += i["montant"]; par_emetteur[i["par"]]["nb"] += 1
+
+    def fmt(n): return format(int(n), ",")
+    def nom_admin(code):
+        inf = DB.get("codes", {}).get(code, {})
+        r = "ADMIN" if inf.get("admin") else (inf.get("role","") or "?")
+        return f"{inf.get('nom','') or ''} ({r})".strip()
+
+    synth = "".join(
+        f'<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid #21262d">'
+        f'<span style="font-family:monospace;color:#e6edf3">{p} <span style="color:#8b949e;font-family:system-ui;font-size:12px">{nom_admin(p)}</span></span>'
+        f'<b style="color:#f0883e">{fmt(v["total"])} XPF <span style="color:#8b949e;font-weight:400">({v["nb"]})</span></b></div>'
+        for p,v in sorted(par_emetteur.items(), key=lambda kv: kv[1]["total"], reverse=True))
+
+    rows_masse = "".join(
+        f'<div style="background:#161b22;border:1px solid #30363d;border-radius:8px;padding:10px;margin-bottom:6px;font-size:13px">'
+        f'<div style="display:flex;justify-content:space-between"><b style="color:#f0883e">{fmt(m["total"])} XPF</b>'
+        f'<span style="color:#8b949e">{m["date"][:16].replace("T"," ")}</span></div>'
+        f'<div style="color:#cbd5e1;margin-top:3px">{m["nb_codes"]} code(s) × {fmt(m["montant_code"])} · {m["motif"]}</div>'
+        f'<div style="color:#a78bfa;font-family:monospace;font-size:12px;margin-top:2px">par : {m["par"]} <span style="color:#8b949e;font-family:system-ui">{nom_admin(m["par"])}</span></div></div>'
+        for m in masse) or '<div style="color:#8b949e">Aucun crédit groupé.</div>'
+
+    rows_indiv = "".join(
+        f'<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #21262d;font-size:13px">'
+        f'<span style="color:#cbd5e1"><b style="color:#67e8f9">{fmt(i["montant"])}</b> → {i["code"]}</span>'
+        f'<span style="color:#a78bfa;font-family:monospace;font-size:12px">{i["par"]} · {i["date"][:10]}</span></div>'
+        for i in indiv) or '<div style="color:#8b949e">Aucun gros crédit individuel.</div>'
+
+    total_masse = sum(m["total"] for m in masse)
+    total_indiv = sum(i["montant"] for i in indiv)
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Crédits suspects</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:640px;margin:0 auto">
+      <h1 style="font-size:20px;color:#f85149;margin-bottom:6px">🕵️ Audit des crédits admin</h1>
+      <div style="color:#8b949e;font-size:13px;margin-bottom:14px">Total crédits groupés : <b style="color:#f0883e">{fmt(total_masse)} XPF</b> · gros crédits individuels : <b style="color:#67e8f9">{fmt(total_indiv)} XPF</b></div>
+      <div style="background:rgba(248,81,73,.08);border:1px solid #f85149;border-radius:10px;padding:14px;margin-bottom:16px">
+        <div style="color:#fca5a5;font-weight:800;margin-bottom:8px">👤 QUI a créé ces crédits (par émetteur)</div>
+        {synth}
+      </div>
+      <div style="color:#f0883e;font-weight:800;margin-bottom:8px">📦 Crédits groupés (Dédommagement / transfert admin)</div>
+      {rows_masse}
+      <div style="color:#67e8f9;font-weight:800;margin:16px 0 8px">💎 Gros crédits individuels (≥ 1 000)</div>
+      {rows_indiv}
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
