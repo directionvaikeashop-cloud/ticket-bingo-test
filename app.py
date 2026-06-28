@@ -15103,3 +15103,101 @@ def bannir_circuit():
       <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:6px;color:#fca5a5">Code</th><th style="padding:6px;color:#fca5a5">Nom</th><th style="padding:6px;color:#fca5a5">Rôle</th><th style="padding:6px;color:#fca5a5">Preuve</th><th style="padding:6px;color:#fca5a5;text-align:right">Solde</th><th style="padding:6px;color:#fca5a5">État</th></tr>
       {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/joueuses-lesees")
+def joueuses_lesees():
+    """ADMIN — Liste les VRAIES joueuses lésées : celles dont le solde actuel est
+    INFÉRIEUR à leur dû légitime (vrai argent payé + gains − dépenses réelles),
+    EN EXCLUANT le circuit de fraude. Lecture seule. ?cle=ADMIN"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    staff = set((DB.get("codes", {}) or {}).keys())
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
+            noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100",0)*100+p.get("50",0)*50+p.get("20",0)*20+p.get("10",0)*10
+
+    achats={};gains={};tickets_dep={};retraits={};bc={};recu={};envoye={}
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict) and c.get("statut")=="validee" and c.get("code_joueur"):
+            cj=(c.get("code_joueur") or "").upper(); nbp=int(c.get("nb_pions",c.get("pions_credites",0)) or 0); vp=int(c.get("valeur_pion",0) or 0)
+            achats[cj]=achats.get(cj,0)+((nbp*vp) or int(c.get("montant_net",0) or 0))
+    for g in DB.get("gains_finaux", []):
+        if isinstance(g, dict) and g.get("code"):
+            cj=(g.get("code") or "").upper(); gains[cj]=gains.get(cj,0)+int(g.get("montant_gain",g.get("montant_credite",0)) or 0)
+    for c in DB.get("commandes_tickets_pions", []):
+        if isinstance(c, dict) and c.get("code_joueur") and c.get("statut")!="annulee_org":
+            cj=(c.get("code_joueur") or "").upper(); tickets_dep[cj]=tickets_dep.get(cj,0)+int(c.get("total_pions",0) or 0)
+    for r in DB.get("demandes_retrait", []):
+        if isinstance(r, dict) and r.get("statut")=="validee" and r.get("code_joueur"):
+            cj=(r.get("code_joueur") or "").upper(); retraits[cj]=retraits.get(cj,0)+int(r.get("montant_demande",0) or 0)
+    for x in DB.get("rejoindre_log", []):
+        if isinstance(x, dict) and x.get("campagne","")=="semaine" and x.get("code"):
+            cj=(x.get("code") or "").upper(); bc[cj]=bc.get(cj,0)+500
+    for t in DB.get("transferts_pions", []):
+        if isinstance(t, dict):
+            de=(t.get("de") or "").upper(); vers=(t.get("vers") or "").upper(); m=int(t.get("montant",0) or 0)
+            if de: envoye[de]=envoye.get(de,0)+m
+            if vers: recu[vers]=recu.get(vers,0)+m
+
+    # Circuit de fraude (mêmes critères que /bannir-circuit) à EXCLURE
+    fabricants=set()
+    for c in envoye:
+        eu=achats.get(c,0)+gains.get(c,0)+bc.get(c,0)+recu.get(c,0)
+        if envoye[c]-eu>0: fabricants.add(c)
+    circuit=set(fabricants); frontier=set(fabricants); niveau=0
+    transferts=[t for t in DB.get("transferts_pions", []) if isinstance(t, dict)]
+    while frontier and niveau<=6:
+        niveau+=1; suivant=set()
+        for t in transferts:
+            de=(t.get("de") or "").upper(); vers=(t.get("vers") or "").upper()
+            if de in frontier and vers and vers not in circuit:
+                circuit.add(vers); suivant.add(vers)
+        frontier=suivant
+
+    # Dû légitime = vrai argent (achats+gains+bonus) − dépenses réelles (tickets+retraits)
+    codes = set(achats)|set(gains)|set(tickets_dep)|set(retraits)|set(bc)
+    lignes=[]; total_lese=0
+    for c in codes:
+        c=c.upper()
+        if c in staff or c in circuit:
+            continue
+        du = max(0, achats.get(c,0)+gains.get(c,0)+bc.get(c,0) - tickets_dep.get(c,0) - retraits.get(c,0))
+        actuel = solde(c)
+        manque = du - actuel
+        if manque > 0:
+            total_lese += manque
+            lignes.append((c, noms.get(c,""), achats.get(c,0)+gains.get(c,0)+bc.get(c,0), tickets_dep.get(c,0)+retraits.get(c,0), du, actuel, manque))
+    lignes.sort(key=lambda x:-x[6])
+
+    rows=""
+    for c,nom,inn,dep,du,act,manque in lignes:
+        rows+=(f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+               f'<td style="padding:6px;font-family:monospace;color:#a78bfa">{c}</td>'
+               f'<td style="padding:6px;color:#94a3b8;font-size:12px">{nom}</td>'
+               f'<td style="padding:6px;text-align:right;color:#6ee7b7">{format(inn, ",")}</td>'
+               f'<td style="padding:6px;text-align:right;color:#fca5a5">{format(dep, ",")}</td>'
+               f'<td style="padding:6px;text-align:right;color:#93c5fd">{format(du, ",")}</td>'
+               f'<td style="padding:6px;text-align:right;color:#8b949e">{format(act, ",")}</td>'
+               f'<td style="padding:6px;text-align:right;color:#fbbf24;font-weight:800">{format(manque, ",")}</td></tr>')
+    if not rows:
+        rows='<tr><td colspan="7" style="padding:16px;text-align:center;color:#34d399">✅ Aucune joueuse lésée détectée. Tout le monde a au moins son dû légitime.</td></tr>'
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Joueuses lésées</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:920px;margin:0 auto">
+      <h1 style="font-size:20px;color:#fbbf24;margin-bottom:8px">🤝 Vraies joueuses lésées (à rembourser éventuellement)</h1>
+      <div style="background:rgba(251,191,36,.1);border:1px solid #f59e0b;border-radius:10px;padding:12px;margin-bottom:12px;color:#fde68a">
+        <b>{len(lignes)}</b> joueuse(s) honnête(s) ont aujourd'hui MOINS que leur dû légitime. Total manquant : <b>{format(total_lese, ",")} XPF</b>. (Circuit de fraude EXCLU.)</div>
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:10px">Dû légitime = (vrai argent payé + gains + bonus) − (tickets + retraits). « Manque » = dû − solde actuel. Lecture seule, rien n'est remboursé ici.</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:700px">
+      <tr style="border-bottom:2px solid #92400e;text-align:left"><th style="padding:6px;color:#fde68a">Code</th><th style="padding:6px;color:#fde68a">Nom</th><th style="padding:6px;color:#fde68a;text-align:right">Vrai entré</th><th style="padding:6px;color:#fde68a;text-align:right">Dépensé</th><th style="padding:6px;color:#fde68a;text-align:right">Dû</th><th style="padding:6px;color:#fde68a;text-align:right">Actuel</th><th style="padding:6px;color:#fde68a;text-align:right">Manque</th></tr>
+      {rows}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
