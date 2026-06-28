@@ -16199,3 +16199,68 @@ def diag_acces():
         <div style="color:#fde68a;font-size:13px">💡 Solution : {sol}</div>
       </div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/creer-compte-joueur")
+def creer_compte_joueur():
+    """ADMIN — Crée un compte/ticket minimal pour un code joueur orphelin (a des
+    pions mais pas de compte), pour qu'il puisse accéder et jouer. Ne touche PAS
+    aux pions. Aperçu ; rien sans &confirme=1. ?cle=ADMIN&code=X&nom=Y[&confirme=1]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    code = (request.args.get("code", "") or "").strip().upper()
+    nom = (request.args.get("nom", "") or "").strip()
+    confirme = request.args.get("confirme", "") == "1"
+    if not code or not nom:
+        return Response("Ajoute &code=LE_CODE&nom=LE_NOM", status=400, mimetype="text/plain; charset=utf-8")
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100",0)*100+p.get("50",0)*50+p.get("20",0)*20+p.get("10",0)*10
+
+    existe = next((t for t in DB.get("tickets", []) if isinstance(t, dict) and (t.get("code_acheteur") or "").upper()==code), None)
+    s = solde(code)
+    bloque = code in set(DB.get("codes_bloques", []) or [])
+
+    if confirme and not existe:
+        ticket = {
+            "id": hashlib.md5(f"{nom}{code}{datetime.datetime.now()}".encode()).hexdigest()[:8],
+            "acheteur": nom, "jeu": "COMPTE", "serie": "-",
+            "prix": 0, "photo_url": None, "pdf_url": None,
+            "page_debut": None, "page_fin": None,
+            "code_acheteur": code, "email": "",
+            "code_org": "ADMIN", "date": datetime.datetime.now().isoformat(),
+            "compte_cree_admin": True
+        }
+        DB.setdefault("tickets", []).insert(0, ticket)
+        DB.setdefault("tickets_acheteurs", {})[code] = ticket["id"]
+        DB.setdefault("comptes_crees", []).insert(0, {"id":secrets.token_hex(4).upper(),"code":code,"nom":nom,"par":cle,"date":datetime.datetime.now().isoformat()})
+        save_data(immediat=True)
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:24px;color:#fff"><div style="max-width:540px;margin:0 auto">
+        <div style="background:rgba(16,185,129,.15);border:2px solid #10b981;border-radius:12px;padding:20px;color:#34d399">
+        <div style="font-size:18px;font-weight:800;margin-bottom:8px">✅ Compte créé</div>
+        <div style="color:#cbd5e1;font-size:14px">Le compte <b>{nom}</b> est créé sur le code <b style="color:#a78bfa">{code}</b>.<br>Ses <b style="color:#6ee7b7">{format(s, ",")} pions</b> sont intacts.<br>Elle peut maintenant <b>se connecter et jouer</b> avec son code 4MER0O.{"<br><br>⚠️ Note : ce code est BANNI, pense à le débloquer." if bloque else ""}</div>
+        </div></div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    if existe:
+        corps = f'<div style="background:rgba(52,211,153,.1);border:1px solid #10b981;border-radius:10px;padding:14px;color:#6ee7b7">✅ Ce code a DÉJÀ un compte ({existe.get("acheteur","")}). Pas besoin d\'en créer. Si elle n\'accède pas, vérifie le code saisi (O/0) ou son blocage.</div>'
+    else:
+        corps = (f'<div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-bottom:12px;font-size:14px">'
+                 f'<div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8b949e">Code</span><b style="color:#a78bfa;font-family:monospace">{code}</b></div>'
+                 f'<div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8b949e">Nom à rattacher</span><b style="color:#cbd5e1">{nom}</b></div>'
+                 f'<div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8b949e">Pions (intacts)</span><b style="color:#6ee7b7">{format(s, ",")} XPF</b></div>'
+                 f'{"<div style=\\'display:flex;justify-content:space-between;padding:4px 0\\'><span style=\\'color:#8b949e\\'>Statut</span><b style=\\'color:#f87171\\'>🚫 banni</b></div>" if bloque else ""}'
+                 f'</div>'
+                 f'<div style="background:rgba(34,211,238,.08);border:1px solid #0891b2;border-radius:10px;padding:14px">'
+                 f'<div style="color:#67e8f9;font-weight:700;margin-bottom:8px">👁️ Aperçu : créer le compte « {nom} » sur {code}</div>'
+                 f'<a href="/creer-compte-joueur?cle={cle}&code={code}&nom={nom.replace(" ","%20")}&confirme=1" style="display:inline-block;background:#0891b2;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">✅ Confirmer la création du compte</a></div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Créer compte</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:560px;margin:0 auto">
+      <h1 style="font-size:19px;color:#22d3ee;margin-bottom:12px">👤 Créer un compte joueur</h1>
+      {corps}
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
