@@ -16743,3 +16743,86 @@ def tracer_admin2024():
         {bloc_ip(f"{suspect} ({nom_de(suspect)})", ip_sus, "#a78bfa")}
       </div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/croiser-heini")
+def croiser_heini():
+    """ADMIN — Pour chaque bénéficiaire des crédits d'ADMIN2024, montre QUI a créé
+    le compte (organisatrice via code_org, ou QR). Compte combien viennent du
+    suspect. ?cle=ADMIN[&suspect=CPFRD66H]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    suspect = (request.args.get("suspect", "CPFRD66H") or "CPFRD66H").strip().upper()
+    nom_suspect = DB.get("codes", {}).get(suspect, {}).get("nom", suspect)
+
+    # bénéficiaires d'ADMIN2024
+    benef = {}
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict) and (c.get("par","") or "").upper()=="ADMIN2024":
+            codes=c.get("codes") or []; mc=int(c.get("nb_pions",0) or 0)*int(c.get("valeur_pion",0) or 0)
+            for cd in codes:
+                cd=(cd or "").upper()
+                if cd: benef[cd]=benef.get(cd,0)+mc
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict) and (c.get("par","") or "").upper()=="ADMIN2024":
+            cd=(c.get("code_joueur","") or "").upper()
+            if cd: benef[cd]=benef.get(cd,0)+int(c.get("nb_pions",0) or 0)*int(c.get("valeur_pion",0) or 0)
+
+    bannis = set((c or "").upper() for c in DB.get("codes_bloques", []))
+    def nom_de(code):
+        for t in DB.get("tickets", []):
+            if isinstance(t, dict) and (t.get("code_acheteur") or "").upper()==code and t.get("acheteur"):
+                return t.get("acheteur")
+        return ""
+    def createur(code):
+        tks=[t for t in DB.get("tickets", []) if (t.get("code_acheteur","") or "").upper()==code]
+        rj=any((x.get("code","") or "").upper()==code for x in DB.get("rejoindre_log", []))
+        orgs=sorted({(t.get("code_org") or "").upper() for t in tks if t.get("code_org") and (t.get("code_org") or "").upper() not in ("","ADMIN","PUB")})
+        pub=any((t.get("code_org")=="PUB" or t.get("source")=="publicite") for t in tks)
+        if suspect in orgs: return ("suspect", suspect)
+        if orgs: return ("autre_org", orgs[0])
+        if rj or pub: return ("qr", "QR")
+        return ("inconnu", "?")
+
+    cats={"suspect":[], "autre_org":[], "qr":[], "inconnu":[]}
+    for cd,m in benef.items():
+        k,who=createur(cd)
+        cats[k].append((cd, nom_de(cd), m, who))
+    for k in cats: cats[k].sort(key=lambda x:x[2], reverse=True)
+
+    def fmt(n): return format(int(n), ",")
+    def nomorg(c): return DB.get("codes", {}).get(c, {}).get("nom", c)
+    def bloc(titre, rows, coul, montre_org=False):
+        if not rows: return ""
+        h=f'<div style="margin:14px 0"><div style="color:{coul};font-weight:800;font-size:14px;margin-bottom:6px">{titre} ({len(rows)})</div>'
+        for (cd,nom,m,who) in rows:
+            h+=(f'<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #21262d;font-size:13px">'
+                f'<span style="font-family:monospace;color:#e6edf3">{cd} <span style="font-family:system-ui;color:#94a3b8">{nom}</span>{" 🚫" if cd in bannis else ""}'
+                + (f' <span style="color:#8b949e;font-size:11px">· créé par {nomorg(who)}</span>' if montre_org else '')
+                + f'</span><b style="color:#67e8f9">{fmt(m)}</b></div>')
+        return h+'</div>'
+
+    tot = sum(benef.values())
+    n_sus=len(cats["suspect"]); n_tot=len(benef)
+    pct = round(100*n_sus/max(1,n_tot))
+
+    verdict=(f'<div style="background:rgba(248,81,73,.15);border:2px solid #f85149;border-radius:10px;padding:14px">'
+             f'<div style="color:#fca5a5;font-weight:800;font-size:15px">🔴 {n_sus} des {n_tot} bénéficiaires ({pct}%) ont été créés par {suspect} {nom_suspect}</div>'
+             f'<div style="color:#cbd5e1;font-size:13px;margin-top:6px">soit {fmt(sum(r[2] for r in cats["suspect"]))} XPF de crédits ADMIN2024 sur des comptes qu\'elle a elle-même créés.</div></div>'
+             if n_sus>0 else
+             f'<div style="background:rgba(251,191,36,.12);border:1px solid #f59e0b;border-radius:10px;padding:14px;color:#fde68a">🟡 Aucun bénéficiaire n\'a été créé par {suspect}. Le lien n\'est pas établi par ce croisement.</div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Croisement HEINI</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:640px;margin:0 auto">
+      <h1 style="font-size:20px;color:#f85149;margin-bottom:6px">🔗 Bénéficiaires ADMIN2024 × créateur du compte</h1>
+      <div style="color:#8b949e;font-size:13px;margin-bottom:12px">{n_tot} bénéficiaires · {fmt(tot)} XPF · suspect : <b style="font-family:monospace;color:#e6edf3">{suspect}</b> {nom_suspect}</div>
+      {verdict}
+      {bloc("🔴 Comptes créés par le SUSPECT", cats["suspect"], "#f85149")}
+      {bloc("🟠 Créés par une AUTRE organisatrice", cats["autre_org"], "#f59e0b", True)}
+      {bloc("🔵 Auto-inscription QR", cats["qr"], "#58a6ff")}
+      {bloc("⚪ Origine inconnue", cats["inconnu"], "#8b949e")}
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
