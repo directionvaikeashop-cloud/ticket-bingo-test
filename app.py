@@ -15000,6 +15000,7 @@ def bannir_circuit():
     if not (info and info.get("admin")):
         return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
     confirme = request.args.get("confirme", "") == "1"
+    sauf = set(x.strip().upper() for x in (request.args.get("sauf", "") or "").split(",") if x.strip())
     staff = set((DB.get("codes", {}) or {}).keys())
     noms = {}
     for t in DB.get("tickets", []):
@@ -15054,7 +15055,7 @@ def bannir_circuit():
         frontier=suivant
         if niveau>6: break
 
-    circuit=[c for c in role if c and c not in staff]
+    circuit=[c for c in role if c and c not in staff and c not in sauf]
     circuit.sort(key=lambda c:(hop[c], -(fabricants.get(c,0) or recu.get(c,0))))
 
     deja=set(DB.get("codes_bloques", []) or [])
@@ -15092,7 +15093,7 @@ def bannir_circuit():
         banniere=(f'<div style="background:rgba(251,191,36,.1);border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:14px">'
                   f'<div style="color:#fde68a;font-weight:700;margin-bottom:6px">👁️ APERÇU — rien n\'est encore banni</div>'
                   f'<div style="color:#94a3b8;font-size:13px;margin-bottom:10px">Circuit détecté : <b style="color:#f87171">{nb_fab} fabricants</b> + <b style="color:#fbbf24">{nb_col} collecteurs</b> = <b>{len(circuit)} codes</b>. Vérifie la liste ci-dessous AVANT de bannir.</div>'
-                  f'<a href="/bannir-circuit?cle={cle}&confirme=1" style="display:inline-block;background:#ef4444;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">🔨 Confirmer le bannissement du circuit</a></div>')
+                  f'<a href="/bannir-circuit?cle={cle}&sauf={",".join(sorted(sauf))}&confirme=1" style="display:inline-block;background:#ef4444;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">🔨 Confirmer le bannissement du circuit</a></div>')
 
     return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bannir le circuit</title></head>
     <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:880px;margin:0 auto">
