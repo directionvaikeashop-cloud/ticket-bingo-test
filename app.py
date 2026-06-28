@@ -16264,3 +16264,66 @@ def creer_compte_joueur():
       <h1 style="font-size:19px;color:#22d3ee;margin-bottom:12px">👤 Créer un compte joueur</h1>
       {corps}
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/bloquer-code")
+def bloquer_code_simple():
+    """ADMIN — Bloque (ou débloque) UN code via lien. Ajoute/retire de codes_bloques.
+    Aperçu ; rien sans &confirme=1. ?cle=ADMIN&code=X[&debloquer=1][&confirme=1]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    code = (request.args.get("code", "") or "").strip().upper()
+    debloquer = request.args.get("debloquer", "") == "1"
+    confirme = request.args.get("confirme", "") == "1"
+    if not code:
+        return Response("Ajoute &code=LE_CODE", status=400, mimetype="text/plain; charset=utf-8")
+    nom = ""
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and (t.get("code_acheteur") or "").upper()==code and t.get("acheteur"):
+            nom = t.get("acheteur"); break
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100",0)*100+p.get("50",0)*50+p.get("20",0)*20+p.get("10",0)*10
+    deja_bloque = code in set(DB.get("codes_bloques", []) or [])
+    s = solde(code)
+
+    if confirme:
+        DB.setdefault("codes_bloques", [])
+        if debloquer:
+            DB["codes_bloques"] = [c for c in DB["codes_bloques"] if (c or "").upper()!=code]
+            action = "DÉBLOQUÉ"; coul = "#34d399"
+        else:
+            if code not in DB["codes_bloques"]:
+                DB["codes_bloques"].append(code)
+            action = "BLOQUÉ"; coul = "#f85149"
+        DB.setdefault("blocages_manuels", []).insert(0, {"id":secrets.token_hex(4).upper(),"code":code,"action":action,"par":cle,"date":datetime.datetime.now().isoformat()})
+        save_data(immediat=True)
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:24px;color:#fff"><div style="max-width:520px;margin:0 auto">
+        <div style="background:rgba(0,0,0,.2);border:2px solid {coul};border-radius:12px;padding:20px;color:{coul}">
+        <div style="font-size:18px;font-weight:800;margin-bottom:8px">✅ Code {action}</div>
+        <div style="color:#cbd5e1;font-size:14px">Le code <b style="color:#a78bfa">{code}</b> {nom} a été <b>{action.lower()}</b>.{" Il ne peut plus se connecter." if not debloquer else " Il peut de nouveau se connecter."}</div>
+        </div></div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    if debloquer:
+        titre = "🔓 Débloquer un code"; btn_txt = "✅ Confirmer le déblocage"; btn_coul = "#10b981"
+        etat = "🚫 actuellement bloqué" if deja_bloque else "✅ déjà débloqué (rien à faire)"
+    else:
+        titre = "🔒 Bloquer un code"; btn_txt = "🔒 Confirmer le blocage"; btn_coul = "#ef4444"
+        etat = "🚫 déjà bloqué (rien à faire)" if deja_bloque else "✅ actuellement actif → sera bloqué"
+    lien_conf = f"/bloquer-code?cle={cle}&code={code}{'&debloquer=1' if debloquer else ''}&confirme=1"
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bloquer code</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:520px;margin:0 auto">
+      <h1 style="font-size:19px;color:#f0883e;margin-bottom:12px">{titre}</h1>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-bottom:12px;font-size:14px">
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8b949e">Code</span><b style="color:#a78bfa;font-family:monospace">{code}</b></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8b949e">Nom</span><b style="color:#cbd5e1">{nom or "—"}</b></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8b949e">Solde</span><b style="color:#67e8f9">{format(s, ",")} XPF</b></div>
+        <div style="display:flex;justify-content:space-between;padding:4px 0"><span style="color:#8b949e">État</span><b style="color:#cbd5e1">{etat}</b></div>
+      </div>
+      <a href="{lien_conf}" style="display:inline-block;background:{btn_coul};color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">{btn_txt}</a>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
