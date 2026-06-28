@@ -14922,3 +14922,184 @@ def etiqueter_credits():
       <tr style="border-bottom:2px solid #065f46;text-align:left"><th style="padding:6px;color:#6ee7b7">Date</th><th style="padding:6px;color:#6ee7b7">Code</th><th style="padding:6px;color:#6ee7b7">Nom</th><th style="padding:6px;color:#6ee7b7;text-align:right">Montant</th></tr>
       {rows}</table></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/annuler-commandes-tickets")
+def annuler_commandes_tickets():
+    """ADMIN — Annule les commandes de tickets en attente (non attribuées) SANS
+    rembourser : statut en_attente -> annulee_org. Les retire de la file de l'orga,
+    garde les pions débités (relevé = compteur préservé). Aperçu ; rien sans
+    &confirme=1. ?cle=ADMIN[&confirme=1]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    confirme = request.args.get("confirme", "") == "1"
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
+            noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
+
+    vises = [c for c in DB.get("commandes_tickets_pions", [])
+             if isinstance(c, dict) and c.get("statut") == "en_attente"]
+    total_pions = sum(int(c.get("total_pions", 0) or 0) for c in vises)
+    total_tickets = sum(int(c.get("nb_tickets", 0) or 0) for c in vises)
+
+    if confirme and vises:
+        for c in vises:
+            c["statut"] = "annulee_org"
+        DB.setdefault("annulations_commandes_tickets", []).insert(0, {
+            "id": secrets.token_hex(4).upper(), "nb": len(vises),
+            "total_pions": total_pions, "par": cle, "date": datetime.datetime.now().isoformat()})
+        save_data(immediat=True)
+
+    rows = ""
+    for c in vises:
+        cj = (c.get("code_joueur") or "").upper()
+        rows += (f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                 f'<td style="padding:6px;color:#8b949e;font-size:11px">{str(c.get("date",""))[:16]}</td>'
+                 f'<td style="padding:6px;font-family:monospace;color:#a78bfa">{cj}</td>'
+                 f'<td style="padding:6px;color:#94a3b8;font-size:12px">{noms.get(cj,"")}</td>'
+                 f'<td style="padding:6px;color:#fbbf24">{c.get("jeu","")}</td>'
+                 f'<td style="padding:6px;text-align:right">{c.get("nb_tickets","")}</td>'
+                 f'<td style="padding:6px;text-align:right;color:#fca5a5">{format(int(c.get("total_pions",0) or 0), ",")}</td></tr>')
+    if not rows:
+        rows = '<tr><td colspan="6" style="padding:16px;text-align:center;color:#34d399">✅ Aucune commande en attente. File déjà vide.</td></tr>'
+
+    if confirme:
+        banniere = (f'<div style="background:rgba(16,185,129,.15);border:2px solid #10b981;border-radius:10px;padding:14px;margin-bottom:14px;color:#34d399;font-weight:800">'
+                    f'✅ FAIT — {len(vises)} commande(s) retirée(s) de la file (sans remboursement). Pions débités conservés, relevés cohérents.</div>')
+    else:
+        banniere = (f'<div style="background:rgba(251,191,36,.1);border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:14px">'
+                    f'<div style="color:#fde68a;font-weight:700;margin-bottom:6px">👁️ APERÇU — rien n\'est encore modifié</div>'
+                    f'<div style="color:#94a3b8;font-size:13px;margin-bottom:6px"><b>{len(vises)} commande(s)</b> en attente · {total_tickets} ticket(s) · <b>{format(total_pions, ",")} XPF</b> de pions (déjà débités, NON remboursés).</div>'
+                    f'<div style="color:#94a3b8;font-size:12px;margin-bottom:10px">Elles passeront en « annulee_org » → disparaissent de ta file. Aucun pion rendu.</div>'
+                    f'<a href="/annuler-commandes-tickets?cle={cle}&confirme=1" style="display:inline-block;background:#ef4444;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">✅ Confirmer le retrait (sans remboursement)</a></div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Annuler commandes tickets</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:780px;margin:0 auto">
+      <h1 style="font-size:20px;color:#f0883e;margin-bottom:8px">🎫 Retirer les commandes de tickets non attribuées</h1>
+      {banniere}
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:560px">
+      <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:6px;color:#fca5a5">Date</th><th style="padding:6px;color:#fca5a5">Code</th><th style="padding:6px;color:#fca5a5">Nom</th><th style="padding:6px;color:#fca5a5">Jeu</th><th style="padding:6px;color:#fca5a5;text-align:right">Tickets</th><th style="padding:6px;color:#fca5a5;text-align:right">Pions</th></tr>
+      {rows}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/bannir-circuit")
+def bannir_circuit():
+    """ADMIN — Identifie le circuit de fraude (fabricants + receveurs de leurs pions
+    en chaîne) et les bannit (codes_bloques). Aperçu d'abord ; rien sans &confirme=1.
+    Exclut staff/admin/org. ?cle=ADMIN[&confirme=1]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    confirme = request.args.get("confirme", "") == "1"
+    staff = set((DB.get("codes", {}) or {}).keys())
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
+            noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100",0)*100+p.get("50",0)*50+p.get("20",0)*20+p.get("10",0)*10
+
+    achats={};gains={};bc={};recu={};envoye={}
+    for c in DB.get("commandes_pions_joueurs", []):
+        if isinstance(c, dict) and c.get("statut")=="validee" and c.get("code_joueur"):
+            cj=(c.get("code_joueur") or "").upper(); nbp=int(c.get("nb_pions",c.get("pions_credites",0)) or 0); vp=int(c.get("valeur_pion",0) or 0)
+            achats[cj]=achats.get(cj,0)+((nbp*vp) or int(c.get("montant_net",0) or 0))
+    for g in DB.get("gains_finaux", []):
+        if isinstance(g, dict) and g.get("code"):
+            cj=(g.get("code") or "").upper(); gains[cj]=gains.get(cj,0)+int(g.get("montant_gain",g.get("montant_credite",0)) or 0)
+    for x in DB.get("rejoindre_log", []):
+        if isinstance(x, dict) and x.get("campagne","")=="semaine" and x.get("code"):
+            cj=(x.get("code") or "").upper(); bc[cj]=bc.get(cj,0)+500
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict) and c.get("code_joueur"):
+            cj=(c.get("code_joueur") or "").upper(); bc[cj]=bc.get(cj,0)+int(c.get("nb_pions",0) or 0)*int(c.get("valeur_pion",0) or 0)
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict):
+            m=int(c.get("nb_pions",0) or 0)*int(c.get("valeur_pion",0) or 0)
+            for cj in (c.get("codes") or []):
+                cj=(cj or "").upper(); bc[cj]=bc.get(cj,0)+m
+    transferts=[t for t in DB.get("transferts_pions", []) if isinstance(t, dict)]
+    for t in transferts:
+        de=(t.get("de") or "").upper(); vers=(t.get("vers") or "").upper(); m=int(t.get("montant",0) or 0)
+        if de: envoye[de]=envoye.get(de,0)+m
+        if vers: recu[vers]=recu.get(vers,0)+m
+
+    # FABRICANTS : envoyé > tout ce qu'ils ont eu
+    fabricants={}
+    for c in envoye:
+        eu=achats.get(c,0)+gains.get(c,0)+bc.get(c,0)+recu.get(c,0)
+        ec=envoye[c]-eu
+        if ec>0: fabricants[c]=ec
+    # CHAÎNE : tous ceux qui reçoivent (en chaîne) de quelqu'un du circuit
+    role={}; hop={}
+    for c,ec in fabricants.items():
+        role[c]="fabricant"; hop[c]=0
+    frontier=set(fabricants.keys()); niveau=0
+    while frontier:
+        niveau+=1; suivant=set()
+        for t in transferts:
+            de=(t.get("de") or "").upper(); vers=(t.get("vers") or "").upper()
+            if de in frontier and vers and vers not in role:
+                role[vers]="collecteur"; hop[vers]=niveau; suivant.add(vers)
+        frontier=suivant
+        if niveau>6: break
+
+    circuit=[c for c in role if c and c not in staff]
+    circuit.sort(key=lambda c:(hop[c], -(fabricants.get(c,0) or recu.get(c,0))))
+
+    deja=set(DB.get("codes_bloques", []) or [])
+    if confirme and circuit:
+        DB.setdefault("codes_bloques", [])
+        ajoutes=0
+        for c in circuit:
+            if c not in DB["codes_bloques"]:
+                DB["codes_bloques"].append(c); ajoutes+=1
+        DB.setdefault("bannissements", []).insert(0, {"id":secrets.token_hex(4).upper(),"nb":ajoutes,"codes":circuit,"par":cle,"date":datetime.datetime.now().isoformat()})
+        save_data(immediat=True)
+
+    rows=""
+    for c in circuit:
+        if role[c]=="fabricant":
+            preuve=f'🔴 a fabriqué {format(fabricants[c], ",")} XPF'; coul="#f85149"
+        else:
+            preuve=f'💰 a reçu {format(recu.get(c,0), ",")} XPF (niveau {hop[c]})'; coul="#fbbf24"
+        etat="déjà bloqué" if c in deja else ("BANNI ✅" if confirme else "à bannir")
+        rows+=(f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+               f'<td style="padding:6px;font-family:monospace;color:#a78bfa">{c}</td>'
+               f'<td style="padding:6px;color:#94a3b8;font-size:12px">{noms.get(c,"")}</td>'
+               f'<td style="padding:6px;color:{coul};font-weight:700">{role[c]}</td>'
+               f'<td style="padding:6px;color:#cbd5e1;font-size:12px">{preuve}</td>'
+               f'<td style="padding:6px;text-align:right;color:#8b949e">{format(solde(c), ",")}</td>'
+               f'<td style="padding:6px;color:#6ee7b7;font-size:12px">{etat}</td></tr>')
+    if not rows:
+        rows='<tr><td colspan="6" style="padding:16px;text-align:center;color:#34d399">Aucun code de fraude détecté.</td></tr>'
+
+    nb_fab=sum(1 for c in circuit if role[c]=="fabricant"); nb_col=len(circuit)-nb_fab
+    if confirme:
+        banniere=(f'<div style="background:rgba(248,81,73,.15);border:2px solid #f85149;border-radius:10px;padding:14px;margin-bottom:14px;color:#fca5a5;font-weight:800">'
+                  f'✅ FAIT — {len(circuit)} code(s) bannis ({nb_fab} fabricants + {nb_col} collecteurs). Ils ne peuvent plus se connecter.</div>')
+    else:
+        banniere=(f'<div style="background:rgba(251,191,36,.1);border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:14px">'
+                  f'<div style="color:#fde68a;font-weight:700;margin-bottom:6px">👁️ APERÇU — rien n\'est encore banni</div>'
+                  f'<div style="color:#94a3b8;font-size:13px;margin-bottom:10px">Circuit détecté : <b style="color:#f87171">{nb_fab} fabricants</b> + <b style="color:#fbbf24">{nb_col} collecteurs</b> = <b>{len(circuit)} codes</b>. Vérifie la liste ci-dessous AVANT de bannir.</div>'
+                  f'<a href="/bannir-circuit?cle={cle}&confirme=1" style="display:inline-block;background:#ef4444;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">🔨 Confirmer le bannissement du circuit</a></div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Bannir le circuit</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:880px;margin:0 auto">
+      <h1 style="font-size:20px;color:#f0883e;margin-bottom:8px">🔨 Bannir le circuit de fraude</h1>
+      {banniere}
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:10px">🔴 fabricant = a envoyé plus qu'il n'a eu (pions créés). 💰 collecteur = a reçu des pions du circuit (niveau = nb de sauts depuis un fabricant).</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:680px">
+      <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:6px;color:#fca5a5">Code</th><th style="padding:6px;color:#fca5a5">Nom</th><th style="padding:6px;color:#fca5a5">Rôle</th><th style="padding:6px;color:#fca5a5">Preuve</th><th style="padding:6px;color:#fca5a5;text-align:right">Solde</th><th style="padding:6px;color:#fca5a5">État</th></tr>
+      {rows}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
