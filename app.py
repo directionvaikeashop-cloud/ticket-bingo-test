@@ -15496,3 +15496,66 @@ def assainir_solde_negatif():
         <a href="{lien_conf}" style="display:inline-block;background:#10b981;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">✅ Confirmer l'assainissement</a>
       </div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/vider-soldes-bannis")
+def vider_soldes_bannis():
+    """ADMIN — Remet à 0 le solde de pions des comptes bannis (codes_bloques) qui
+    ont encore un solde positif. Enregistre une correction (relevé reste cohérent).
+    Ferme le risque de retrait. Aperçu ; rien sans &confirme=1. ?cle=ADMIN[&confirme=1]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+    confirme = request.args.get("confirme", "") == "1"
+    staff = set((DB.get("codes", {}) or {}).keys())
+    noms = {}
+    for t in DB.get("tickets", []):
+        if isinstance(t, dict) and t.get("code_acheteur") and t.get("acheteur"):
+            noms[(t.get("code_acheteur") or "").upper()] = t.get("acheteur")
+    def solde(c):
+        p = DB.get("pions_joueurs", {}).get(c, {})
+        return p.get("100",0)*100+p.get("50",0)*50+p.get("20",0)*20+p.get("10",0)*10
+
+    bannis = [c for c in (DB.get("codes_bloques", []) or []) if c and c not in staff]
+    vises = [(c, noms.get(c,""), solde(c)) for c in bannis if solde(c) > 0]
+    vises.sort(key=lambda x:-x[2])
+    total = sum(s for _,_,s in vises)
+
+    if confirme and vises:
+        now = datetime.datetime.now().isoformat()
+        for c,_,s in vises:
+            DB.setdefault("corrections_pions", []).insert(0, {
+                "code_joueur": c, "montant_retire": s,
+                "motif": "Pions de fraude retirés (compte banni)", "par": cle, "date": now})
+            DB.setdefault("pions_joueurs", {})[c] = {"100":0,"50":0,"20":0,"10":0}
+        DB.setdefault("vidages_bannis", []).insert(0, {"id":secrets.token_hex(4).upper(),"nb":len(vises),"total":total,"par":cle,"date":now})
+        save_data(immediat=True)
+
+    rows = "".join(f'<tr style="border-bottom:1px solid rgba(255,255,255,.06)">'
+                   f'<td style="padding:6px;font-family:monospace;color:#a78bfa">{c}</td>'
+                   f'<td style="padding:6px;color:#94a3b8;font-size:12px">{nom}</td>'
+                   f'<td style="padding:6px;text-align:right;color:#fca5a5;font-weight:700">{format(s, ",")}</td>'
+                   f'<td style="padding:6px;color:#6ee7b7;font-size:12px">{"→ 0 ✅" if confirme else "→ 0"}</td></tr>' for c,nom,s in vises)
+    if not rows:
+        rows = '<tr><td colspan="4" style="padding:16px;text-align:center;color:#34d399">✅ Aucun compte banni avec solde positif. Déjà tout à 0.</td></tr>'
+
+    if confirme:
+        banniere = f'<div style="background:rgba(16,185,129,.15);border:2px solid #10b981;border-radius:10px;padding:14px;margin-bottom:14px;color:#34d399;font-weight:800">✅ FAIT — {len(vises)} compte(s) remis à 0 · {format(total, ",")} XPF de pions de fraude retirés. Risque de retrait fermé.</div>'
+    else:
+        banniere = (f'<div style="background:rgba(251,191,36,.1);border:1px solid #f59e0b;border-radius:10px;padding:14px;margin-bottom:14px">'
+                    f'<div style="color:#fde68a;font-weight:700;margin-bottom:6px">👁️ APERÇU — rien n\'est encore modifié</div>'
+                    f'<div style="color:#94a3b8;font-size:13px;margin-bottom:10px"><b>{len(vises)} compte(s) banni(s)</b> ont encore un solde · total <b>{format(total, ",")} XPF</b> (pions de fraude, sans argent réel). On les remet à 0.</div>'
+                    f'<a href="/vider-soldes-bannis?cle={cle}&confirme=1" style="display:inline-block;background:#ef4444;color:#fff;padding:12px 20px;border-radius:10px;text-decoration:none;font-weight:700">🔒 Confirmer la mise à 0 des comptes bannis</a></div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Vider soldes bannis</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:680px;margin:0 auto">
+      <h1 style="font-size:20px;color:#f0883e;margin-bottom:8px">🔒 Mise à 0 des comptes bannis</h1>
+      {banniere}
+      <div style="color:#94a3b8;font-size:12px;margin-bottom:10px">Seuls les comptes <b>bannis</b> (codes_bloques) avec solde positif sont concernés. Une correction est tracée → relevés cohérents.</div>
+      <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px;min-width:480px">
+      <tr style="border-bottom:2px solid #7f1d1d;text-align:left"><th style="padding:6px;color:#fca5a5">Code</th><th style="padding:6px;color:#fca5a5">Nom</th><th style="padding:6px;color:#fca5a5;text-align:right">Solde actuel</th><th style="padding:6px;color:#fca5a5">Après</th></tr>
+      {rows}</table></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
