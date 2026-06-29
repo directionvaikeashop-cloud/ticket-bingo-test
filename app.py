@@ -17135,3 +17135,121 @@ def profil_joueuse():
         <div style="color:#cbd5e1;margin-top:3px">⬆️ envoyés à : {tlist(tout)}</div>
       </div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/rapport-organisateur")
+def rapport_organisateur():
+    """ADMIN — Rapport d'activité d'un profil organisateur sur une fenêtre de temps :
+    ventes, gains déclarés, cagnottes, comptes créés, ET crédits admin émis pendant
+    la période (pour surveiller). ?cle=ADMIN[&org=CODE][&debut=ISO][&fin=ISO]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin")):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    # Résoudre le profil organisateur MAEVA (ou &org=)
+    org = (request.args.get("org", "") or "").strip().upper()
+    if not org:
+        for c, v in DB.get("codes", {}).items():
+            if "MAEVA" in (v.get("nom","") or "").upper() and not v.get("admin"):
+                org = c; break
+    org_nom = DB.get("codes", {}).get(org, {}).get("nom", org) if org else "?"
+
+    # Fenêtre de temps
+    now = datetime.datetime.now()
+    debut = (request.args.get("debut","") or "").strip()
+    fin = (request.args.get("fin","") or "").strip()
+    if not debut:
+        debut = (now - datetime.timedelta(days=1)).strftime("%Y-%m-%dT00:00")
+    if not fin:
+        fin = now.strftime("%Y-%m-%dT23:59")
+    def dans(d):
+        return bool(d) and debut <= d[:len(fin)] <= fin or (bool(d) and debut <= d <= fin+"~")
+
+    def fmt(n): return format(int(n), ",")
+    def nom_de(c):
+        for t in DB.get("tickets", []):
+            if isinstance(t, dict) and (t.get("code_acheteur") or "").upper()==(c or "").upper() and t.get("acheteur"):
+                return t.get("acheteur")
+        return DB.get("codes", {}).get((c or "").upper(), {}).get("nom","") or ""
+
+    # 1) Ventes de cet org dans la fenêtre
+    ventes = [v for v in DB.get("ventes", []) if isinstance(v, dict)
+              and (v.get("code_org","") or "").upper()==org and debut <= (v.get("date","") or "") <= fin+"~"]
+    tot_ventes = sum(int(v.get("total",0) or 0) for v in ventes)
+
+    # 2) Gains déclarés par cet org dans la fenêtre
+    gains = [g for g in DB.get("gains_finaux", []) if isinstance(g, dict)
+             and (g.get("code_org","") or "").upper()==org and debut <= (g.get("date","") or "") <= fin+"~"]
+    tot_gains = sum(int(g.get("montant_credite", g.get("montant_gain",0)) or 0) for g in gains)
+
+    # 3) Cagnottes de cet org dans la fenêtre
+    cagn = [c for c in DB.get("cagnottes", []) if isinstance(c, dict)
+            and (c.get("code_org","") or "").upper()==org and debut <= (c.get("date","") or "") <= fin+"~"]
+
+    # 4) Comptes créés par cet org dans la fenêtre
+    crees = [t for t in DB.get("tickets", []) if isinstance(t, dict)
+             and (t.get("code_org","") or "").upper()==org and debut <= (t.get("date","") or "") <= fin+"~"]
+
+    # 5) Crédits admin émis PENDANT la fenêtre (par n'importe qui) — surveillance
+    cred_periode = []
+    for c in DB.get("credits_admin", []):
+        if isinstance(c, dict) and debut <= (c.get("date","") or "") <= fin+"~":
+            m=int(c.get("nb_pions",0) or 0)*int(c.get("valeur_pion",0) or 0)
+            if m!=0: cred_periode.append((c.get("date","")[:16].replace("T"," "), c.get("code_joueur","?"), m, c.get("par","?"), c.get("motif","") or ""))
+    for c in DB.get("credits_masse", []):
+        if isinstance(c, dict) and debut <= (c.get("date","") or "") <= fin+"~":
+            m=int(c.get("nb_pions",0) or 0)*int(c.get("valeur_pion",0) or 0)
+            cred_periode.append((c.get("date","")[:16].replace("T"," "), f'{len(c.get("codes") or [])} codes', m, c.get("par","?"), (c.get("motif","") or "")+" (groupe)"))
+    cred_periode.sort(reverse=True)
+
+    rows_ventes = "".join(
+        f'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #21262d;font-size:12px">'
+        f'<span style="color:#cbd5e1">{(v.get("date","") or "")[5:16].replace("T"," ")} · {v.get("jeu","")} · {v.get("client","") or v.get("code_acheteur","")}</span>'
+        f'<span><b style="color:#6ee7b7">{fmt(v.get("total",0))}</b> <span style="color:#8b949e">{v.get("mode_paiement","")}</span></span></div>'
+        for v in ventes) or '<div style="color:#8b949e;font-size:12px">Aucune vente</div>'
+
+    rows_gains = "".join(
+        f'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #21262d;font-size:12px">'
+        f'<span style="color:#cbd5e1">{(g.get("date","") or "")[5:16].replace("T"," ")} · {g.get("jeu","")} · 🏆 {g.get("code_gagnant","")} {nom_de(g.get("code_gagnant",""))}</span>'
+        f'<b style="color:#67e8f9">{fmt(g.get("montant_credite", g.get("montant_gain",0)))}</b></div>'
+        for g in gains) or '<div style="color:#8b949e;font-size:12px">Aucun gain déclaré</div>'
+
+    rows_cagn = "".join(
+        f'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #21262d;font-size:12px">'
+        f'<span style="color:#cbd5e1">{(c.get("date","") or "")[5:16].replace("T"," ")} · mises {fmt(c.get("total_mises",0))}</span>'
+        f'<span>cagnotte <b style="color:#6ee7b7">{fmt(c.get("cagnotte_annoncee",0))}</b> · part org <b style="color:#f0883e">{fmt(c.get("part_org",0))}</b></span></div>'
+        for c in cagn) or '<div style="color:#8b949e;font-size:12px">Aucune cagnotte calculée</div>'
+
+    rows_cred = "".join(
+        f'<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid #21262d;font-size:12px">'
+        f'<span style="color:#cbd5e1">{d} · → {cd} · {mo[:24]}</span>'
+        f'<span><b style="color:#fca5a5">{fmt(m)}</b> <span style="font-family:monospace;color:#a78bfa">{p}</span></span></div>'
+        for (d,cd,m,p,mo) in cred_periode) or '<div style="color:#34d399;font-size:12px">✅ Aucun crédit admin émis pendant cette période</div>'
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Rapport organisateur</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;padding:16px;color:#fff"><div style="max-width:640px;margin:0 auto">
+      <h1 style="font-size:20px;color:#c084fc;margin-bottom:4px">📋 Rapport organisateur — {org_nom}</h1>
+      <div style="color:#8b949e;font-size:13px;margin-bottom:14px">Code : <b style="font-family:monospace;color:#e6edf3">{org}</b> · Période : <b style="color:#cbd5e1">{debut.replace("T"," ")} → {fin.replace("T"," ")}</b><br><span style="font-size:11px">Pour changer : &debut=2026-06-27T18:00&fin=2026-06-28T23:00</span></div>
+
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="color:#6ee7b7;font-weight:700;font-size:14px;margin-bottom:6px">🎟️ Ventes de tickets ({len(ventes)}) · total {fmt(tot_ventes)} XPF</div>{rows_ventes}
+      </div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="color:#67e8f9;font-weight:700;font-size:14px;margin-bottom:6px">🏆 Gains déclarés ({len(gains)}) · total {fmt(tot_gains)} XPF</div>{rows_gains}
+      </div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="color:#f0883e;font-weight:700;font-size:14px;margin-bottom:6px">💰 Cagnottes ({len(cagn)})</div>{rows_cagn}
+      </div>
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="color:#a78bfa;font-weight:700;font-size:14px;margin-bottom:6px">🆕 Comptes créés ({len(crees)})</div>
+        {("".join(f'<div style="font-size:12px;color:#cbd5e1;padding:2px 0">{(t.get("date","") or "")[5:16].replace("T"," ")} · {t.get("code_acheteur","")} {t.get("acheteur","")}</div>' for t in crees)) or '<div style="color:#8b949e;font-size:12px">Aucun</div>'}
+      </div>
+      <div style="background:rgba(248,81,73,.07);border:1px solid #f85149;border-radius:10px;padding:12px">
+        <div style="color:#fca5a5;font-weight:700;font-size:14px;margin-bottom:6px">🟥 Crédits admin émis pendant la période (surveillance)</div>
+        <div style="color:#8b949e;font-size:11px;margin-bottom:6px">Un organisateur ne peut PAS créditer normalement. Si tu vois des crédits ici par un autre code que le tien, c'est suspect.</div>
+        {rows_cred}
+      </div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
