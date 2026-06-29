@@ -17253,3 +17253,166 @@ def rapport_organisateur():
         {rows_cred}
       </div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/centre-admin")
+def centre_admin():
+    """ADMIN — Tableau de bord central : tous les outils admin/enquête/sécurité
+    regroupés en boutons cliquables. ?cle=ADMIN"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin") and info.get("actif", True)):
+        return Response('''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui;padding:40px;color:#fff;text-align:center">
+        <div style="max-width:420px;margin:0 auto"><h1 style="color:#f85149">🔒 Accès réservé</h1>
+        <p style="color:#cbd5e1">Ajoute ton code admin à l'adresse :<br><code style="color:#67e8f9">/centre-admin?cle=TON_CODE</code></p></div></body></html>''',
+        status=403, mimetype="text/html; charset=utf-8")
+
+    nb_bannis = len(DB.get("codes_bloques", []) or [])
+
+    # Outils à lien direct (pas d'entrée) : (route, titre, emoji, description)
+    directs_enquete = [
+        ("examiner-faux-positifs","Bannis re-vérifiés","🔁","Faux positifs à réhabiliter"),
+        ("examiner-credits-suspects","Audit des crédits","🕵️","Qui a créé les crédits"),
+        ("tracer-admin2024","Tracer ADMIN2024","🎯","Activité du code piraté"),
+        ("croiser-heini","Croisement HEINI","🔗","Comptes créés par le suspect"),
+        ("joueuses-a-reverifier","Joueuses à recontrôler","⚠️","Argent ADMIN2024 restant"),
+        ("joueuses-lesees","Joueuses lésées","💔","Vraies victimes à rembourser"),
+        ("liste-bannis","Liste des bannis","🚫",f"{nb_bannis} comptes bloqués"),
+        ("visuel-releves","Tableau des soldes","📊","Vue d'ensemble"),
+    ]
+    # Outils avec UN code
+    f_code = [
+        ("profil-joueuse","Profil d'enquête","🔎","code","Tout savoir sur une joueuse"),
+        ("diag-acces","Diagnostic d'accès","🩺","code","Pourquoi elle ne peut pas jouer"),
+        ("debloquer-joueuse","Débloquer + restituer","🔓","code","Débloque et rend le dû"),
+    ]
+    # bloquer (code, option débloquer)
+    # Outils code + montant
+    f_code_montant = [
+        ("poser-solde-joueur","Régler le solde","⚖️","Met le solde réel à un montant"),
+        ("crediter-bonus","Créditer un bonus","🎁","Ajoute des pions (gain/bonus)"),
+        ("rembourser-joueuse","Rembourser une victime","💸","Remboursement plafonné"),
+        ("assainir-solde-negatif","Corriger solde négatif","🩹","Répare un solde négatif"),
+    ]
+
+    def lien(route, extra=""):
+        return f"/{route}?cle={cle}{extra}"
+
+    # cartes lien direct
+    cartes_directes = "".join(
+        f'<a href="{lien(r)}" style="display:block;background:#161b22;border:1px solid #30363d;border-left:3px solid #58a6ff;border-radius:10px;padding:13px;text-decoration:none;margin-bottom:8px">'
+        f'<div style="font-size:15px;font-weight:700;color:#e6edf3">{e} {t}</div>'
+        f'<div style="font-size:12px;color:#8b949e;margin-top:2px">{d}</div></a>'
+        for (r,t,e,d) in directs_enquete)
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Centre Admin TUKEA</title>
+    <style>
+      *{{box-sizing:border-box}} body{{margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;color:#fff;padding:14px}}
+      .wrap{{max-width:600px;margin:0 auto}}
+      h1{{font-size:22px;color:#c084fc;margin:0 0 2px}}
+      .sec{{font-size:13px;font-weight:800;color:#f0883e;text-transform:uppercase;letter-spacing:.5px;margin:20px 0 8px}}
+      .card{{background:#161b22;border:1px solid #30363d;border-radius:10px;padding:13px;margin-bottom:8px}}
+      .card .t{{font-size:15px;font-weight:700;color:#e6edf3}}
+      .card .d{{font-size:12px;color:#8b949e;margin:2px 0 8px}}
+      input{{width:100%;padding:9px 11px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;font-size:14px;margin-bottom:6px}}
+      .row{{display:flex;gap:6px}} .row input{{flex:1}}
+      button{{width:100%;padding:10px;border:0;border-radius:8px;background:#7c3aed;color:#fff;font-weight:700;font-size:14px;cursor:pointer}}
+      button.sec2{{background:#0891b2}} button.danger{{background:#dc2626}} button.ok{{background:#059669}}
+      a.btn{{display:block;text-align:center;padding:10px;border-radius:8px;color:#fff;font-weight:700;text-decoration:none;font-size:14px}}
+    </style></head>
+    <body><div class="wrap">
+      <h1>🎛️ Centre de contrôle TUKEA</h1>
+      <div style="color:#8b949e;font-size:13px;margin-bottom:6px">Tous tes outils en un seul endroit. Connectée en admin ✅</div>
+      <div style="background:rgba(124,58,237,.1);border:1px solid #7c3aed;border-radius:8px;padding:8px 11px;font-size:12px;color:#d8b4fe;margin-bottom:6px">💡 Garde cette page en favori : <b>ticketbingo.space/centre-admin?cle=TON_CODE</b></div>
+
+      <div class="sec">🕵️ Enquête & vue d'ensemble</div>
+      {cartes_directes}
+
+      <div class="sec">🔍 Examiner une joueuse</div>
+      <div class="card">
+        <div class="t">🔎 Examiner / Profil / Relevé</div>
+        <div class="d">Entre un code joueur</div>
+        <input id="cex" placeholder="Code joueur (ex: 9MBPN5)" oninput="this.value=this.value.toUpperCase()">
+        <div class="row">
+          <button class="sec2" onclick="go('examiner-codes','&codes='+v('cex'))">Examiner</button>
+          <button class="sec2" onclick="go('profil-joueuse','&code='+v('cex'))">Profil</button>
+        </div>
+        <div class="row" style="margin-top:6px">
+          <button onclick="loc('/releve-financier-joueur/'+v('cex')+'?cle={cle}')">Relevé</button>
+          <button onclick="go('diag-acces','&code='+v('cex'))">Diag accès</button>
+        </div>
+      </div>
+
+      <div class="sec">⚖️ Régler un solde (code + montant)</div>
+      <div class="card">
+        <input id="csolde" placeholder="Code joueur" oninput="this.value=this.value.toUpperCase()">
+        <input id="msolde" placeholder="Montant (XPF)" inputmode="numeric">
+        <button class="ok" onclick="go('poser-solde-joueur','&code='+v('csolde')+'&montant='+v('msolde'))">⚖️ Régler le solde réel</button>
+        <div class="row" style="margin-top:6px">
+          <button class="sec2" onclick="go('crediter-bonus','&code='+v('csolde')+'&montant='+v('msolde'))">🎁 Bonus</button>
+          <button class="sec2" onclick="go('rembourser-joueuse','&code='+v('csolde')+'&montant='+v('msolde'))">💸 Rembourser</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="t">↩️ Retirer pions fabriqués / restituer légitime</div>
+        <div class="d">Code + solde légitime + montant à retirer</div>
+        <input id="crl" placeholder="Code joueur" oninput="this.value=this.value.toUpperCase()">
+        <div class="row"><input id="leg" placeholder="Solde légitime" inputmode="numeric"><input id="ret" placeholder="À retirer" inputmode="numeric"></div>
+        <button onclick="go('restituer-legitime','&code='+v('crl')+'&legitime='+v('leg')+'&retirer='+v('ret'))">↩️ Restituer le légitime</button>
+        <button class="sec2" style="margin-top:6px" onclick="go('annuler-retrait-fabrique','&code='+v('crl')+'&solde='+v('leg'))">Annuler un retrait (remettre solde)</button>
+      </div>
+
+      <div class="sec">👤 Comptes & accès</div>
+      <div class="card">
+        <div class="t">🆕 Créer un compte joueur</div>
+        <input id="ccode" placeholder="Code joueur" oninput="this.value=this.value.toUpperCase()">
+        <input id="cnom" placeholder="Nom (ex: TATIE X)">
+        <button class="ok" onclick="go('creer-compte-joueur','&code='+v('ccode')+'&nom='+encodeURIComponent(v('cnom')))">🆕 Créer le compte</button>
+      </div>
+      <div class="card">
+        <div class="t">🔓 Débloquer / restituer le dû</div>
+        <input id="cdeb" placeholder="Code joueur" oninput="this.value=this.value.toUpperCase()">
+        <button class="ok" onclick="go('debloquer-joueuse','&code='+v('cdeb'))">🔓 Débloquer + restituer</button>
+      </div>
+
+      <div class="sec">🔒 Sécurité & blocages</div>
+      <div class="card">
+        <div class="t">🔒 Bloquer / débloquer un code</div>
+        <input id="cblo" placeholder="Code joueur" oninput="this.value=this.value.toUpperCase()">
+        <div class="row">
+          <button class="danger" onclick="go('bloquer-code','&code='+v('cblo'))">🔒 Bloquer</button>
+          <button class="ok" onclick="go('bloquer-code','&code='+v('cblo')+'&debloquer=1')">🔓 Débloquer</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="t">🔒 Suspendre une organisatrice</div>
+        <input id="corg" placeholder="Code organisatrice (ex: CPFRD66H)" oninput="this.value=this.value.toUpperCase()">
+        <div class="row">
+          <button class="danger" onclick="go('suspendre-organisateur','&code='+v('corg'))">Suspendre</button>
+          <button class="ok" onclick="go('suspendre-organisateur','&code='+v('corg')+'&reactiver=1')">Réactiver</button>
+        </div>
+      </div>
+      <div class="card">
+        <div class="t">🗝️ Révoquer un ancien code admin</div>
+        <div class="d">⚠️ Utilise ton NOUVEAU code admin dans l'adresse</div>
+        <input id="crev" placeholder="Ancien code à révoquer (ex: MAEVA2026PEARL)" oninput="this.value=this.value.toUpperCase()">
+        <button class="danger" onclick="go('revoquer-admin','&code='+v('crev'))">🗝️ Révoquer</button>
+      </div>
+
+      <div class="sec">📊 Rapports</div>
+      <div class="card">
+        <a class="btn" style="background:#7c3aed" href="{lien('rapport-organisateur')}">📋 Rapport organisateur (profil MAEVA)</a>
+      </div>
+
+      <div style="height:30px"></div>
+    </div>
+    <script>
+      var CLE="{cle}";
+      function v(id){{return (document.getElementById(id).value||'').trim();}}
+      function go(route, extra){{ if(extra.match(/=(&|$)/)){{alert('Remplis les champs d\\'abord');return;}} window.location='/'+route+'?cle='+CLE+extra; }}
+      function loc(u){{ window.location=u; }}
+    </script>
+    </body></html>''', mimetype="text/html; charset=utf-8")
