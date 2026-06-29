@@ -17838,3 +17838,66 @@ def email_organisateur():
       <p style="color:#6ee7b7;font-weight:700;margin:0 0 6px">✅ Email enregistré</p>
       <div style="color:#cbd5e1;font-size:14px">{nom_de(code)} <span style="font-family:monospace;color:#8b949e">{code}</span><br>📧 <b>{email}</b></div></div>'''
     return page("📧 Email enregistré", corps, "#10b981")
+
+
+@app.route("/corriger-stock-pions-org")
+def corriger_stock_pions_org():
+    """ADMIN — Déplace les pions de la poche JOUEUSE (pions_joueurs) vers la poche
+    STOCK ORGANISATRICE (pions_org) pour un code. Corrige un crédit mal placé.
+    ?cle=ADMIN&code=X[&confirme=1]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin") and info.get("actif", True)):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    code = (request.args.get("code", "") or "").strip().upper()
+    confirme = request.args.get("confirme", "") == "1"
+    def fmt(n): return format(int(n), ",")
+    def nom_de(c): return DB.get("codes", {}).get((c or "").upper(), {}).get("nom", c) or c
+    def page(titre, corps, couleur="#0d9488"):
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{titre}</title></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;color:#fff;padding:16px"><div style="max-width:560px;margin:0 auto">
+        <h1 style="font-size:20px;color:{couleur}">{titre}</h1>{corps}</div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    if not code:
+        return page("❌ Code manquant", '<p style="color:#cbd5e1">Ajoute &code=LE_CODE</p>', "#f85149")
+
+    pj = DB.get("pions_joueurs", {}).get(code, {})
+    p100, p50, p20, p10 = pj.get("100",0), pj.get("50",0), pj.get("20",0), pj.get("10",0)
+    valeur = p100*100 + p50*50 + p20*20 + p10*10
+    po = DB.get("pions_org", {}).get(code, {})
+    stock_actuel = po.get("100",0)*100+po.get("50",0)*50+po.get("20",0)*20+po.get("10",0)*10
+
+    if valeur <= 0:
+        return page("ℹ️ Rien à déplacer", f'<p style="color:#cbd5e1">La poche joueuse de <b>{nom_de(code)}</b> est vide. Stock organisateur actuel : <b>{fmt(stock_actuel)} XPF</b>.</p><p style="color:#8b949e;font-size:13px">Si elle ne voit toujours pas ses pions, le souci est ailleurs — dis-le-moi.</p>', "#58a6ff")
+
+    if not confirme:
+        corps = f'''<p style="color:#cbd5e1;font-size:14px">Déplacer les pions de <b>{nom_de(code)}</b> <span style="font-family:monospace;color:#8b949e">{code}</span> de la poche <b>joueuse</b> vers la poche <b>stock organisatrice</b> :</p>
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin:10px 0;font-size:14px;line-height:1.9">
+          {"<div>🪙 "+fmt(p100)+" × 100 F</div>" if p100 else ""}
+          {"<div>🪙 "+fmt(p50)+" × 50 F</div>" if p50 else ""}
+          {"<div>🪙 "+fmt(p20)+" × 20 F</div>" if p20 else ""}
+          {"<div>🪙 "+fmt(p10)+" × 10 F</div>" if p10 else ""}
+          <div style="border-top:1px solid #30363d;margin-top:6px;padding-top:6px">À déplacer : <b style="color:#fbbf24">{fmt(valeur)} XPF</b></div>
+        </div>
+        <p style="color:#8b949e;font-size:13px">Stock organisateur : {fmt(stock_actuel)} → <b style="color:#6ee7b7">{fmt(stock_actuel+valeur)} XPF</b> · Poche joueuse : {fmt(valeur)} → <b>0</b></p>
+        <a href="/corriger-stock-pions-org?cle={cle}&code={code}&confirme=1" style="display:block;text-align:center;background:#059669;color:#fff;padding:13px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;margin-top:8px">✅ Déplacer vers le stock organisatrice</a>'''
+        return page("🔄 Corriger la poche des pions", corps)
+
+    # CONFIRMÉ : déplacer
+    DB.setdefault("pions_org", {}).setdefault(code, {})
+    poche = DB["pions_org"][code]
+    for val, nb in [("100",p100),("50",p50),("20",p20),("10",p10)]:
+        if nb: poche[val] = poche.get(val,0) + nb
+    # vider la poche joueuse
+    DB["pions_joueurs"][code] = {"100":0,"50":0,"20":0,"10":0}
+    save_data(immediat=True)
+    nv = poche.get("100",0)*100+poche.get("50",0)*50+poche.get("20",0)*20+poche.get("10",0)*10
+    corps = f'''<div style="background:rgba(16,185,129,.1);border:1px solid #10b981;border-radius:10px;padding:14px">
+      <p style="color:#6ee7b7;font-weight:700;margin:0 0 8px">✅ {fmt(valeur)} XPF de pions déplacés dans le stock organisatrice</p>
+      <div style="color:#cbd5e1;font-size:14px">{nom_de(code)} <span style="font-family:monospace;color:#8b949e">{code}</span><br>
+      Stock organisateur maintenant : <b style="color:#67e8f9;font-size:16px">{fmt(nv)} XPF</b></div></div>
+      <p style="color:#8b949e;font-size:13px;margin-top:10px">Vahineura doit maintenant voir ses pions dans son espace (qu'elle rafraîchisse la page).</p>'''
+    return page("🔄 Pions déplacés", corps, "#10b981")
