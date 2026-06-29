@@ -17514,3 +17514,100 @@ def guide_joueur():
         ], False),
     ]
     return _page_guide("GUIDE DU JOUEUR", "Comment jouer en toute confiance", sections, "#0d9488")
+
+
+@app.route("/changer-code-organisateur")
+def changer_code_organisateur():
+    """ADMIN — Change le code (= mot de passe) d'un organisateur : crée le nouveau code,
+    déplace TOUT l'historique (tickets, ventes, gains, cagnottes...) vers le nouveau,
+    et DÉSACTIVE l'ancien. ?cle=ADMIN&ancien=X&nouveau=Y[&confirme=1]"""
+    global DB
+    import copy as _copy
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin") and info.get("actif", True)):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    ancien = (request.args.get("ancien", "") or "").strip().upper()
+    nouveau = (request.args.get("nouveau", "") or "").strip().upper()
+    confirme = request.args.get("confirme", "") == "1"
+
+    def page(titre, corps, couleur="#c084fc"):
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{titre}</title></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;color:#fff;padding:16px"><div style="max-width:580px;margin:0 auto">
+        <h1 style="font-size:20px;color:{couleur}">{titre}</h1>{corps}</div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    co = DB.get("codes", {})
+    if not ancien or ancien not in co:
+        return page("❌ Ancien code introuvable", f'<p style="color:#cbd5e1">Le code <b>{ancien or "(vide)"}</b> n\'existe pas. Ajoute &ancien=TON_CODE_ORG.</p>', "#f85149")
+    if co[ancien].get("admin"):
+        return page("⛔ Code admin", '<p style="color:#cbd5e1">Cet outil est pour les codes ORGANISATEUR, pas admin. Pour l\'admin, utilise /revoquer-admin.</p>', "#f85149")
+    if not nouveau:
+        return page("✏️ Choisis le nouveau code", f'<p style="color:#cbd5e1">Ajoute <b>&nouveau=TON_NOUVEAU_CODE</b> (au moins 6 caractères, lettres/chiffres). Exemple :<br><code style="color:#67e8f9">/changer-code-organisateur?cle={cle}&ancien={ancien}&nouveau=MAEVA2026ORG</code></p>', "#f59e0b")
+    if len(nouveau) < 6 or not nouveau.isalnum():
+        return page("❌ Code invalide", '<p style="color:#cbd5e1">Le nouveau code doit faire au moins 6 caractères, lettres et chiffres uniquement (pas d\'espace ni symbole).</p>', "#f85149")
+    if nouveau in co:
+        return page("❌ Code déjà pris", f'<p style="color:#cbd5e1">Le code <b>{nouveau}</b> existe déjà. Choisis-en un autre.</p>', "#f85149")
+    if nouveau == ancien:
+        return page("❌ Identique", '<p style="color:#cbd5e1">Le nouveau code doit être différent de l\'ancien.</p>', "#f85149")
+
+    ORGF = ("code_org", "code_org_destinataire", "code_org_vente", "code_organisateur")
+    # comptage des références
+    refs = {}
+    for k, v in DB.items():
+        if isinstance(v, list):
+            n = 0
+            for it in v:
+                if isinstance(it, dict):
+                    for f in ORGF:
+                        if (it.get(f) or "").upper() == ancien:
+                            n += 1
+            if n: refs[k] = n
+    total = sum(refs.values())
+    nom = co[ancien].get("nom", ancien)
+
+    if not confirme:
+        lignes = "".join(f'<li><b style="color:#67e8f9">{n}</b> dans <span style="font-family:monospace">{k}</span></li>' for k, n in sorted(refs.items(), key=lambda x:-x[1]))
+        corps = f'''<p style="color:#cbd5e1;font-size:14px">Tu vas changer le code de l'organisatrice <b>{nom}</b> :</p>
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin:10px 0;font-size:14px">
+          <div>Ancien code : <b style="font-family:monospace;color:#fca5a5">{ancien}</b> → sera <b>désactivé</b> 🔒</div>
+          <div style="margin-top:6px">Nouveau code : <b style="font-family:monospace;color:#6ee7b7">{nouveau}</b> → <b>actif</b> ✅</div>
+        </div>
+        <p style="color:#cbd5e1;font-size:14px">📦 <b>{total}</b> élément(s) d'historique vont suivre vers le nouveau code :</p>
+        <ul style="color:#cbd5e1;font-size:13px">{lignes or "<li>Aucun (profil neuf)</li>"}</ul>
+        <div style="background:rgba(245,158,11,.1);border:1px solid #f59e0b;border-radius:8px;padding:10px;font-size:13px;color:#fcd34d;margin:10px 0">
+          ⚠️ Après ça, <b>{ancien}</b> ne pourra plus se connecter (HEINI bloquée). Toi, tu te connecteras avec <b>{nouveau}</b>. Note-le bien et garde-le secret.</div>
+        <a href="/changer-code-organisateur?cle={cle}&ancien={ancien}&nouveau={nouveau}&confirme=1" style="display:block;text-align:center;background:#dc2626;color:#fff;padding:13px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px">✅ Confirmer le changement de code</a>'''
+        return page("🔑 Changer le code organisateur", corps)
+
+    # CONFIRMÉ : on applique
+    DB["codes"][nouveau] = _copy.deepcopy(co[ancien])
+    DB["codes"][nouveau]["actif"] = True
+    maj = {}
+    for k, v in DB.items():
+        if isinstance(v, list):
+            n = 0
+            for it in v:
+                if isinstance(it, dict):
+                    for f in ORGF:
+                        if (it.get(f) or "").upper() == ancien:
+                            it[f] = nouveau; n += 1
+            if n: maj[k] = n
+    # désactiver l'ancien
+    DB["codes"][ancien]["actif"] = False
+    if "[ancien code remplacé" not in (DB["codes"][ancien].get("nom","") or ""):
+        DB["codes"][ancien]["nom"] = (DB["codes"][ancien].get("nom", ancien) or ancien) + " [ancien code remplacé]"
+    save_data(immediat=True)
+    total_maj = sum(maj.values())
+    lignes = "".join(f'<li><b style="color:#6ee7b7">{n}</b> dans {k}</li>' for k, n in sorted(maj.items(), key=lambda x:-x[1]))
+    corps = f'''<div style="background:rgba(16,185,129,.1);border:1px solid #10b981;border-radius:10px;padding:14px;margin:10px 0">
+      <p style="color:#6ee7b7;font-size:15px;font-weight:700;margin:0 0 8px">✅ Code organisateur changé !</p>
+      <div style="color:#cbd5e1;font-size:14px">Ton nouveau code : <b style="font-family:monospace;color:#6ee7b7;font-size:18px">{nouveau}</b></div>
+      <div style="color:#cbd5e1;font-size:13px;margin-top:6px">Ancien code <b style="font-family:monospace">{ancien}</b> : <b style="color:#fca5a5">désactivé 🔒</b> (HEINI ne peut plus se connecter)</div>
+    </div>
+    <p style="color:#cbd5e1;font-size:14px">📦 <b>{total_maj}</b> élément(s) d'historique déplacés vers le nouveau code :</p>
+    <ul style="color:#cbd5e1;font-size:13px">{lignes or "<li>Aucun</li>"}</ul>
+    <div style="background:rgba(245,158,11,.1);border:1px solid #f59e0b;border-radius:8px;padding:12px;font-size:14px;color:#fcd34d;margin-top:10px">
+      🔐 <b>Note ton nouveau code et garde-le secret.</b> Connecte-toi désormais avec <b>{nouveau}</b>.</div>'''
+    return page("🔑 Code changé", corps, "#10b981")
