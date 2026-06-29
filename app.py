@@ -17407,6 +17407,7 @@ def centre_admin():
       <div class="sec">🧾 Crédits & RIB</div>
       <div class="card">
         <a class="btn" style="background:#f59e0b;color:#1a1a1a" href="{lien('credits-organisateurs')}">🧾 Ardoise des organisatrices (commandes à crédit)</a>
+        <a class="btn" style="background:#0d9488;margin-top:8px" href="{lien('crediter-stock-org')}">🪙 Créditer le stock de pions d'une organisatrice</a>
         <a class="btn" style="background:#0d9488;margin-top:8px" href="{lien('rib-organisateur')}">🏦 Enregistrer un RIB organisatrice</a>
       </div>
 
@@ -17901,3 +17902,192 @@ def corriger_stock_pions_org():
       Stock organisateur maintenant : <b style="color:#67e8f9;font-size:16px">{fmt(nv)} XPF</b></div></div>
       <p style="color:#8b949e;font-size:13px;margin-top:10px">Vahineura doit maintenant voir ses pions dans son espace (qu'elle rafraîchisse la page).</p>'''
     return page("🔄 Pions déplacés", corps, "#10b981")
+
+
+@app.route("/crediter-stock-org")
+def crediter_stock_org():
+    """ADMIN — Crédite le STOCK d'une organisatrice (pions_org) par valeur, au bon endroit.
+    ?cle=ADMIN[&code=X&p100=&p50=&p20=&p10=&motif=][&confirme=1] (formulaire si pas de code)"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin") and info.get("actif", True)):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    code = (request.args.get("code", "") or "").strip().upper()
+    def gi(k):
+        try: return max(0, int(float(request.args.get(k, "0") or 0)))
+        except: return 0
+    p100, p50, p20, p10 = gi("p100"), gi("p50"), gi("p20"), gi("p10")
+    motif = (request.args.get("motif", "") or "").strip() or "Commande de pions (stock organisatrice)"
+    confirme = request.args.get("confirme", "") == "1"
+    valeur = p100*100 + p50*50 + p20*20 + p10*10
+
+    def fmt(n): return format(int(n), ",")
+    def nom_de(c): return DB.get("codes", {}).get((c or "").upper(), {}).get("nom", c) or c
+    def page(titre, corps, couleur="#0d9488"):
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{titre}</title></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;color:#fff;padding:16px"><div style="max-width:560px;margin:0 auto">
+        <h1 style="font-size:20px;color:{couleur}">{titre}</h1>{corps}</div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    po = DB.get("pions_org", {}).get(code, {}) if code else {}
+    stock = po.get("100",0)*100+po.get("50",0)*50+po.get("20",0)*20+po.get("10",0)*10
+
+    # Formulaire si pas de quantités
+    if not confirme and valeur <= 0:
+        corps = f'''<p style="color:#cbd5e1;font-size:14px">Crédite le <b>stock de pions</b> d'une organisatrice (au bon endroit). Entre son code et les quantités par valeur.</p>
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:16px">
+          <label style="font-size:12px;color:#8b949e">Code organisatrice</label>
+          <input id="code" value="{code}" placeholder="ex: GNY5SP7J" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;margin:4px 0 12px;font-family:monospace;font-size:15px">
+          <div style="display:flex;gap:8px">
+            <div style="flex:1"><label style="font-size:12px;color:#8b949e">Pièces 100 F</label><input id="p100" inputmode="numeric" placeholder="0" style="width:100%;padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-top:4px"></div>
+            <div style="flex:1"><label style="font-size:12px;color:#8b949e">Pièces 50 F</label><input id="p50" inputmode="numeric" placeholder="0" style="width:100%;padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-top:4px"></div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <div style="flex:1"><label style="font-size:12px;color:#8b949e">Pièces 20 F</label><input id="p20" inputmode="numeric" placeholder="0" style="width:100%;padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-top:4px"></div>
+            <div style="flex:1"><label style="font-size:12px;color:#8b949e">Pièces 10 F</label><input id="p10" inputmode="numeric" placeholder="0" style="width:100%;padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-top:4px"></div>
+          </div>
+          <label style="font-size:12px;color:#8b949e;display:block;margin-top:10px">Motif</label>
+          <input id="motif" value="Commande de pions (stock organisatrice)" style="width:100%;padding:10px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;margin:4px 0 14px;font-size:14px">
+          <button onclick="go()" style="width:100%;padding:12px;border:0;border-radius:8px;background:#0d9488;color:#fff;font-weight:700;font-size:15px;cursor:pointer">🪙 Voir l'aperçu</button>
+        </div>
+        <script>
+          function go(){{
+            var c=document.getElementById('code').value.trim();
+            if(!c){{alert('Entre le code organisatrice');return;}}
+            window.location='/crediter-stock-org?cle={cle}&code='+encodeURIComponent(c)
+              +'&p100='+(document.getElementById('p100').value||0)
+              +'&p50='+(document.getElementById('p50').value||0)
+              +'&p20='+(document.getElementById('p20').value||0)
+              +'&p10='+(document.getElementById('p10').value||0)
+              +'&motif='+encodeURIComponent(document.getElementById('motif').value.trim());
+          }}
+        </script>'''
+        return page("🪙 Créditer le stock d'une organisatrice", corps)
+
+    if not code or code not in DB.get("codes", {}):
+        return page("❌ Code introuvable", f'<p style="color:#cbd5e1">Le code <b>{code or "(vide)"}</b> n\'existe pas.</p>', "#f85149")
+
+    if not confirme:
+        corps = f'''<p style="color:#cbd5e1;font-size:14px">Créditer le stock de <b>{nom_de(code)}</b> <span style="font-family:monospace;color:#8b949e">{code}</span> :</p>
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin:10px 0;font-size:14px;line-height:1.9">
+          {"<div>🪙 "+fmt(p100)+" × 100 F = <b>"+fmt(p100*100)+"</b></div>" if p100 else ""}
+          {"<div>🪙 "+fmt(p50)+" × 50 F = <b>"+fmt(p50*50)+"</b></div>" if p50 else ""}
+          {"<div>🪙 "+fmt(p20)+" × 20 F = <b>"+fmt(p20*20)+"</b></div>" if p20 else ""}
+          {"<div>🪙 "+fmt(p10)+" × 10 F = <b>"+fmt(p10*10)+"</b></div>" if p10 else ""}
+          <div style="border-top:1px solid #30363d;margin-top:6px;padding-top:6px">Total : <b style="color:#6ee7b7;font-size:16px">{fmt(valeur)} XPF</b></div>
+        </div>
+        <p style="color:#8b949e;font-size:13px">Stock actuel : {fmt(stock)} → <b style="color:#67e8f9">{fmt(stock+valeur)} XPF</b><br>Motif : {motif}</p>
+        <a href="/crediter-stock-org?cle={cle}&code={code}&p100={p100}&p50={p50}&p20={p20}&p10={p10}&motif={motif.replace(' ','%20')}&confirme=1" style="display:block;text-align:center;background:#059669;color:#fff;padding:13px;border-radius:10px;text-decoration:none;font-weight:700;font-size:15px;margin-top:8px">✅ Confirmer le crédit de {fmt(valeur)} XPF</a>'''
+        return page("🪙 Créditer le stock organisatrice", corps)
+
+    if valeur <= 0:
+        return page("❌ Rien à créditer", '<p style="color:#cbd5e1">Indique au moins une quantité.</p>', "#f85149")
+
+    # CONFIRMÉ
+    DB.setdefault("pions_org", {}).setdefault(code, {})
+    poche = DB["pions_org"][code]
+    for val, nb in [("100",p100),("50",p50),("20",p20),("10",p10)]:
+        if nb: poche[val] = poche.get(val,0) + nb
+    DB.setdefault("historique_stock_org", [])
+    DB["historique_stock_org"].insert(0, {
+        "code_org": code, "nom_org": nom_de(code), "p100": p100, "p50": p50, "p20": p20, "p10": p10,
+        "valeur": valeur, "motif": motif, "par": cle, "date": datetime.datetime.now().isoformat()})
+    save_data(immediat=True)
+    nv = poche.get("100",0)*100+poche.get("50",0)*50+poche.get("20",0)*20+poche.get("10",0)*10
+    corps = f'''<div style="background:rgba(16,185,129,.1);border:1px solid #10b981;border-radius:10px;padding:14px">
+      <p style="color:#6ee7b7;font-weight:700;margin:0 0 8px">✅ {fmt(valeur)} XPF crédités au stock</p>
+      <div style="color:#cbd5e1;font-size:14px">{nom_de(code)} <span style="font-family:monospace;color:#8b949e">{code}</span><br>
+      Stock organisateur : <b style="color:#67e8f9;font-size:16px">{fmt(nv)} XPF</b><br>
+      <span style="color:#8b949e;font-size:13px">Motif : {motif}</span></div></div>
+      <p style="color:#8b949e;font-size:13px;margin-top:10px">Elle verra ses pions dans son espace (rafraîchir la page).</p>'''
+    return page("🪙 Stock crédité", corps, "#10b981")
+
+
+@app.route("/tarifs")
+def tarifs_petits_jeux():
+    """PUBLIC : affiche la grille tarifaire. ADMIN (?cle=) : ajouter/retirer des lignes.
+    ?cle=ADMIN&action=ajouter&designation=&prix=&categorie= | &action=supprimer&id="""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    est_admin = bool(info and info.get("admin") and info.get("actif", True))
+
+    if "tarifs" not in DB or not isinstance(DB.get("tarifs"), list):
+        DB["tarifs"] = []
+    tarifs = DB["tarifs"]
+
+    def fmt(n): return format(int(n), ",")
+    action = (request.args.get("action", "") or "").strip()
+    msg = ""
+
+    if est_admin and action == "ajouter":
+        designation = (request.args.get("designation", "") or "").strip()
+        categorie = (request.args.get("categorie", "") or "").strip() or "Petits jeux"
+        try: prix = int(float(request.args.get("prix", "0") or 0))
+        except: prix = 0
+        if designation and prix >= 0:
+            tarifs.append({"id": "T"+datetime.datetime.now().strftime("%Y%m%d%H%M%S%f")[:18],
+                           "designation": designation, "prix": prix, "categorie": categorie})
+            save_data(immediat=True)
+            msg = f'<div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:8px;padding:9px;color:#6ee7b7;font-size:13px;margin-bottom:12px">✅ Tarif ajouté.</div>'
+        else:
+            msg = '<div style="background:rgba(248,81,73,.12);border:1px solid #f85149;border-radius:8px;padding:9px;color:#fca5a5;font-size:13px;margin-bottom:12px">❌ Désignation + prix requis.</div>'
+    elif est_admin and action == "supprimer":
+        eid = (request.args.get("id", "") or "").strip()
+        before = len(tarifs)
+        DB["tarifs"] = [t for t in tarifs if t.get("id") != eid]; tarifs = DB["tarifs"]
+        if len(tarifs) < before:
+            save_data(immediat=True)
+            msg = '<div style="background:rgba(245,158,11,.12);border:1px solid #f59e0b;border-radius:8px;padding:9px;color:#fcd34d;font-size:13px;margin-bottom:12px">🗑️ Ligne supprimée.</div>'
+
+    # regrouper par catégorie
+    cats = {}
+    for t in tarifs:
+        cats.setdefault(t.get("categorie", "Petits jeux"), []).append(t)
+
+    blocs = ""
+    for cat in cats:
+        lignes = ""
+        for t in cats[cat]:
+            suppr = (f'<a href="/tarifs?cle={cle}&action=supprimer&id={t.get("id")}" style="color:#8b949e;text-decoration:none;margin-left:8px" title="Supprimer">🗑️</a>') if est_admin else ""
+            lignes += (f'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #21262d">'
+                       f'<span style="color:#e6edf3;font-size:14px">{t.get("designation","")}</span>'
+                       f'<span style="white-space:nowrap"><b style="color:#6ee7b7;font-size:15px">{fmt(t.get("prix",0))} XPF</b>{suppr}</span></div>')
+        blocs += (f'<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:14px;margin-bottom:14px">'
+                  f'<div style="font-size:13px;font-weight:800;color:#c084fc;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">{cat}</div>{lignes}</div>')
+    if not blocs:
+        blocs = '<div style="color:#8b949e;text-align:center;padding:20px;font-size:14px">Aucun tarif pour l\'instant.' + (' Ajoute-en ci-dessous.' if est_admin else '') + '</div>'
+
+    form_admin = ""
+    if est_admin:
+        form_admin = f'''<div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:14px;margin-top:16px">
+          <div style="font-size:14px;font-weight:700;color:#67e8f9;margin-bottom:8px">➕ Ajouter un tarif</div>
+          <input id="desig" placeholder="Désignation (ex: 500 feuilles OHANA — 1 carton)" style="width:100%;padding:9px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-bottom:7px;font-size:14px">
+          <div style="display:flex;gap:7px">
+            <input id="prix" placeholder="Prix XPF" inputmode="numeric" style="flex:1;padding:9px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;font-size:14px">
+            <input id="cat" placeholder="Catégorie (ex: Feuilles)" value="Petits jeux" style="flex:1.4;padding:9px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;font-size:14px">
+          </div>
+          <button onclick="ajt()" style="width:100%;padding:11px;border:0;border-radius:8px;background:#7c3aed;color:#fff;font-weight:700;font-size:15px;cursor:pointer;margin-top:9px">➕ Ajouter</button>
+        </div>
+        <div style="color:#8b949e;font-size:12px;margin-top:10px;text-align:center">💡 Lien public à partager (sans code) : <b>ticketbingo.space/tarifs</b></div>
+        <script>
+          function ajt(){{
+            var d=document.getElementById('desig').value.trim(), p=document.getElementById('prix').value.trim();
+            if(!d||!p){{alert('Désignation et prix requis');return;}}
+            window.location='/tarifs?cle={cle}&action=ajouter&designation='+encodeURIComponent(d)+'&prix='+encodeURIComponent(p)+'&categorie='+encodeURIComponent(document.getElementById('cat').value.trim());
+          }}
+        </script>'''
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tarifs — Petits jeux</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;color:#fff;padding:16px"><div style="max-width:580px;margin:0 auto">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:23px;font-weight:900;color:#c084fc">🎲 NOS TARIFS</div>
+        <div style="font-size:14px;color:#5eead4;font-weight:700">Petits jeux · TUKEA</div>
+        <div style="font-size:11px;color:#475569">ticketbingo.space</div>
+      </div>
+      {msg}{blocs}{form_admin}
+      <div style="height:24px"></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
