@@ -4047,12 +4047,11 @@ h1{color:#f59e0b;font-size:22px}p{color:#8b949e;line-height:1.6}
 
 
 @app.route("/guide")
+@app.route("/guide-organisateur")
 def guide_organisateur():
-    """Guide de l'organisateur — reserve aux personnes avec un code valide."""
+    """Guide de l'organisateur — page d'aide publique."""
     global DB
     DB = load_data()
-    if not _code_acces_valide(request.args.get("code", "")):
-        return _page_acces_refuse()
     return """<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Guide de l'Organisateur — Ticket Bingo</title>
@@ -4195,11 +4194,9 @@ b{color:#fff}
 
 @app.route("/guide-joueur")
 def guide_joueur():
-    """Guide de la joueuse — reserve aux personnes avec un code valide."""
+    """Guide de la joueuse — page d'aide publique."""
     global DB
     DB = load_data()
-    if not _code_acces_valide(request.args.get("code", "")):
-        return _page_acces_refuse()
     return """<!DOCTYPE html>
 <html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Guide du Joueur — Ticket Bingo</title>
@@ -17416,105 +17413,6 @@ def centre_admin():
       function loc(u){{ window.location=u; }}
     </script>
     </body></html>''', mimetype="text/html; charset=utf-8")
-
-
-def _page_guide(titre, sous_titre, sections, accent):
-    """Helper : génère une page-guide propre et lisible (mobile)."""
-    blocs = ""
-    for (icone, titre_sec, items, danger) in sections:
-        bordure = "#dc2626" if danger else accent
-        fond = "rgba(220,38,38,.06)" if danger else "#161b22"
-        lis = "".join(f'<li style="margin-bottom:7px;line-height:1.5">{it}</li>' for it in items)
-        blocs += (f'<div style="background:{fond};border:1px solid #30363d;border-left:4px solid {bordure};border-radius:12px;padding:16px;margin-bottom:14px">'
-                  f'<div style="font-size:16px;font-weight:800;color:#e6edf3;margin-bottom:10px">{icone} {titre_sec}</div>'
-                  f'<ul style="margin:0;padding-left:20px;color:#cbd5e1;font-size:14px">{lis}</ul></div>')
-    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{titre}</title></head>
-    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;color:#fff;padding:16px">
-      <div style="max-width:620px;margin:0 auto">
-        <div style="text-align:center;margin-bottom:18px">
-          <div style="font-size:24px;font-weight:900;color:{accent}">{titre}</div>
-          <div style="font-size:13px;color:#8b949e;margin-top:4px">{sous_titre}</div>
-          <div style="font-size:11px;color:#475569;margin-top:2px">TICKET BINGO · TUKEA · mis à jour le 28/06/2026</div>
-        </div>
-        {blocs}
-        <div style="text-align:center;color:#8b949e;font-size:12px;margin:20px 0">💚 Merci, et bons jeux ! · ticketbingo.space</div>
-      </div>
-    </body></html>''', mimetype="text/html; charset=utf-8")
-
-
-@app.route("/guide-organisateur")
-def guide_organisateur():
-    sections = [
-        ("🔑","Se connecter", [
-            "Ouvre <b>ticketbingo.space</b> et entre <b>ton code organisatrice</b> (personnel et confidentiel).",
-            "Tu arrives sur ton espace : annoncer un jeu, vendre des tickets, gérer la cagnotte.",
-        ], False),
-        ("🎯","Le déroulé d'un jeu (5 étapes)", [
-            "<b>1. Annoncer le jeu</b> — choisis le jeu et lance l'annonce. Les joueuses voient qu'une partie démarre.",
-            "<b>2. Vendre les tickets</b> — pour chaque joueuse : son code, le jeu, le nombre de tickets, le paiement.",
-            "<b>3. Valider les paiements</b> — vérifie que la joueuse a <b>bien payé</b> avant de valider. Pas de paiement, pas de ticket.",
-            "<b>4. Calculer la cagnotte</b> — le système additionne tout seul les mises. Tu cliques sur <b>Calculer la cagnotte</b>.",
-            "<b>5. Déclarer la gagnante</b> — enregistre la gagnante : ses pions sont crédités automatiquement.",
-        ], False),
-        ("💰","La règle de la cagnotte", [
-            "<b>80%</b> pour la <b>gagnante</b> · <b>20%</b> pour <b>l'organisatrice</b>.",
-            "Le système calcule tout seul — plus besoin de compter à la main.",
-        ], False),
-        ("🎟️","Les pions", [
-            "Un pion vaut <b>100, 50, 20 ou 10 XPF</b>. Le plus petit = <b>10 XPF</b>.",
-            "Les joueuses achètent leurs pions. <b>Toi, tu n'en crées jamais</b> (voir sécurité).",
-        ], False),
-        ("🛡️","RÈGLES DE SÉCURITÉ — à lire absolument", [
-            "<b>Ton code est PERSONNEL.</b> Ne le partage JAMAIS, avec personne.",
-            "<b>Une organisatrice ne peut PAS créditer de pions.</b> Seule l'administratrice (Maeva) le fait. Si on te demande de « créditer » ou « offrir » des pions → <b>REFUSE et préviens Maeva</b>.",
-            "<b>Vérifie le paiement AVANT de valider</b> une vente.",
-            "<b>Aucune faveur :</b> on déclare gagnante uniquement celle qui a vraiment gagné. Pas de faux comptes.",
-            "<b>Signale toute anomalie à Maeva</b> tout de suite (solde bizarre, demande étrange…).",
-            "<b>Déconnecte-toi</b> à la fin de tes jeux.",
-        ], True),
-        ("🆘","En cas de problème", [
-            "Un solde qui ne correspond pas ? Une joueuse bloquée ? Un doute sur un paiement ?",
-            "<b>Note le code de la joueuse et la situation, et contacte Maeva.</b> Ne corrige jamais les soldes toi-même : c'est le rôle de l'admin.",
-        ], False),
-    ]
-    return _page_guide("GUIDE DE L'ORGANISATRICE", "Comment organiser tes jeux, étape par étape", sections, "#c084fc")
-
-
-@app.route("/guide-joueur")
-def guide_joueur():
-    sections = [
-        ("🔑","Accéder à ton compte", [
-            "Ouvre <b>ticketbingo.space</b> et entre <b>ton code joueur</b> (celui qu'on t'a donné).",
-            "Ton code est <b>personnel</b> : ne le donne à personne.",
-            "Attention aux caractères qui se ressemblent : <b>O</b> (lettre) et <b>0</b> (zéro), <b>I</b> et <b>1</b>.",
-        ], False),
-        ("🎟️","Acheter tes pions", [
-            "Achète tes pions <b>uniquement</b> auprès d'une organisatrice officielle (carte ou espèces).",
-            "Un pion vaut 100, 50, 20 ou 10 XPF. Le plus petit = <b>10 XPF</b>.",
-            "Garde une preuve de ton paiement (référence carte / reçu).",
-        ], False),
-        ("🎮","Jouer", [
-            "Choisis un jeu en cours, achète tes tickets, et joue !",
-            "Si tu gagnes, l'organisatrice te déclare gagnante et tes pions de gain sont crédités automatiquement.",
-            "La cagnotte = <b>80% pour la gagnante</b>.",
-        ], False),
-        ("📊","Vérifier ton solde", [
-            "Ton <b>relevé</b> montre tout : pions achetés, gagnés, dépensés, et ton <b>solde actuel</b>.",
-            "Règle d'or : <b>solde = entrées − sorties</b>. Si quelque chose ne colle pas, signale-le.",
-        ], False),
-        ("🛡️","SÉCURITÉ — protège-toi", [
-            "<b>Ton code est à toi seule.</b> Ne le partage jamais.",
-            "<b>N'achète JAMAIS de pions « pas chers » à un inconnu</b> qui propose de t'en transférer contre du cash. Ces pions peuvent être <b>faux</b> et sans valeur — tu perdrais ton argent.",
-            "Passe <b>toujours</b> par une organisatrice officielle pour acheter tes pions.",
-            "Méfie-toi de quiconque te demande ton code ou te promet des pions gratuits.",
-        ], True),
-        ("🆘","Un souci ?", [
-            "Solde incorrect, compte bloqué, doute sur un paiement ?",
-            "<b>Contacte ton organisatrice ou Maeva</b> avec ton code et l'explication. On vérifiera ton relevé.",
-        ], False),
-    ]
-    return _page_guide("GUIDE DU JOUEUR", "Comment jouer en toute confiance", sections, "#0d9488")
-
 
 @app.route("/changer-code-organisateur")
 def changer_code_organisateur():
