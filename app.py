@@ -17404,6 +17404,12 @@ def centre_admin():
         <a class="btn" style="background:#7c3aed" href="{lien('rapport-organisateur')}">📋 Rapport organisateur (profil MAEVA)</a>
       </div>
 
+      <div class="sec">🧾 Crédits & RIB</div>
+      <div class="card">
+        <a class="btn" style="background:#f59e0b;color:#1a1a1a" href="{lien('credits-organisateurs')}">🧾 Ardoise des organisatrices (commandes à crédit)</a>
+        <a class="btn" style="background:#0d9488;margin-top:8px" href="{lien('rib-organisateur')}">🏦 Enregistrer un RIB organisatrice</a>
+      </div>
+
       <div style="height:30px"></div>
     </div>
     <script>
@@ -17593,3 +17599,127 @@ def rib_organisateur():
       }}
     </script>'''
     return page("🏦 Enregistrer un RIB organisatrice", corps)
+
+
+@app.route("/credits-organisateurs")
+def credits_organisateurs():
+    """ADMIN — Ardoise des organisatrices : commandes à crédit (payées plus tard).
+    Vue + ajout + marquer payé. ?cle=ADMIN[&action=ajouter|payer|annuler...]"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin") and info.get("actif", True)):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    if "credits_organisateurs" not in DB or not isinstance(DB.get("credits_organisateurs"), list):
+        DB["credits_organisateurs"] = []
+    ardoise = DB["credits_organisateurs"]
+
+    def fmt(n): return format(int(n), ",")
+    def nom_de(c):
+        return DB.get("codes", {}).get((c or "").upper(), {}).get("nom", c) or c
+
+    action = (request.args.get("action", "") or "").strip()
+    msg = ""
+
+    if action == "ajouter":
+        code = (request.args.get("code", "") or "").strip().upper()
+        try: montant = int(float(request.args.get("montant", "0") or 0))
+        except: montant = 0
+        motif = (request.args.get("motif", "") or "").strip()
+        if code and montant > 0:
+            ardoise.append({
+                "id": "C" + datetime.datetime.now().strftime("%Y%m%d%H%M%S"),
+                "code_org": code, "nom": nom_de(code), "montant": montant,
+                "motif": motif or "Commande à crédit",
+                "date": datetime.datetime.now().isoformat(),
+                "statut": "du", "date_paiement": None
+            })
+            save_data(immediat=True)
+            msg = f'<div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:8px;padding:10px;color:#6ee7b7;font-size:14px;margin-bottom:12px">✅ Crédit ajouté : {nom_de(code)} doit {fmt(montant)} XPF.</div>'
+        else:
+            msg = '<div style="background:rgba(248,81,73,.12);border:1px solid #f85149;border-radius:8px;padding:10px;color:#fca5a5;font-size:14px;margin-bottom:12px">❌ Entre un code et un montant valides.</div>'
+
+    elif action == "payer":
+        eid = (request.args.get("id", "") or "").strip()
+        for e in ardoise:
+            if e.get("id") == eid and e.get("statut") == "du":
+                e["statut"] = "paye"; e["date_paiement"] = datetime.datetime.now().isoformat()
+                save_data(immediat=True)
+                msg = f'<div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:8px;padding:10px;color:#6ee7b7;font-size:14px;margin-bottom:12px">✅ Payé : {e.get("nom")} — {fmt(e.get("montant",0))} XPF réglés. Merci !</div>'
+                break
+
+    elif action == "annuler":
+        eid = (request.args.get("id", "") or "").strip()
+        before = len(ardoise)
+        DB["credits_organisateurs"] = [e for e in ardoise if e.get("id") != eid]
+        ardoise = DB["credits_organisateurs"]
+        if len(ardoise) < before:
+            save_data(immediat=True)
+            msg = '<div style="background:rgba(245,158,11,.12);border:1px solid #f59e0b;border-radius:8px;padding:10px;color:#fcd34d;font-size:14px;margin-bottom:12px">🗑️ Ligne supprimée.</div>'
+
+    # regrouper par organisatrice — uniquement les "du"
+    dus = [e for e in ardoise if e.get("statut") == "du"]
+    payes = [e for e in ardoise if e.get("statut") == "paye"]
+    total_du = sum(int(e.get("montant", 0) or 0) for e in dus)
+    par_org = {}
+    for e in dus:
+        par_org.setdefault(e.get("code_org", "?"), []).append(e)
+
+    blocs = ""
+    for code_org in sorted(par_org, key=lambda c: -sum(int(x.get("montant",0) or 0) for x in par_org[c])):
+        items = sorted(par_org[code_org], key=lambda x: x.get("date", ""))
+        sous_total = sum(int(x.get("montant", 0) or 0) for x in items)
+        lignes = "".join(
+            f'<div style="display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #21262d;font-size:13px">'
+            f'<span style="color:#cbd5e1">{(e.get("date","") or "")[:10]} · {e.get("motif","")}</span>'
+            f'<span style="display:flex;align-items:center;gap:8px"><b style="color:#fca5a5">{fmt(e.get("montant",0))}</b>'
+            f'<a href="/credits-organisateurs?cle={cle}&action=payer&id={e.get("id")}" style="background:#059669;color:#fff;text-decoration:none;padding:4px 9px;border-radius:6px;font-size:12px;font-weight:700">✅ Payé</a>'
+            f'<a href="/credits-organisateurs?cle={cle}&action=annuler&id={e.get("id")}" style="color:#8b949e;text-decoration:none;font-size:14px" title="Supprimer">🗑️</a></span></div>'
+            for e in items)
+        blocs += (f'<div style="background:#161b22;border:1px solid #30363d;border-left:3px solid #f59e0b;border-radius:10px;padding:13px;margin-bottom:10px">'
+                  f'<div style="display:flex;justify-content:space-between;margin-bottom:4px"><b style="color:#e6edf3;font-size:15px">{nom_de(code_org)} <span style="font-family:monospace;color:#8b949e;font-size:12px">{code_org}</span></b>'
+                  f'<b style="color:#f0883e">doit {fmt(sous_total)} XPF</b></div>{lignes}</div>')
+    if not blocs:
+        blocs = '<div style="color:#34d399;font-size:14px;text-align:center;padding:14px">✅ Aucune ardoise en cours. Tout est payé !</div>'
+
+    # historique payé (10 derniers)
+    hist = ""
+    for e in sorted(payes, key=lambda x: x.get("date_paiement","") or "", reverse=True)[:10]:
+        hist += (f'<div style="display:flex;justify-content:space-between;font-size:12px;color:#8b949e;padding:3px 0">'
+                 f'<span>{(e.get("date_paiement","") or "")[:10]} · {e.get("nom","")} · {e.get("motif","")}</span>'
+                 f'<span style="color:#6ee7b7">✓ {fmt(e.get("montant",0))}</span></div>')
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ardoise organisatrices</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;color:#fff;padding:16px"><div style="max-width:600px;margin:0 auto">
+      <h1 style="font-size:21px;color:#f59e0b;margin-bottom:2px">🧾 Ardoise des organisatrices</h1>
+      <div style="color:#8b949e;font-size:13px;margin-bottom:14px">Commandes à crédit — payées dès qu'elles ont les sous.</div>
+      {msg}
+      <div style="background:linear-gradient(135deg,rgba(245,158,11,.15),rgba(220,38,38,.08));border:1px solid #f59e0b;border-radius:12px;padding:14px;margin-bottom:16px;text-align:center">
+        <div style="font-size:12px;color:#fcd34d">TOTAL DÛ (toutes organisatrices)</div>
+        <div style="font-size:28px;font-weight:800;color:#fbbf24">{fmt(total_du)} XPF</div>
+      </div>
+
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:14px;margin-bottom:16px">
+        <div style="font-size:14px;font-weight:700;color:#67e8f9;margin-bottom:8px">➕ Ajouter une commande à crédit</div>
+        <input id="code" placeholder="Code organisatrice (ex: GNY5SP7J)" oninput="this.value=this.value.toUpperCase()" style="width:100%;padding:9px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-bottom:7px;font-size:14px;font-family:monospace">
+        <input id="montant" placeholder="Montant dû (XPF)" inputmode="numeric" style="width:100%;padding:9px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-bottom:7px;font-size:14px">
+        <input id="motif" placeholder="Détail (ex: 100 tickets OHANA + 20 pions)" style="width:100%;padding:9px;border-radius:8px;border:1px solid #30363d;background:#0d1117;color:#fff;margin-bottom:9px;font-size:14px">
+        <button onclick="ajouter()" style="width:100%;padding:11px;border:0;border-radius:8px;background:#f59e0b;color:#1a1a1a;font-weight:800;font-size:15px;cursor:pointer">➕ Ajouter au crédit</button>
+      </div>
+
+      <div style="font-size:13px;font-weight:700;color:#f0883e;margin-bottom:8px">💳 EN COURS (à recouvrer)</div>
+      {blocs}
+
+      {'<div style="margin-top:18px"><div style="font-size:13px;font-weight:700;color:#6ee7b7;margin-bottom:6px">✅ Derniers paiements reçus</div>'+hist+'</div>' if hist else ''}
+    <div style="height:30px"></div></div>
+    <script>
+      var CLE="{cle}";
+      function ajouter(){{
+        var c=document.getElementById('code').value.trim();
+        var m=document.getElementById('montant').value.trim();
+        if(!c||!m){{alert('Entre au moins le code et le montant');return;}}
+        window.location='/credits-organisateurs?cle='+CLE+'&action=ajouter&code='+encodeURIComponent(c)+'&montant='+encodeURIComponent(m)+'&motif='+encodeURIComponent(document.getElementById('motif').value.trim());
+      }}
+    </script></body></html>''', mimetype="text/html; charset=utf-8")
