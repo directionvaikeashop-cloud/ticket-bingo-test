@@ -358,11 +358,12 @@ def _ecrire_donnees_disque():
                 except Exception:
                     pass
             os.replace(tmp, DATA_FILE)
-            # 🐘 Recopie durable dans PostgreSQL (filet anti-perte ; ne bloque jamais la sauvegarde)
+            # 🐘 Recopie durable dans PostgreSQL — EN ARRIÈRE-PLAN (ne bloque plus
+            # la sauvegarde : le fichier ci-dessus est déjà écrit, durable).
             try:
-                _pg_ecrire(a_ecrire)
+                _pg_planifier(a_ecrire)
             except Exception as _epg:
-                print(f"[PG ECRITURE ERR] {_epg}")
+                print(f"[PG PLANIF ERR] {_epg}")
         print(f"[SAVE OK] {DATA_FILE}")
     except Exception as e:
         print(f"[SAVE ERR] {e}")
@@ -377,6 +378,45 @@ _VERROU_THROTTLE = _threading_save.Lock()
 # d'interblocage : un seul verrou réentrant). Ne ralentit que les écritures.
 _VERROU_DB = _threading_save.RLock()
 _THROTTLE_SECONDES = 2.0
+
+# 🐘 Écriture PostgreSQL en ARRIÈRE-PLAN (hors du chemin critique).
+# Le disque est déjà écrit immédiatement (durable) ; PostgreSQL est un filet de
+# secours qui peut prendre quelques secondes de retard sans AUCUN risque (au
+# redémarrage, c'est toujours le FICHIER qui fait foi). Évite que chaque
+# mouvement d'argent bloque sur l'envoi complet vers PostgreSQL — indispensable
+# sous charge (tournoi à ~20 joueuses simultanées).
+_PG_SNAPSHOT = [None]
+_PG_VERROU_BG = _threading_save.Lock()
+_PG_DERNIER = [0.0]
+_PG_TIMER = [None]
+_PG_THROTTLE = 3.0  # au plus une écriture PostgreSQL toutes les 3 s
+
+def _pg_flush_arriere_plan():
+    with _PG_VERROU_BG:
+        data = _PG_SNAPSHOT[0]
+        _PG_SNAPSHOT[0] = None
+        _PG_TIMER[0] = None
+        _PG_DERNIER[0] = _time_save.time()
+    if data is not None:
+        try:
+            _pg_ecrire(data)
+        except Exception as _e:
+            print(f"[PG BG ERR] {_e}")
+
+def _pg_planifier(data):
+    """Programme une écriture PostgreSQL en arrière-plan (throttlée).
+    Garde toujours le DERNIER état ; ne bloque jamais l'appelant."""
+    if not _PG_OK:
+        return
+    with _PG_VERROU_BG:
+        _PG_SNAPSHOT[0] = data
+        if _PG_TIMER[0] is not None:
+            return  # une écriture est déjà programmée -> elle prendra ce snapshot
+        delai = max(0.05, _PG_THROTTLE - (_time_save.time() - _PG_DERNIER[0]))
+        t = _threading_save.Timer(delai, _pg_flush_arriere_plan)
+        t.daemon = True
+        _PG_TIMER[0] = t
+        t.start()
 
 def _sauvegarde_differee():
     """Exécute la sauvegarde regroupée après le délai."""
@@ -696,9 +736,11 @@ def upload_cloudinary_image(image_b64):
 @app.route("/")
 def index():
     response = send_from_directory(".", "index.html")
-    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-    response.headers["Pragma"] = "no-cache"
-    response.headers["Expires"] = "0"
+    # OUVERTURE RAPIDE : "no-cache" = le navigateur GARDE la page mais REVALIDE
+    # a chaque ouverture. Si rien n'a change -> reponse 304 minuscule (instantane).
+    # Si tu as deploye une nouvelle version -> il telecharge la nouvelle (toujours a jour).
+    # Avant : "no-store" forcait un re-telechargement COMPLET a chaque fois (lent).
+    response.headers["Cache-Control"] = "no-cache"
     return response
 
 @app.route("/ping")
