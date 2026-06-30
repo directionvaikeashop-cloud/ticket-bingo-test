@@ -17408,7 +17408,9 @@ def centre_admin():
       <div class="card">
         <a class="btn" style="background:#f59e0b;color:#1a1a1a" href="{lien('credits-organisateurs')}">🧾 Ardoise des organisatrices (commandes à crédit)</a>
         <a class="btn" style="background:#0d9488;margin-top:8px" href="{lien('crediter-stock-org')}">🪙 Créditer le stock de pions d'une organisatrice</a>
+        <a class="btn" style="background:#7c3aed;margin-top:8px" href="{lien('creer-organisateur')}">➕ Créer une organisatrice</a>
         <a class="btn" style="background:#0d9488;margin-top:8px" href="{lien('rib-organisateur')}">🏦 Enregistrer un RIB organisatrice</a>
+        <a class="btn" style="background:#c084fc;color:#1a1a1a;margin-top:8px" href="{lien('tarifs-jeux')}">🎲 Tarifs des jeux (prix par ticket)</a>
       </div>
 
       <div style="height:30px"></div>
@@ -18091,3 +18093,140 @@ def tarifs_petits_jeux():
       {msg}{blocs}{form_admin}
       <div style="height:24px"></div>
     </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/tarifs-jeux")
+def tarifs_jeux():
+    """PUBLIC : grille tarifaire des jeux de l'app. ADMIN (?cle=) : fixer le prix de chaque jeu.
+    ?cle=ADMIN&action=fixer&jeu=X&prix=Y"""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    est_admin = bool(info and info.get("admin") and info.get("actif", True))
+
+    if "tarifs_jeux" not in DB or not isinstance(DB.get("tarifs_jeux"), dict):
+        DB["tarifs_jeux"] = {}
+    tj = DB["tarifs_jeux"]
+
+    def fmt(n): return format(int(n), ",")
+    msg = ""
+    if est_admin and (request.args.get("action","") == "fixer"):
+        jeu = (request.args.get("jeu", "") or "").strip()
+        try: prix = int(float(request.args.get("prix", "0") or 0))
+        except: prix = 0
+        if jeu in GENERATEURS_JEUX and prix >= 0:
+            tj[jeu] = prix
+            save_data(immediat=True)
+            msg = f'<div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:8px;padding:9px;color:#6ee7b7;font-size:13px;margin-bottom:12px">✅ {jeu} : {fmt(prix)} XPF / ticket.</div>'
+
+    lignes = ""
+    for nom, meta in GENERATEURS_JEUX.items():
+        emoji = meta.get("emoji", "🎲")
+        prix = int(tj.get(nom, 0) or 0)
+        if est_admin:
+            lignes += (f'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid #21262d">'
+                       f'<span style="color:#e6edf3;font-size:14px;flex:1">{emoji} {nom}</span>'
+                       f'<input id="p_{nom}" value="{prix or ""}" placeholder="prix" inputmode="numeric" style="width:80px;padding:7px;border-radius:7px;border:1px solid #30363d;background:#0d1117;color:#fff;text-align:right;font-size:14px">'
+                       f'<button onclick="fix(\'{nom}\')" style="border:0;border-radius:7px;background:#7c3aed;color:#fff;padding:7px 10px;font-weight:700;cursor:pointer">💾</button></div>')
+        else:
+            aff = f'<b style="color:#6ee7b7;font-size:15px">{fmt(prix)} XPF</b>' if prix > 0 else '<span style="color:#8b949e;font-size:13px">prix selon l\'organisatrice</span>'
+            lignes += (f'<div style="display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #21262d">'
+                       f'<span style="color:#e6edf3;font-size:14px">{emoji} {nom}</span>{aff}</div>')
+
+    script = ""
+    if est_admin:
+        script = f'''<script>
+          function fix(nom){{
+            var v=document.getElementById('p_'+nom).value.trim();
+            window.location='/tarifs-jeux?cle={cle}&action=fixer&jeu='+encodeURIComponent(nom)+'&prix='+encodeURIComponent(v||0);
+          }}
+        </script>
+        <div style="color:#8b949e;font-size:12px;margin-top:12px;text-align:center">💡 Lien public à partager (sans code) : <b>ticketbingo.space/tarifs-jeux</b><br>Le prix s'affiche par ticket. Laisse vide = « prix selon l'organisatrice ».</div>'''
+
+    return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Tarifs des jeux</title></head>
+    <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;color:#fff;padding:16px"><div style="max-width:560px;margin:0 auto">
+      <div style="text-align:center;margin-bottom:16px">
+        <div style="font-size:23px;font-weight:900;color:#c084fc">🎲 TARIFS DES JEUX</div>
+        <div style="font-size:14px;color:#5eead4;font-weight:700">Ticket Bingo · TUKEA</div>
+        <div style="font-size:11px;color:#475569">prix par ticket</div>
+      </div>
+      {msg}
+      <div style="background:#161b22;border:1px solid #30363d;border-radius:12px;padding:14px">{lignes}</div>
+      {script}
+      <div style="height:24px"></div>
+    </div></body></html>''', mimetype="text/html; charset=utf-8")
+
+
+@app.route("/creer-organisateur")
+def creer_organisateur():
+    """ADMIN — Crée une nouvelle organisatrice (code actif = identifiant de connexion).
+    ?cle=ADMIN&nom=...&email=...[&code=XXX][&confirme=1]
+    Génère un code clair si non fourni. N'écrase jamais un code existant."""
+    global DB
+    DB = load_data()
+    cle = (request.args.get("cle", "") or "").strip().upper()
+    info = DB.get("codes", {}).get(cle)
+    if not (info and info.get("admin") and info.get("actif", True)):
+        return Response("Acces reserve. Ajoute ?cle=TON_CODE_ADMIN.", status=403, mimetype="text/plain; charset=utf-8")
+
+    nom = (request.args.get("nom", "") or "").strip()
+    email = (request.args.get("email", "") or "").strip()
+    code = (request.args.get("code", "") or "").strip().upper()
+    confirme = request.args.get("confirme", "") == "1"
+
+    def page(titre, corps, couleur="#7c3aed"):
+        return Response(f'''<!DOCTYPE html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{titre}</title></head>
+        <body style="margin:0;background:#0f0e1f;font-family:system-ui,sans-serif;color:#fff;padding:16px"><div style="max-width:560px;margin:0 auto">
+        <h1 style="font-size:20px;color:{couleur}">{titre}</h1>{corps}</div></body></html>''', mimetype="text/html; charset=utf-8")
+
+    if not nom:
+        return page("❌ Nom manquant", '<p style="color:#cbd5e1">Ajoute &nom=TATIE LUCIA</p>', "#f85149")
+
+    # générer un code clair (sans O,0,I,1) si non fourni
+    if not code:
+        alpha = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+        for _ in range(50):
+            cand = "".join(secrets.choice(alpha) for _ in range(8))
+            if cand not in DB.get("codes", {}):
+                code = cand; break
+
+    existe = code in DB.get("codes", {})
+
+    if not confirme:
+        avert = ""
+        if existe:
+            avert = f'<div style="background:rgba(248,81,73,.12);border:1px solid #f85149;border-radius:8px;padding:11px;color:#fca5a5;font-size:13px;margin-bottom:10px">⚠️ Le code <b>{code}</b> existe DÉJÀ ({DB["codes"][code].get("nom","?")}). La création est bloquée pour ne rien écraser. Laisse le champ code vide pour en générer un nouveau.</div>'
+        corps = f'''<p style="color:#cbd5e1;font-size:14px">Créer la nouvelle organisatrice :</p>
+        {avert}
+        <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:16px;margin:10px 0;font-size:15px;line-height:1.9">
+          Nom : <b style="color:#fff">{nom}</b><br>
+          Email : <b style="color:#6ee7b7">{email or "(aucun)"}</b><br>
+          Code de connexion : <b style="font-family:monospace;color:#67e8f9;font-size:20px;letter-spacing:2px">{code}</b></div>
+        {"" if existe else f'<a href="/creer-organisateur?cle={cle}&nom={nom.replace(chr(32),"%20")}&email={email}&code={code}&confirme=1" style="display:block;text-align:center;background:#7c3aed;color:#fff;padding:14px;border-radius:10px;text-decoration:none;font-weight:700;font-size:16px">✅ Créer cette organisatrice</a>'}
+        <p style="color:#8b949e;font-size:12px;margin-top:12px">Le code sera son identifiant pour se connecter à l'espace organisateur.</p>'''
+        return page("➕ Nouvelle organisatrice", corps)
+
+    if existe:
+        return page("❌ Code déjà pris", f'<p style="color:#cbd5e1">Le code <b>{code}</b> existe déjà. Rien créé (sécurité anti-écrasement).</p>', "#f85149")
+
+    DB["codes"][code] = {
+        "duree": 365, "nom": nom, "actif": True, "email": email,
+        "created": datetime.datetime.now().isoformat(),
+        "expire": (datetime.datetime.now() + datetime.timedelta(days=365)).isoformat()
+    }
+    save_data(immediat=True)
+    corps = f'''<div style="background:rgba(16,185,129,.12);border:1px solid #10b981;border-radius:10px;padding:16px">
+      <p style="color:#6ee7b7;font-weight:700;margin:0 0 10px;font-size:16px">✅ Organisatrice créée !</p>
+      <div style="color:#cbd5e1;font-size:15px;line-height:1.9">
+        Nom : <b style="color:#fff">{nom}</b><br>
+        Email : <b>{email or "(aucun)"}</b><br>
+        Code de connexion : <b style="font-family:monospace;color:#67e8f9;font-size:22px;letter-spacing:2px">{code}</b></div></div>
+    <div style="background:#161b22;border:1px solid #30363d;border-radius:10px;padding:14px;margin-top:12px">
+      <p style="color:#f0883e;font-weight:700;margin:0 0 8px;font-size:14px">📋 Prochaines étapes</p>
+      <div style="font-size:13px;line-height:1.8">
+        <a href="/rib-organisateur?cle={cle}&code={code}" style="color:#58a6ff">🏦 Enregistrer son RIB</a><br>
+        <a href="/crediter-stock-org?cle={cle}&code={code}" style="color:#58a6ff">🪙 Créditer son stock de pions</a><br>
+        <a href="/credits-organisateurs?cle={cle}&action=ajouter&code={code}" style="color:#58a6ff">🧾 Ouvrir son ardoise (dette)</a></div></div>
+    <p style="color:#8b949e;font-size:13px;margin-top:12px">Donne-lui son code <b style="font-family:monospace">{code}</b> : elle le saisit dans « 🎪 Espace Organisateur » pour se connecter.</p>'''
+    return page("✅ Créée", corps, "#10b981")
