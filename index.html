@@ -1356,14 +1356,17 @@ async function accesJoueurDirect(){
       loadTirageJoueur();
       // Afficher la barre fixe boules
       afficherBarreBoules();
-      setInterval(updateBarreBoules, 5000);
+      if(window._intBarreBoules) clearInterval(window._intBarreBoules);
+      window._intBarreBoules = setInterval(updateBarreBoules, 5000);
       updateBarreBoules();
       // Vérifier les messages micro toutes les 3 secondes
-      setInterval(checkMicroJoueur, 3000);
+      if(window._intCheckMicro) clearInterval(window._intCheckMicro);
+      window._intCheckMicro = setInterval(checkMicroJoueur, 3000);
       checkMicroJoueur();
       // Afficher et rafraîchir les jeux annoncés par l'organisateur
       chargerJeuxDisponibles(code);
-      setInterval(function(){ chargerJeuxDisponibles(code); }, 10000);
+      if(window._intJeuxDispo) clearInterval(window._intJeuxDispo);
+      window._intJeuxDispo = setInterval(function(){ chargerJeuxDisponibles(code); }, 10000);
       document.getElementById("joueur-ticket-zone").innerHTML = `
         <div class="card">
           <div class="ct">🎱 ${t.jeu} — Série ${t.serie}</div>
@@ -3659,7 +3662,11 @@ function tirerBoule(){
       
       // Son ding + voix
       try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        // CORRECTIF : UN seul moteur audio réutilisé (avant : un nouveau à chaque
+        // boule -> le navigateur sature après ~6 et l'onglet plante en plein tournoi).
+        if(!window._dingCtx){ window._dingCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+        var ctx = window._dingCtx;
+        if(ctx.state === 'suspended'){ try{ ctx.resume(); }catch(e){} }
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
         osc.connect(gain);
@@ -6529,6 +6536,7 @@ async function toggleTirageAuto(){
     await calculerCagnotteAuto();
     // Démarrer
     tirageAutoActif = true;
+    if(tirageAutoInterval) clearInterval(tirageAutoInterval);
     tirageAutoInterval = setInterval(tirerBoule, vitesseTirage * 1000);
     btn.style.background = 'linear-gradient(135deg,#ef4444,#dc2626)';
     btn.innerHTML = '⏹️ Arrêter tirage auto';
