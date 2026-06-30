@@ -11453,20 +11453,33 @@ def activite_joueurs():
     code_org = s["code"]
     is_admin = bool(s.get("admin"))
 
-    # A quel organisateur appartient chaque joueuse ? (via ses tickets)
-    org_de = {}
+    # A quels organisateurs appartient chaque joueuse ? (via TOUS ses tickets ET commandes)
+    # On garde un ENSEMBLE d'organisateurs par joueuse : ainsi une joueuse qui joue
+    # chez plusieurs organisatrices apparait chez CHACUNE (pas seulement la derniere).
+    orgs_de = {}
     nom_de = {}
     for t in DB.get("tickets", []):
         c = (t.get("code_acheteur", "") or "").upper()
         if c:
-            org_de[c] = t.get("code_org")
-            nom_de[c] = t.get("acheteur", "")
+            orgs_de.setdefault(c, set()).add(t.get("code_org"))
+            if t.get("acheteur"):
+                nom_de[c] = t.get("acheteur", "")
+    # Inclure les commandes par pions : tant que le ticket n'est pas genere/valide,
+    # il n'est pas dans "tickets", mais la joueuse joue DEJA chez cette organisatrice.
+    for cmd in DB.get("commandes_tickets_pions", []):
+        c = (cmd.get("code_joueur", "") or "").upper()
+        if c:
+            orgs_de.setdefault(c, set()).add(cmd.get("code_org"))
+    # Nom de secours
+    for c in list(orgs_de.keys()):
+        if not nom_de.get(c):
+            nom_de[c] = DB.get("codes", {}).get(c, {}).get("nom", "") or ""
 
     maintenant = datetime.datetime.now()
     out = []
     with _VERROU_ACTIVITE:
         for code, a in list(ACTIVITE_JOUEURS.items()):
-            if not is_admin and org_de.get(code) != code_org:
+            if not is_admin and code_org not in orgs_de.get(code, set()):
                 continue
             secs = 99999
             try:
