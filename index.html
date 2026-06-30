@@ -3699,7 +3699,8 @@ function resetTirage(){
 let bingoTicketActuel = null;
 
 function setBingoTicket(acheteur, jeu, serie, ticketId, pdfUrl, pageDebut, pageFin){
-  bingoTicketActuel = {acheteur, jeu, serie, ticketId, pdf_url: pdfUrl||null, page_debut: pageDebut||1, page_fin: pageFin||9999};
+  bingoTicketActuel = {acheteur, jeu, serie, ticketId, pdf_url: pdfUrl||null, page_debut: pageDebut||1, page_fin: pageFin||9999,
+    code_org: ((typeof codeOrgMicroActuel !== 'undefined' && codeOrgMicroActuel) ? codeOrgMicroActuel : ((typeof MON_ORG !== 'undefined' && MON_ORG) ? MON_ORG : ''))};
 }
 
 async function declarerBingo(){
