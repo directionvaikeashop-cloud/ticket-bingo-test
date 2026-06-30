@@ -5538,6 +5538,10 @@ function chargerJeuxDisponibles(codeJoueur){
   fetch('/api/annonce/jeux?code=' + encodeURIComponent(codeJoueur || ''))
   .then(function(r){ return r.json(); })
   .then(function(jeux){
+    // MICRO : si une seule organisatrice a un jeu actif, brancher le micro de la joueuse dessus
+    if(Array.isArray(jeux) && jeux.length === 1 && jeux[0] && jeux[0].code_org && typeof connecterMicroJoueur === 'function'){
+      connecterMicroJoueur(jeux[0].code_org);
+    }
     var cards = document.querySelectorAll('.jeux-dispo-card');
     var listes = document.querySelectorAll('.jeux-dispo-liste');
     if(!cards.length || !listes.length) return;
@@ -5597,6 +5601,8 @@ function chargerJeuxDisponibles(codeJoueur){
 async function commanderTicketAvecPions(jeuId, jeu, prix, nbTickets, codeOrg, codeJoueur){
   var total = prix * nbTickets;
   if(!confirm('Commander ' + nbTickets + ' ticket(s) ' + jeu + ' pour ' + total.toLocaleString('fr-FR') + ' XPF de pions ?')) return;
+  // La joueuse rejoint CE jeu -> brancher son micro sur CETTE organisatrice (pour l'entendre)
+  if(typeof connecterMicroJoueur === 'function' && codeOrg) connecterMicroJoueur(codeOrg);
   try{
     const r = await fetch('/api/commande/ticket-pions', {
       method: 'POST',
@@ -6235,6 +6241,11 @@ function connecterMicroJoueur(codeOrg){
   if(_cm) _cm.style.display = 'block';
   // Eviter les doubles connexions
   if(joueurMicroWs && joueurMicroWs.readyState === WebSocket.OPEN && codeOrgMicroActuel === codeOrg) return;
+  // CHANGEMENT D'ORGANISATRICE : fermer proprement l'ancien canal (sinon on entend l'ancienne ou on se reconnecte dessus)
+  if(joueurMicroWs && codeOrgMicroActuel && codeOrgMicroActuel !== codeOrg){
+    try{ joueurMicroWs.onclose = null; joueurMicroWs.onmessage = null; joueurMicroWs.close(); }catch(e){}
+    if(joueurMicroPing){ clearInterval(joueurMicroPing); joueurMicroPing = null; }
+  }
   codeOrgMicroActuel = codeOrg;
   try{
     const wsUrl = (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws/micro/joueur/' + codeOrg;
