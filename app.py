@@ -1705,7 +1705,9 @@ def declarer_bingo():
     # Trouver l'organisateur du ticket
     ticket_id = d.get("ticketId", "")
     ticket = next((t for t in DB["tickets"] if t["id"] == ticket_id), None)
-    code_org_alerte = ticket.get("code_org", "") if ticket else ""
+    # L'alerte va a l'organisatrice DU JEU joue : code_org du ticket si connu,
+    # sinon celui envoye par la joueuse (le jeu qu'elle joue actuellement).
+    code_org_alerte = (ticket.get("code_org", "") if ticket else "") or (d.get("code_org", "") or "").strip()
     
     alerte = {
         "id": gen_code(8),
