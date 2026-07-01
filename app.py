@@ -111,7 +111,12 @@ if HAS_WEBSOCKET:
 @app.before_request
 def _verrouiller_ecritures():
     if request.method == "POST":
-        _VERROU_ECRITURES.acquire()
+        # ⏱️ Timeout de sécurité : si le verrou n'est pas dispo en 8s, on refuse
+        # PROPREMENT au lieu de bloquer tout le serveur indéfiniment (évite
+        # l'engorgement en cascade qui provoquait les coupures /ping).
+        acquis = _VERROU_ECRITURES.acquire(timeout=8)
+        if not acquis:
+            return jsonify({"erreur": "Serveur momentanément occupé, réessayez dans quelques secondes."}), 503
         g.verrou_ecriture_pris = True
 
 @app.teardown_request
