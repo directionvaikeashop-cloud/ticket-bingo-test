@@ -1,5 +1,22 @@
 import hashlib, datetime, os, secrets, string, json, base64
 import urllib.request, urllib.parse
+
+# 🚀 Décodage JSON rapide (orjson) pour alléger la lecture de la base à chaque
+# requête — gros gain sous charge (tournoi). Filet de sécurité : si orjson n'est
+# pas disponible ou échoue, on retombe automatiquement sur le json standard.
+try:
+    import orjson as _orjson
+    _USE_ORJSON = True
+except Exception:
+    _USE_ORJSON = False
+
+def _parse_json_rapide(contenu):
+    if _USE_ORJSON:
+        try:
+            return _orjson.loads(contenu)
+        except Exception:
+            pass
+    return json.loads(contenu)
 from flask import Flask, request, jsonify, send_from_directory, Response, send_file, g, make_response
 try:
     from flask_sock import Sock
@@ -273,7 +290,7 @@ def load_data():
                 _contenu = _lire_donnees_brut_cache()
                 if _contenu is None:
                     continue
-                data = json.loads(_contenu)
+                data = _parse_json_rapide(_contenu)
             elif os.path.exists(chemin):
                 with open(chemin, "r") as f:
                     data = json.load(f)
