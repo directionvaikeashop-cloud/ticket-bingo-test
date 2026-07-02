@@ -108,9 +108,18 @@ app = Flask(__name__, static_folder=".")
 if HAS_WEBSOCKET:
     sock = Sock(app)
 
+# 🛡️ BRIQUE 1 : routes admin (GET) qui MODIFIENT l'argent — elles passent
+# désormais par le MÊME verrou que les POST. Avant, elles écrivaient hors
+# protection : deux actions simultanées pouvaient s'écraser (famille du bug
+# "gain non crédité"). Corrigé structurellement.
+_CHEMINS_GET_MUTANTS = ['/aligner-soldes', '/annuler-commandes-tickets', '/annuler-credits-fraude', '/annuler-credits-periode', '/annuler-retrait-fabrique', '/anti-fraude', '/assainir-solde-negatif', '/audit-fraude', '/bannir-circuit', '/bloquer-code', '/changer-code-organisateur', '/codes-bloques', '/corriger-ccp', '/corriger-double-bonus', '/corriger-stock-pions-org', '/crediter-bonus', '/crediter-petits-jeux', '/crediter-pions-org', '/crediter-stock-org', '/credits-organisateurs', '/creer-compte-joueur', '/creer-organisateur', '/debloquer-joueuse', '/email-organisateur', '/empreinte', '/etiqueter-credits', '/fusion-codes', '/maj-tournoi-juillet', '/neutraliser-debloquer', '/organisatrices', '/perturbateurs', '/poser-solde-joueur', '/rapport-org', '/rembourser-jeu', '/rembourser-joueuse', '/restaurer-collectrice', '/restituer-legitime', '/retrait-espece', '/revoquer-admin', '/rib-organisateur', '/securite-admin', '/suspendre-organisateur', '/tarifs', '/tarifs-jeux', '/transfert-pions', '/vider-soldes-bannis']
+_CHEMINS_GET_MUTANTS = frozenset(_CHEMINS_GET_MUTANTS)
+
 @app.before_request
 def _verrouiller_ecritures():
-    if request.method == "POST":
+    if (request.method == "POST"
+            or request.path in _CHEMINS_GET_MUTANTS
+            or request.path.startswith("/api/jeux/")):
         # ⏱️ Timeout de sécurité : si le verrou n'est pas dispo en 8s, on refuse
         # PROPREMENT au lieu de bloquer tout le serveur indéfiniment (évite
         # l'engorgement en cascade qui provoquait les coupures /ping).
@@ -313,7 +322,26 @@ def _synchroniser_postgres_demarrage():
 _init_postgres()
 
 
+# 🧠 BRIQUE 1 — LA BASE EN MÉMOIRE
+# L'appli garde UNE SEULE copie analysée des données. Tant que le fichier n'a
+# pas changé (empreinte mtime+taille), toutes les requêtes utilisent cette
+# copie : ZÉRO relecture, ZÉRO ré-analyse. Après chaque écriture, la mémoire
+# est réalignée sur ce qui vient d'être écrit. Un seul objet partagé = plus
+# aucune "vieille copie" ne peut écraser une correction.
+_MEM_DB = {"sig": None, "obj": None}
+_MEM_VERROU = threading.Lock()
+
 def load_data():
+    # 🧠 Si le fichier n'a pas changé -> servir l'objet déjà en mémoire (instantané)
+    try:
+        _st = os.stat(DATA_FILE)
+        _sig = (_st.st_mtime_ns, _st.st_size)
+    except Exception:
+        _sig = None
+    if _sig is not None:
+        with _MEM_VERROU:
+            if _MEM_DB["obj"] is not None and _MEM_DB["sig"] == _sig:
+                return _MEM_DB["obj"]
     # Essayer le fichier principal, puis la copie de secours (.bak)
     for chemin in [DATA_FILE, DATA_FILE + ".bak"]:
         try:
@@ -357,6 +385,10 @@ def load_data():
                         data["codes"]["ADMIN2024"]["actif"] = False
                 if not data.get("jeux"):
                     data["jeux"] = ["P6", "OHANA 75", "QUINES 90", "OHANA 75 4 SERIE"]
+                if chemin == DATA_FILE and _sig is not None:
+                    with _MEM_VERROU:
+                        _MEM_DB["obj"] = data
+                        _MEM_DB["sig"] = _sig
                 return data
         except Exception as e:
             print(f"[LOAD ERR] {chemin}: {e}")
@@ -407,6 +439,14 @@ def _ecrire_donnees_disque():
                 except Exception:
                     pass
             os.replace(tmp, DATA_FILE)
+            # 🧠 BRIQUE 1 : la mémoire reste alignée sur ce qu'on vient d'écrire
+            try:
+                _st2 = os.stat(DATA_FILE)
+                with _MEM_VERROU:
+                    _MEM_DB["obj"] = a_ecrire
+                    _MEM_DB["sig"] = (_st2.st_mtime_ns, _st2.st_size)
+            except Exception:
+                pass
             # 🐘 Recopie durable dans PostgreSQL — EN ARRIÈRE-PLAN (ne bloque plus
             # la sauvegarde : le fichier ci-dessus est déjà écrit, durable).
             try:
