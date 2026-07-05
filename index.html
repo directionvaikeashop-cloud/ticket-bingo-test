@@ -1593,9 +1593,18 @@ function afficherBarreBoules(){
   document.body.style.paddingBottom = '80px';
 }
 
+function _orgTirage(){
+  try{ if (typeof MON_ORG !== 'undefined' && MON_ORG) return MON_ORG; }catch(e){}
+  try{ if (typeof CODE_ORG !== 'undefined' && CODE_ORG) return CODE_ORG; }catch(e){}
+  return '';
+}
+function _urlTirage(){
+  var o = _orgTirage();
+  return '/api/tirage' + (o ? ('?org=' + encodeURIComponent(o)) : '');
+}
 async function updateBarreBoules(){
   try{
-    const r = await fetch('/api/tirage');
+    const r = await fetch(_urlTirage());
     const d = await r.json();
     const boules = d.boules || [];
     let barre = document.getElementById('barre-boules-fixe');
@@ -3178,7 +3187,7 @@ function arreterHeartbeatActivite(){
 async function comparerToutesBoulesAvecPDF(){
   try{
     if(Object.keys(carteNumeros).length === 0) return;
-    var r = await fetch('/api/tirage');
+    var r = await fetch(_urlTirage());
     var d = await r.json();
     var boules = d.boules || [];
     if(!boules.length) return;
@@ -3635,7 +3644,7 @@ function tirerBoule(){
       document.querySelectorAll('[id="nb-restants"]').forEach(function(el){ el.textContent = bouleRestantes.length; });
       
       // Sauvegarder pour les joueurs
-      fetch('/api/tirage', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({boules: boulesTirees, vitesse: vitesseTirage||3})}).catch(()=>{});
+      fetch('/api/tirage', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({boules: boulesTirees, vitesse: vitesseTirage||3, org: _orgTirage()})}).catch(()=>{});
       
       // Ajouter à l'historique
       document.querySelectorAll('[id="historique-boules"]').forEach(function(hist){
@@ -3686,7 +3695,7 @@ function resetTirage(){
   document.querySelectorAll('[id="historique-boules"]').forEach(function(el){ el.innerHTML = ''; });
   // IMPORTANT : vider aussi le tirage sur le SERVEUR,
   // sinon les joueurs continuent de voir les anciennes boules indefiniment
-  fetch('/api/tirage', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({boules: [], vitesse: vitesseTirage||3})}).catch(function(){});
+  fetch('/api/tirage', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({boules: [], vitesse: vitesseTirage||3, org: _orgTirage()})}).catch(function(){});
 }
 
 // === BINGO ===
@@ -7316,7 +7325,7 @@ function stopTirageAutoRefresh(){
 
 async function loadTirageJoueur(){
   try{
-    const r = await fetch('/api/tirage');
+    const r = await fetch(_urlTirage());
     const d = await r.json();
     const boules = d.boules || [];
     // Mettre à jour TOUS les affichages tirage joueur (ancien + nouvel espace)
