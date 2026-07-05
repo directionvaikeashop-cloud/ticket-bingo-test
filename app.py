@@ -173,7 +173,8 @@ _LD_VERROU = threading.Lock()
 # Lecture seule (ne touche jamais à l'argent). Se met à jour tout seul en 2s max.
 _MICRO_CACHE = {"ts": 0.0, "actif": False, "message": ""}
 _MICRO_VERROU = threading.Lock()
-_TIRAGE_CACHE = {"ts": 0.0, "boules": [], "vitesse": 3}
+# 🎯 BRIQUE 3 : cache du tirage PAR TOURNOI ("" = ancien tirage global, compatibilité)
+_TIRAGE_CACHE = {}
 _TIRAGE_VERROU = threading.Lock()
 _CACHE_LEGER_TTL = 2.0
 
@@ -1864,7 +1865,9 @@ def declarer_bingo():
     try:
         import re as _re
         tirage_set = set()
-        for _x in DB.get("tirage", []):
+        _t_org = DB.get("tirages", {}).get(code_org_alerte) if code_org_alerte else None
+        _src_t = _t_org.get("boules", []) if _t_org is not None else DB.get("tirage", [])
+        for _x in _src_t:
             try:
                 tirage_set.add(int(_x))
             except Exception:
@@ -2456,9 +2459,10 @@ def reset_donnees_admin():
     DB["tickets"] = []
     DB["alertes_bingo"] = []
     DB["tirage"] = []
+    DB["tirages"] = {}
     DB["tirage_vitesse"] = 3
     with _TIRAGE_VERROU:
-        _TIRAGE_CACHE["boules"] = []; _TIRAGE_CACHE["vitesse"] = 3; _TIRAGE_CACHE["ts"] = _time_cache.time()
+        _TIRAGE_CACHE.clear()
     DB["coches"] = {}
     DB["commandes_tickets"] = []
     DB["paiements_stripe"] = []
@@ -2622,11 +2626,13 @@ def reset_tournoi():
     
     code_org = s["code"]
     
-    # 1. Remettre le tirage à zéro
+    # 1. Remettre le tirage à zéro (le SIEN uniquement + le global de compatibilité)
     DB["tirage"] = []
     DB["tirage_vitesse"] = 3
+    if code_org:
+        DB.setdefault("tirages", {})[code_org] = {"boules": [], "vitesse": 3}
     with _TIRAGE_VERROU:
-        _TIRAGE_CACHE["boules"] = []; _TIRAGE_CACHE["vitesse"] = 3; _TIRAGE_CACHE["ts"] = _time_cache.time()
+        _TIRAGE_CACHE.clear()
     
     # 2. Effacer TOUTES les alertes bingo
     DB["alertes_bingo"] = []
@@ -2705,27 +2711,44 @@ def sauvegarder_tirage():
     global DB
     DB = load_data()
     d = request.json
-    DB["tirage"] = d.get("boules", [])
-    DB["tirage_vitesse"] = d.get("vitesse", 3)
+    org = (d.get("org") or "").upper().strip()
+    boules = d.get("boules", [])
+    vitesse = d.get("vitesse", 3)
+    # 🎯 BRIQUE 3 : chaque tournoi garde SA liste de boules
+    if org:
+        DB.setdefault("tirages", {})[org] = {"boules": boules, "vitesse": vitesse}
+    # Compatibilité : les anciens écrans (pas encore rechargés) lisent le global
+    DB["tirage"] = boules
+    DB["tirage_vitesse"] = vitesse
     save_data()
+    _val = {"boules": boules, "vitesse": vitesse, "ts": _time_cache.time()}
     with _TIRAGE_VERROU:
-        _TIRAGE_CACHE["boules"] = DB["tirage"]
-        _TIRAGE_CACHE["vitesse"] = DB["tirage_vitesse"]
-        _TIRAGE_CACHE["ts"] = _time_cache.time()
+        _TIRAGE_CACHE[org or ""] = dict(_val)
+        if org:
+            _TIRAGE_CACHE[""] = dict(_val)
     return jsonify({"ok": True})
 
 @app.route("/api/tirage")
 def get_tirage():
+    org = (request.args.get("org") or "").upper().strip()
+    cle = org or ""
     maintenant = _time_cache.time()
     with _TIRAGE_VERROU:
-        if (maintenant - _TIRAGE_CACHE["ts"]) < _CACHE_LEGER_TTL:
-            return jsonify({"boules": _TIRAGE_CACHE["boules"], "vitesse": _TIRAGE_CACHE["vitesse"]})
+        c = _TIRAGE_CACHE.get(cle)
+        if c and (maintenant - c["ts"]) < _CACHE_LEGER_TTL:
+            return jsonify({"boules": c["boules"], "vitesse": c["vitesse"]})
     _d = load_data()
+    if org:
+        t = _d.get("tirages", {}).get(org)
+        if t is None:
+            # Tournoi sans tirage propre (transition) -> retomber sur le global
+            t = {"boules": _d.get("tirage", []), "vitesse": _d.get("tirage_vitesse", 3)}
+    else:
+        t = {"boules": _d.get("tirage", []), "vitesse": _d.get("tirage_vitesse", 3)}
+    val = {"boules": t.get("boules", []), "vitesse": t.get("vitesse", 3), "ts": maintenant}
     with _TIRAGE_VERROU:
-        _TIRAGE_CACHE["boules"] = _d.get("tirage", [])
-        _TIRAGE_CACHE["vitesse"] = _d.get("tirage_vitesse", 3)
-        _TIRAGE_CACHE["ts"] = maintenant
-        return jsonify({"boules": _TIRAGE_CACHE["boules"], "vitesse": _TIRAGE_CACHE["vitesse"]})
+        _TIRAGE_CACHE[cle] = val
+        return jsonify({"boules": val["boules"], "vitesse": val["vitesse"]})
 
 @app.route("/api/verifier-bingo", methods=["POST"])
 def verifier_bingo_auto():
@@ -9246,8 +9269,17 @@ def verifier_carton():
     except Exception:
         return jsonify({"ok": False, "msg": "Numéro de série invalide"}), 400
 
+    # 🎯 BRIQUE 3 : vérifier avec le tirage DU tournoi concerné (fallback global)
+    org_v = ((d.get("org") or s.get("code") or "")).upper().strip()
+    _src = None
+    if org_v:
+        _t = DB.get("tirages", {}).get(org_v)
+        if _t is not None:
+            _src = _t.get("boules", [])
+    if _src is None:
+        _src = DB.get("tirage", [])
     tirage = set()
-    for x in DB.get("tirage", []):
+    for x in _src:
         try:
             tirage.add(int(x))
         except Exception:
